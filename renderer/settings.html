@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com">
+  <title>FindMyVoice Settings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <div class="layout">
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-item active" data-tab="home">
+        <span class="sidebar-icon" style="background: rgba(223,100,2,0.15); color: #df6402;">🏠</span>
+        <span>Home</span>
+      </div>
+      <div class="sidebar-item" data-tab="modes">
+        <span class="sidebar-icon" style="background: rgba(0,136,255,0.15); color: #0088ff;">⊞</span>
+        <span>Modes</span>
+      </div>
+      <div class="sidebar-item" data-tab="vocabulary">
+        <span class="sidebar-icon" style="background: rgba(52,199,89,0.15); color: #34c759;">📖</span>
+        <span>Vocabulary</span>
+      </div>
+      <div class="sidebar-item" data-tab="configuration">
+        <span class="sidebar-icon" style="background: rgba(116,119,128,0.15); color: #747780;">⚙️</span>
+        <span>Configuration</span>
+      </div>
+      <div class="sidebar-item" data-tab="models">
+        <span class="sidebar-icon" style="background: rgba(89,120,170,0.15); color: #5978aa;">🧠</span>
+        <span>Models Library</span>
+      </div>
+      <div class="sidebar-item" data-tab="history">
+        <span class="sidebar-icon" style="background: rgba(90,200,250,0.15); color: #5ac8fa;">🕐</span>
+        <span>History</span>
+      </div>
+    </nav>
+
+    <!-- Content -->
+    <main class="content" id="content">
+      <!-- Home Tab -->
+      <div class="tab-panel active" id="tab-home">
+        <div class="placeholder-view">
+          <div class="placeholder-icon" style="color: #0088ff;">🎙️</div>
+          <h2>FindMyVoice</h2>
+          <p class="muted">Version 0.5.0</p>
+          <p class="muted" style="max-width: 300px; text-align: center;">
+            Lightweight voice-to-text for macOS &amp; Windows.<br>
+            Press your hotkey to record, release to transcribe and paste.
+          </p>
+        </div>
+      </div>
+
+      <!-- Modes Tab -->
+      <div class="tab-panel" id="tab-modes">
+        <div class="placeholder-view">
+          <div class="placeholder-icon">⊞</div>
+          <h2>Modes</h2>
+          <p class="muted">Mode profiles coming soon.</p>
+        </div>
+      </div>
+
+      <!-- Vocabulary Tab -->
+      <div class="tab-panel" id="tab-vocabulary">
+        <div class="placeholder-view">
+          <div class="placeholder-icon">📖</div>
+          <h2>Vocabulary</h2>
+          <p class="muted">Custom vocabulary coming soon.</p>
+        </div>
+      </div>
+
+      <!-- Configuration Tab -->
+      <div class="tab-panel" id="tab-configuration">
+        <div class="tab-scroll">
+          <!-- Keyboard Shortcuts -->
+          <section>
+            <h3 class="section-title">Keyboard Shortcuts</h3>
+            <div class="settings-card">
+              <div class="shortcut-row" data-action="toggle_recording">
+                <div class="shortcut-info">
+                  <div class="shortcut-title">Toggle Recording</div>
+                  <div class="shortcut-subtitle">Starts and stops recordings</div>
+                </div>
+                <div class="shortcut-badges" id="badge-toggle_recording"></div>
+                <button class="shortcut-reset hidden" data-action="toggle_recording" title="Reset to default">↺</button>
+              </div>
+              <div class="divider"></div>
+              <div class="shortcut-row" data-action="cancel_recording">
+                <div class="shortcut-info">
+                  <div class="shortcut-title">Cancel Recording</div>
+                  <div class="shortcut-subtitle">Discards active recording</div>
+                </div>
+                <div class="shortcut-badges" id="badge-cancel_recording"></div>
+                <button class="shortcut-reset hidden" data-action="cancel_recording" title="Reset to default">↺</button>
+              </div>
+              <div class="divider"></div>
+              <div class="shortcut-row" data-action="change_mode">
+                <div class="shortcut-info">
+                  <div class="shortcut-title">Change mode</div>
+                  <div class="shortcut-subtitle">Activates the mode switcher</div>
+                </div>
+                <div class="shortcut-badges" id="badge-change_mode"></div>
+                <button class="shortcut-reset hidden" data-action="change_mode" title="Reset to default">↺</button>
+              </div>
+              <div class="divider"></div>
+              <div class="shortcut-row" data-action="push_to_talk">
+                <div class="shortcut-info">
+                  <div class="shortcut-title">Push to Talk</div>
+                  <div class="shortcut-subtitle">Hold to record, release when done</div>
+                </div>
+                <div class="shortcut-badges" id="badge-push_to_talk"></div>
+                <button class="shortcut-reset hidden" data-action="push_to_talk" title="Reset to default">↺</button>
+              </div>
+              <div class="divider"></div>
+              <div class="shortcut-row" data-action="mouse_shortcut">
+                <div class="shortcut-info">
+                  <div class="shortcut-title">Mouse shortcut</div>
+                  <div class="shortcut-subtitle">Tap to toggle, or hold and release when done</div>
+                </div>
+                <div class="shortcut-badges" id="badge-mouse_shortcut"></div>
+                <button class="shortcut-reset hidden" data-action="mouse_shortcut" title="Reset to default">↺</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- Application Options -->
+          <section>
+            <h3 class="section-title">Application</h3>
+            <div class="settings-card">
+              <div class="toggle-row">
+                <span>Auto-paste into active app</span>
+                <label class="switch">
+                  <input type="checkbox" id="opt-autoPaste">
+                  <span class="slider"></span>
+                </label>
+              </div>
+              <div class="divider"></div>
+              <div class="toggle-row">
+                <span>Auto-capitalize</span>
+                <label class="switch">
+                  <input type="checkbox" id="opt-autoCapitalize">
+                  <span class="slider"></span>
+                </label>
+              </div>
+              <div class="divider"></div>
+              <div class="toggle-row">
+                <span>Auto-punctuate</span>
+                <label class="switch">
+                  <input type="checkbox" id="opt-autoPunctuate">
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <!-- Recording Sounds -->
+          <section>
+            <h3 class="section-title">Recording Sounds</h3>
+            <div class="settings-card">
+              <div class="toggle-row">
+                <span>Mute all sounds</span>
+                <label class="switch">
+                  <input type="checkbox" id="opt-soundMuted">
+                  <span class="slider"></span>
+                </label>
+              </div>
+              <div class="divider"></div>
+              <div class="sound-row" id="sound-start-row">
+                <span>Start sound</span>
+                <div class="sound-controls">
+                  <select id="sel-soundStart"></select>
+                  <button class="play-btn" data-sound="start" title="Preview">▶</button>
+                </div>
+              </div>
+              <div class="divider"></div>
+              <div class="sound-row" id="sound-stop-row">
+                <span>Stop sound</span>
+                <div class="sound-controls">
+                  <select id="sel-soundStop"></select>
+                  <button class="play-btn" data-sound="stop" title="Preview">▶</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- Models Library Tab -->
+      <div class="tab-panel" id="tab-models">
+        <div class="tab-scroll">
+          <!-- Provider -->
+          <section>
+            <h3 class="section-title">Provider</h3>
+            <div class="settings-card">
+              <div class="picker-row">
+                <span>API Provider</span>
+                <select id="sel-provider">
+                  <option value="openai">OpenAI</option>
+                  <option value="nemo">NeMo (Local)</option>
+                </select>
+              </div>
+            </div>
+          </section>
+
+          <!-- OpenAI Settings -->
+          <section id="section-openai">
+            <h3 class="section-title">OpenAI Settings</h3>
+            <div class="settings-card">
+              <div class="picker-row">
+                <span>API Key</span>
+                <input type="password" id="inp-apiKey" placeholder="sk-..." class="text-input">
+              </div>
+              <div class="divider"></div>
+              <div class="picker-row">
+                <span>Model</span>
+                <select id="sel-openaiModel">
+                  <option value="whisper-1">whisper-1</option>
+                  <option value="whisper-large-v3">whisper-large-v3</option>
+                  <option value="whisper-large-v3-turbo">whisper-large-v3-turbo</option>
+                </select>
+              </div>
+              <div class="divider"></div>
+              <div class="picker-row">
+                <span>Language</span>
+                <select id="sel-openaiLang"></select>
+              </div>
+            </div>
+          </section>
+
+          <!-- NeMo Settings -->
+          <section id="section-nemo" class="hidden">
+            <h3 class="section-title">NeMo Toolkit</h3>
+            <div class="settings-card">
+              <div id="nemo-content">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- History Tab -->
+      <div class="tab-panel" id="tab-history">
+        <div class="placeholder-view">
+          <div class="placeholder-icon">🕐</div>
+          <h2>History</h2>
+          <p class="muted">Transcription history coming soon.</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="settings.js"></script>
+</body>
+</html>
