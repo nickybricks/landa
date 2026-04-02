@@ -20,8 +20,16 @@ contextBridge.exposeInMainWorld('api', {
   // Platform
   getPlatform: () => ipcRenderer.invoke('get-platform'),
 
+  // Installed apps (for popup grid)
+  getInstalledApps: () => ipcRenderer.invoke('get-installed-apps'),
+
   // Listen for config updates from polling
   onConfigUpdated: (callback) => {
     ipcRenderer.on('config-updated', (_event, config) => callback(config));
+  },
+
+  // Listen for tab navigation from main process (e.g. tray menu → Modes)
+  onNavigateTab: (callback) => {
+    ipcRenderer.on('navigate-tab', (_event, tab) => callback(tab));
   },
 });

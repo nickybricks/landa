@@ -1,6 +1,6 @@
 {
   "name": "findmyvoice",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Lightweight voice-to-text — global hotkey recording that pastes into any active app",
   "main": "main.js",
   "scripts": {

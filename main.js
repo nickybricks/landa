@@ -25,6 +25,7 @@ let pollTimer = null;
 let isRecording = false;
 let reformatEnabled = false;
 let reformatMode = 'default';
+let modesConfig = { selections: { 'personal-message': 'formal', 'email': 'formal' } };
 let currentShortcut = null; // Electron accelerator string
 let lastHotkeyTime = 0;
 
@@ -184,31 +185,56 @@ function createTray() {
 function updateTray() {
   if (!tray) return;
 
+  const sels = modesConfig.selections || {};
+  const pmStyle = capitalize(sels['personal-message'] || 'formal');
+  const emailStyle = capitalize(sels['email'] || 'formal');
+
   const statusLabel = isRecording
     ? 'Recording…'
-    : (reformatEnabled ? `Idle · ${capitalize(reformatMode)}` : 'Idle');
+    : `Idle · 💬 ${pmStyle}`;
 
-  const modeItems = ['default', 'email', 'slack'].map((mode) => ({
-    label: capitalize(mode),
-    type: 'radio',
-    checked: reformatMode === mode,
-    click: () => { api.selectMode(mode).catch(() => {}); },
-  }));
+  const styles = ['formal', 'casual', 'excited'];
+
+  const categoryMenus = [
+    {
+      label: `💬 Personal Message — ${pmStyle}`,
+      submenu: styles.map((style) => ({
+        label: capitalize(style),
+        type: 'radio',
+        checked: (sels['personal-message'] || 'formal') === style,
+        click: () => {
+          const newSels = { ...sels, 'personal-message': style };
+          api.patchConfig({ modes: { selections: newSels } }).catch(() => {});
+        },
+      })),
+    },
+    {
+      label: `📧 Email — ${emailStyle}`,
+      submenu: styles.map((style) => ({
+        label: capitalize(style),
+        type: 'radio',
+        checked: (sels['email'] || 'formal') === style,
+        click: () => {
+          const newSels = { ...sels, 'email': style };
+          api.patchConfig({ modes: { selections: newSels } }).catch(() => {});
+        },
+      })),
+    },
+  ];
 
   const contextMenu = Menu.buildFromTemplate([
     { label: statusLabel, enabled: false },
     { type: 'separator' },
+    ...categoryMenus,
+    { type: 'separator' },
     {
-      label: 'Reformat Output',
-      type: 'checkbox',
-      checked: reformatEnabled,
-      click: (item) => {
-        api.patchConfig({ reformat_enabled: item.checked }).catch(() => {});
+      label: 'Modes Settings…',
+      click: () => {
+        openSettings();
+        if (settingsWindow && !settingsWindow.isDestroyed()) {
+          settingsWindow.webContents.send('navigate-tab', 'modes');
+        }
       },
-    },
-    {
-      label: `Mode: ${capitalize(reformatMode)}`,
-      submenu: modeItems,
     },
     { type: 'separator' },
     {
@@ -246,10 +272,12 @@ function openSettings() {
   }
 
   settingsWindow = new BrowserWindow({
-    width: 720,
-    height: 520,
+    width: 1350,
+    height: 830,
+    minWidth: 1050,
+    minHeight: 650,
     title: 'FindMyVoice Settings',
-    resizable: false,
+    resizable: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -391,7 +419,13 @@ function startStatusPolling() {
                                reformatMode !== config.reformat_mode;
       reformatEnabled = config.reformat_enabled || false;
       reformatMode = config.reformat_mode || 'default';
-      if (reformatChanged) updateTray();
+
+      // Update modes config
+      const newModes = config.modes || modesConfig;
+      const modesChanged = JSON.stringify(newModes) !== JSON.stringify(modesConfig);
+      modesConfig = newModes;
+
+      if (reformatChanged || modesChanged) updateTray();
 
       // Forward config updates to settings window
       if (settingsWindow && !settingsWindow.isDestroyed()) {
@@ -524,6 +558,42 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle('get-platform', () => process.platform);
+
+  ipcMain.handle('get-installed-apps', async () => {
+    if (process.platform !== 'darwin') {
+      return []; // TODO: Add Windows support via PowerShell
+    }
+
+    const appDirs = ['/Applications', '/System/Applications'];
+    const appEntries = [];
+
+    for (const dir of appDirs) {
+      let entries;
+      try {
+        entries = fs.readdirSync(dir).filter((f) => f.endsWith('.app'));
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        appEntries.push({ name: entry.replace('.app', ''), appPath: path.join(dir, entry) });
+      }
+    }
+
+    appEntries.sort((a, b) => a.name.localeCompare(b.name));
+
+    // Process sequentially — Promise.all with 100+ getFileIcon calls crashes Electron
+    const apps = [];
+    for (const { name, appPath } of appEntries) {
+      try {
+        const icon = await app.getFileIcon(appPath, { size: 'normal' });
+        apps.push({ name, appPath, icon: icon.toDataURL() });
+      } catch {
+        apps.push({ name, appPath, icon: null });
+      }
+    }
+
+    return apps;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -559,6 +629,7 @@ app.whenReady().then(() => {
       currentHotkeyCombo = config.toggle_recording;
       reformatEnabled = config.reformat_enabled || false;
       reformatMode = config.reformat_mode || 'default';
+      modesConfig = config.modes || modesConfig;
       updateTray();
     } catch {
       // Use default hotkey

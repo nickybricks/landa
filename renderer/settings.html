@@ -7,7 +7,7 @@
   <title>FindMyVoice Settings</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@600;700&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="settings.css">
 </head>
 <body>
@@ -47,7 +47,7 @@
         <div class="placeholder-view">
           <div class="placeholder-icon" style="color: #0088ff;">🎙️</div>
           <h2>FindMyVoice</h2>
-          <p class="muted">Version 0.5.0</p>
+          <p class="muted">Version 0.6.0</p>
           <p class="muted" style="max-width: 300px; text-align: center;">
             Lightweight voice-to-text for macOS &amp; Windows.<br>
             Press your hotkey to record, release to transcribe and paste.
@@ -55,12 +55,51 @@
         </div>
       </div>
 
-      <!-- Modes Tab -->
+      <!-- Modes Tab (three-column: sidebar categories + content) -->
       <div class="tab-panel" id="tab-modes">
-        <div class="placeholder-view">
-          <div class="placeholder-icon">⊞</div>
-          <h2>Modes</h2>
-          <p class="muted">Mode profiles coming soon.</p>
+        <!-- Column 2: Mode Categories -->
+        <div class="modes-sidebar">
+          <div class="modes-category active" data-category="personal-message">
+            <div class="modes-category-row">
+              <span class="modes-category-icon">💬</span>
+              <div class="modes-category-text">
+                <span class="modes-category-name">Personal Message</span>
+                <span class="modes-category-style" id="cat-style-personal-message">Formal</span>
+              </div>
+              <label class="mode-toggle" id="toggle-personal-message">
+                <input type="checkbox" checked>
+                <span class="mode-toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="modes-category" data-category="email">
+            <div class="modes-category-row">
+              <span class="modes-category-icon">📧</span>
+              <div class="modes-category-text">
+                <span class="modes-category-name">Email</span>
+                <span class="modes-category-style" id="cat-style-email">Formal</span>
+              </div>
+              <label class="mode-toggle" id="toggle-email">
+                <input type="checkbox" checked>
+                <span class="mode-toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Column 3: Content Area -->
+        <div class="modes-content">
+          <div class="modes-scroll">
+            <!-- Disabled notice (shown when selected category is toggled off) -->
+            <div class="modes-disabled-notice hidden" id="modes-disabled-notice">
+              This mode is currently disabled. Enable it to activate auto-detection and reformatting.
+            </div>
+            <!-- Banner Card -->
+            <div class="modes-banner" id="modes-banner"></div>
+
+            <!-- Style Cards -->
+            <div class="modes-cards" id="modes-cards"></div>
+          </div>
         </div>
       </div>
 

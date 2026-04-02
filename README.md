@@ -31,6 +31,7 @@ This will:
 - **Global hotkey** — Press the configured shortcut to start/stop recording. Transcribed text is auto-pasted into the active app.
 - **Tray menu** — Right-click (or click on macOS) the tray icon to toggle reformat, change modes, open settings, or quit.
 - **Settings** — Click "Settings…" in the tray menu to configure API keys, hotkeys, sounds, and more.
+- **Modes** — Each mode category (Personal Message, Email) can be toggled on/off. When disabled, no reformatting is applied — raw transcription only. Modes only activate when you're in a linked app or URL; unlinked apps always get raw transcription.
 
 ## Config
 
