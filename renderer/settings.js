@@ -47,20 +47,32 @@ const NEMO_LANGUAGES = [
 
 document.addEventListener('DOMContentLoaded', async () => {
   platform = await window.api.getPlatform();
+  document.body.classList.add('platform-' + platform);
   systemSounds = await window.api.getSystemSounds();
+
+  // Load config first (retry if backend isn't ready yet)
+  config = await window.api.getConfig();
+  if (!config) {
+    for (let i = 0; i < 5 && !config; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      config = await window.api.getConfig();
+    }
+  }
 
   populateSoundSelects();
   populateLanguageSelect();
+  populateLlmModelSelect('openai');
+  setupSidebarToggle();
   setupSidebarNav();
   setupShortcutCapture();
   setupOptionToggles();
   setupSoundControls();
   setupProviderSwitch();
   setupApiKeyInput();
+  setupLlmSettings();
   setupModesTab();
+  setupHistoryTab();
 
-  // Load config
-  config = await window.api.getConfig();
   if (config) applyConfig(config);
 
   // Check NeMo if provider is nemo
@@ -70,8 +82,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Listen for config updates from main process polling
   window.api.onConfigUpdated((updated) => {
+    // Skip if a save is pending/in-flight — the frontend is the source of truth
+    // during edits. Applying a stale polled value would reset dropdowns/inputs.
+    if (saveInFlight) return;
     config = updated;
-    applyConfig(config);
+    applyConfig(config, { fromPoll: true });
   });
 
   // Listen for NeMo install progress
@@ -86,6 +101,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (item) item.click();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Sidebar Toggle
+// ---------------------------------------------------------------------------
+
+function setupSidebarToggle() {
+  const sidebar = document.getElementById('sidebar');
+  const btn = document.getElementById('sidebar-toggle');
+
+  if (localStorage.getItem('sidebar-collapsed') === 'true') {
+    sidebar.classList.add('collapsed');
+  }
+
+  btn.addEventListener('click', () => {
+    sidebar.classList.toggle('collapsed');
+    localStorage.setItem('sidebar-collapsed', sidebar.classList.contains('collapsed'));
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Sidebar Navigation
@@ -111,7 +144,7 @@ function setupSidebarNav() {
 // Apply Config to UI
 // ---------------------------------------------------------------------------
 
-function applyConfig(cfg) {
+function applyConfig(cfg, { fromPoll = false } = {}) {
   // Shortcuts
   for (const action of Object.keys(DEFAULTS)) {
     const combo = cfg[action] || DEFAULTS[action];
@@ -126,18 +159,30 @@ function applyConfig(cfg) {
 
   // Sounds
   document.getElementById('opt-soundMuted').checked = cfg.sound_muted || false;
-  document.getElementById('sel-soundStart').value = cfg.sound_start;
-  document.getElementById('sel-soundStop').value = cfg.sound_stop;
+  document.getElementById('sel-soundStart').value = cfg.sound_start || 'Tink';
+  document.getElementById('sel-soundStop').value = cfg.sound_stop || 'Pop';
   updateSoundRowsDisabled(cfg.sound_muted || false);
 
   // Provider
   document.getElementById('sel-provider').value = cfg.api_provider;
-  updateProviderSections(cfg.api_provider);
+  // Only toggle section visibility from polls — skip renderNemoContent to
+  // avoid destroying open dropdowns (language select, etc.)
+  if (fromPoll) {
+    document.getElementById('section-openai').classList.toggle('hidden', cfg.api_provider !== 'openai');
+    document.getElementById('section-nemo').classList.toggle('hidden', cfg.api_provider !== 'nemo');
+  } else {
+    updateProviderSections(cfg.api_provider);
+  }
 
-  // OpenAI
+  // OpenAI (transcription)
   document.getElementById('inp-apiKey').value = cfg.api_key || '';
-  document.getElementById('sel-openaiModel').value = cfg.openai_model || 'whisper-1';
+  const openaiModel = cfg.openai_model || 'whisper-large-v3';
+  document.getElementById('sel-openaiModel').value = openaiModel;
   document.getElementById('sel-openaiLang').value = cfg.openai_language || 'auto';
+  if (!fromPoll) updateLocalModelStatus(openaiModel);
+
+  // LLM Settings — auto-populate key from transcription api_key when openai+unset
+  applyLlmConfig(cfg, { fromPoll });
 
   // Modes
   applyModesConfig();
@@ -361,10 +406,12 @@ function updateSoundRowsDisabled(muted) {
 function populateSoundSelects() {
   const startSel = document.getElementById('sel-soundStart');
   const stopSel = document.getElementById('sel-soundStop');
+  const startVal = (config && config.sound_start) || 'Tink';
+  const stopVal = (config && config.sound_stop) || 'Pop';
 
   for (const sound of systemSounds) {
-    startSel.add(new Option(sound, sound));
-    stopSel.add(new Option(sound, sound));
+    startSel.add(new Option(sound, sound, false, sound === startVal));
+    stopSel.add(new Option(sound, sound, false, sound === stopVal));
   }
 }
 
@@ -429,6 +476,13 @@ function setupApiKeyInput() {
   input.addEventListener('input', () => {
     if (!config) return;
     config.api_key = input.value;
+    // Auto-populate LLM key only when both speech and LLM providers are openai
+    if (config.api_provider === 'openai' && config.llm_provider === 'openai' && !config.llm_api_key) {
+      config.llm_api_key = input.value;
+      document.getElementById('inp-llm-api-key').value = input.value;
+      updateLlmAutofillNotice(true);
+      applyModesConfig();
+    }
     clearTimeout(debounce);
     debounce = setTimeout(saveConfig, 500);
   });
@@ -442,10 +496,11 @@ function setupApiKeyInput() {
   });
 
   // Model picker
-  document.getElementById('sel-openaiModel').addEventListener('change', (e) => {
+  document.getElementById('sel-openaiModel').addEventListener('change', async (e) => {
     if (!config) return;
     config.openai_model = e.target.value;
     saveConfig();
+    await updateLocalModelStatus(e.target.value);
   });
 
   // Language picker
@@ -461,6 +516,296 @@ function populateLanguageSelect() {
   for (const [code, name] of OPENAI_LANGUAGES) {
     sel.add(new Option(name, code));
   }
+}
+
+// ---------------------------------------------------------------------------
+// Local Whisper Model Status
+// ---------------------------------------------------------------------------
+
+const LOCAL_WHISPER_MODELS = new Set(['whisper-large-v3', 'whisper-large-v3-turbo']);
+let _whisperStatusPollTimer = null;
+let _whisperDepsInstalling = false;
+
+async function updateLocalModelStatus(modelName) {
+  const statusEl = document.getElementById('local-model-status');
+  const dividerEl = document.getElementById('local-model-divider');
+  const apiKeyRow = document.getElementById('row-api-key');
+  const apiKeyDivider = document.getElementById('divider-api-key');
+  if (!statusEl || !dividerEl) return;
+
+  const isLocal = LOCAL_WHISPER_MODELS.has(modelName);
+  if (apiKeyRow) apiKeyRow.classList.toggle('hidden', isLocal);
+  if (apiKeyDivider) apiKeyDivider.classList.toggle('hidden', isLocal);
+
+  if (!isLocal) {
+    statusEl.classList.add('hidden');
+    dividerEl.classList.add('hidden');
+    clearInterval(_whisperStatusPollTimer);
+    _whisperStatusPollTimer = null;
+    return;
+  }
+
+  statusEl.classList.remove('hidden');
+  dividerEl.classList.remove('hidden');
+
+  const status = await window.api.getWhisperLocalStatus(modelName);
+  renderLocalModelStatus(status, modelName);
+
+  // Poll while downloading
+  clearInterval(_whisperStatusPollTimer);
+  if (status && status.downloading) {
+    _whisperStatusPollTimer = setInterval(async () => {
+      const s = await window.api.getWhisperLocalStatus(modelName);
+      renderLocalModelStatus(s, modelName);
+      if (s && !s.downloading) {
+        clearInterval(_whisperStatusPollTimer);
+        _whisperStatusPollTimer = null;
+      }
+    }, 2000);
+  }
+}
+
+function renderLocalModelStatus(status, modelName) {
+  const el = document.getElementById('local-model-status');
+  if (!el) return;
+
+  if (!status) {
+    el.innerHTML = `<div class="local-model-row"><span class="local-model-note muted">Could not reach backend.</span></div>`;
+    return;
+  }
+
+  if (!status.deps_installed) {
+    el.innerHTML = `
+      <div class="local-model-row">
+        <span class="local-model-note">Open source · runs entirely on your device · your voice never leaves this computer.</span>
+        <button class="btn-local-model" id="btn-install-whisper-deps">Install (~2 GB)</button>
+      </div>
+      ${_whisperDepsInstalling ? `<div class="local-model-installing"><span>⏳ Installing…</span><div class="status-line" id="whisper-deps-status-line"></div></div>` : ''}
+    `;
+    const btn = document.getElementById('btn-install-whisper-deps');
+    if (btn) btn.addEventListener('click', installWhisperDeps);
+    return;
+  }
+
+  if (status.downloading) {
+    el.innerHTML = `
+      <div class="local-model-row">
+        <span class="local-model-note">Downloading model…</span>
+        <span class="local-model-badge downloading">⏳ Downloading</span>
+      </div>
+    `;
+    return;
+  }
+
+  if (status.error) {
+    const row = document.createElement('div');
+    row.className = 'local-model-row';
+    const note = document.createElement('span');
+    note.className = 'local-model-note error';
+    note.textContent = `Download failed: ${status.error}`;
+    const btn = document.createElement('button');
+    btn.className = 'btn-local-model';
+    btn.textContent = 'Retry';
+    btn.addEventListener('click', () => downloadWhisperModel(modelName));
+    row.appendChild(note);
+    row.appendChild(btn);
+    el.innerHTML = '';
+    el.appendChild(row);
+    return;
+  }
+
+  if (!status.cached) {
+    el.innerHTML = `
+      <div class="local-model-row">
+        <span class="local-model-note">Open source · runs entirely on your device · your voice never leaves this computer. (~1.5 GB)</span>
+        <button class="btn-local-model" id="btn-download-whisper">Download</button>
+      </div>
+    `;
+    const btn = document.getElementById('btn-download-whisper');
+    if (btn) btn.addEventListener('click', () => downloadWhisperModel(modelName));
+    return;
+  }
+
+  // Cached and ready
+  el.innerHTML = `
+    <div class="local-model-row">
+      <span class="local-model-note">Open source · runs entirely on your device · your voice never leaves this computer.</span>
+      <span class="local-model-badge ready">✓ Ready</span>
+    </div>
+  `;
+}
+
+async function installWhisperDeps() {
+  _whisperDepsInstalling = true;
+  const modelName = config ? (config.openai_model || 'whisper-large-v3') : 'whisper-large-v3';
+  renderLocalModelStatus({ deps_installed: false }, modelName);
+
+  window.api.onWhisperDepsProgress((line) => {
+    const el = document.getElementById('whisper-deps-status-line');
+    if (el) el.textContent = line;
+  });
+
+  const result = await window.api.installWhisperDeps();
+  _whisperDepsInstalling = false;
+
+  if (result && result.success) {
+    await updateLocalModelStatus(modelName);
+  } else {
+    const el = document.getElementById('local-model-status');
+    if (el) el.innerHTML += `<div class="local-model-note error">Install failed. Check logs and try again.</div>`;
+  }
+}
+
+async function downloadWhisperModel(modelName) {
+  await window.api.downloadWhisperModel(modelName);
+  // Start polling
+  await updateLocalModelStatus(modelName);
+}
+
+// ---------------------------------------------------------------------------
+// LLM Settings
+// ---------------------------------------------------------------------------
+
+const LLM_MODELS = {
+  openai: [
+    { value: 'gpt-4o', label: 'GPT-4o' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o mini' },
+    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
+    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
+  ],
+  anthropic: [
+    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+    { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+    { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
+  ],
+};
+
+function populateLlmModelSelect(provider) {
+  const sel = document.getElementById('sel-llm-model');
+  if (!sel) return;
+  const models = LLM_MODELS[provider] || LLM_MODELS.openai;
+  sel.innerHTML = '';
+  for (const m of models) {
+    sel.add(new Option(m.label, m.value));
+  }
+}
+
+function setupLlmSettings() {
+  // LLM icon button in modes sidebar
+  document.getElementById('modes-llm-btn').addEventListener('click', () => {
+    openLlmPanel();
+  });
+
+  // "Open LLM Settings" shortcut from no-key notice
+  document.getElementById('modes-no-llm-goto-btn').addEventListener('click', () => {
+    openLlmPanel();
+  });
+
+  // Provider selector
+  document.getElementById('sel-llm-provider').addEventListener('change', (e) => {
+    if (!config) return;
+    config.llm_provider = e.target.value;
+    populateLlmModelSelect(e.target.value);
+    // Set model to first option for this provider
+    const firstModel = (LLM_MODELS[e.target.value] || [])[0];
+    if (firstModel) {
+      config.llm_model = firstModel.value;
+      document.getElementById('sel-llm-model').value = firstModel.value;
+    }
+    saveConfig();
+  });
+
+  // API key input
+  const llmKeyInput = document.getElementById('inp-llm-api-key');
+  let debounce = null;
+  llmKeyInput.addEventListener('input', () => {
+    if (!config) return;
+    config.llm_api_key = llmKeyInput.value;
+    updateLlmAutofillNotice(false);
+    applyModesConfig();
+    clearTimeout(debounce);
+    debounce = setTimeout(saveConfig, 500);
+  });
+  llmKeyInput.addEventListener('blur', () => {
+    if (!config) return;
+    config.llm_api_key = llmKeyInput.value;
+    clearTimeout(debounce);
+    saveConfig();
+  });
+
+  // Model selector
+  document.getElementById('sel-llm-model').addEventListener('change', (e) => {
+    if (!config) return;
+    config.llm_model = e.target.value;
+    saveConfig();
+  });
+}
+
+function applyLlmConfig(cfg, { fromPoll = false } = {}) {
+  const provider = cfg.llm_provider || 'openai';
+
+  // Auto-populate llm_api_key from transcription api_key only when both providers are openai
+  let autofilled = false;
+  if (!cfg.llm_api_key && cfg.api_provider === 'openai' && cfg.llm_provider === 'openai' && cfg.api_key) {
+    cfg.llm_api_key = cfg.api_key;
+    autofilled = true;
+    if (!fromPoll) saveConfig();
+  }
+
+  document.getElementById('sel-llm-provider').value = provider;
+  populateLlmModelSelect(provider);
+
+  document.getElementById('inp-llm-api-key').value = cfg.llm_api_key || '';
+
+  // Set model — default to first for provider if not set
+  const models = LLM_MODELS[provider] || LLM_MODELS.openai;
+  const savedModel = cfg.llm_model || '';
+  const modelExists = models.some((m) => m.value === savedModel);
+  const modelToUse = modelExists ? savedModel : (models[0] ? models[0].value : '');
+  document.getElementById('sel-llm-model').value = modelToUse;
+  if (!cfg.llm_model && modelToUse) {
+    cfg.llm_model = modelToUse;
+  }
+
+  updateLlmAutofillNotice(autofilled);
+  updateModesLlmGate();
+}
+
+function updateLlmAutofillNotice(show) {
+  const notice = document.getElementById('llm-autofill-notice');
+  if (notice) notice.classList.toggle('hidden', !show);
+}
+
+function hasLlmApiKey() {
+  return !!(config && config.llm_api_key && config.llm_api_key.trim());
+}
+
+function updateModesLlmGate() {
+  const notice = document.getElementById('modes-no-llm-notice');
+  if (!notice) return;
+  const hasKey = hasLlmApiKey();
+  notice.classList.toggle('hidden', hasKey);
+  // Disable only the enable/disable toggles when no key — categories stay clickable
+  document.querySelectorAll('.mode-toggle input').forEach((inp) => {
+    inp.disabled = !hasKey;
+  });
+  document.querySelectorAll('.mode-toggle').forEach((el) => {
+    el.style.opacity = hasKey ? '' : '0.4';
+    el.style.pointerEvents = hasKey ? '' : 'none';
+  });
+}
+
+function openLlmPanel() {
+  document.getElementById('modes-llm-btn').classList.add('active');
+  document.querySelectorAll('.modes-category').forEach((el) => el.classList.remove('active'));
+  document.getElementById('modes-llm-panel').classList.remove('hidden');
+  document.getElementById('modes-category-panel').classList.add('hidden');
+}
+
+function closeLlmPanel() {
+  document.getElementById('modes-llm-btn').classList.remove('active');
+  document.getElementById('modes-llm-panel').classList.add('hidden');
+  document.getElementById('modes-category-panel').classList.remove('hidden');
 }
 
 // ---------------------------------------------------------------------------
@@ -624,9 +969,19 @@ let installedAppsCache = null;
 let installedAppsCacheTime = 0;
 const APPS_CACHE_TTL = 5 * 60 * 1000;
 
+async function preloadInstalledApps() {
+  const now = Date.now();
+  if (!installedAppsCache || now - installedAppsCacheTime > APPS_CACHE_TTL) {
+    installedAppsCache = await window.api.getInstalledApps();
+    installedAppsCacheTime = Date.now();
+    renderBanner(selectedCategory);
+  }
+}
+
 function setupModesTab() {
   document.querySelectorAll('.modes-category').forEach((el) => {
     el.addEventListener('click', () => {
+      closeLlmPanel();
       selectCategory(el.dataset.category);
     });
   });
@@ -637,6 +992,7 @@ function setupModesTab() {
     if (!toggle) continue;
     toggle.addEventListener('click', (e) => e.stopPropagation());
     toggle.querySelector('input').addEventListener('change', (e) => {
+      if (!hasLlmApiKey()) { e.target.checked = false; return; }
       saveCategoryEnabled(categoryId, e.target.checked);
       // Update dim state immediately
       const row = document.querySelector(`.modes-category[data-category="${categoryId}"]`);
@@ -650,6 +1006,9 @@ function setupModesTab() {
 
   // Render initial state
   selectCategory('personal-message');
+
+  // Pre-load installed apps so banner icons show real icons immediately
+  preloadInstalledApps();
 }
 
 function selectCategory(categoryId) {
@@ -678,6 +1037,8 @@ function getCategoryConfig(categoryId) {
 }
 
 function getCategoryEnabled(categoryId) {
+  // Modes require an LLM API key — treat as disabled when none is set
+  if (!hasLlmApiKey()) return false;
   const enabled = (config && config.modes && config.modes.enabled) || {};
   // Default to true if not explicitly set
   return enabled[categoryId] !== false;
@@ -688,12 +1049,7 @@ function saveCategoryEnabled(categoryId, isEnabled) {
   if (!config.modes) config.modes = { selections: {}, categories: {}, enabled: {} };
   if (!config.modes.enabled) config.modes.enabled = {};
   config.modes.enabled[categoryId] = isEnabled;
-  clearTimeout(saveDebounce);
-  const toSave = { ...config };
-  if (toSave.api_provider === 'nemo' && nemoInstalled !== true) {
-    toSave.api_provider = 'openai';
-  }
-  window.api.saveConfig(toSave);
+  saveConfig();
 }
 
 function getAppIcon(appName) {
@@ -701,6 +1057,17 @@ function getAppIcon(appName) {
   if (KNOWN_APP_ICONS[key]) return KNOWN_APP_ICONS[key];
   // Fallback: first letter with a neutral color
   return { label: appName.charAt(0).toUpperCase(), bg: '#6B7280' };
+}
+
+function getBannerIconHtml(name) {
+  if (installedAppsCache) {
+    const cached = installedAppsCache.find((a) => a.name.toLowerCase() === name.toLowerCase());
+    if (cached && cached.icon) {
+      return `<div class="modes-banner-icon modes-banner-icon-app"><img src="${cached.icon}" alt="${name}"></div>`;
+    }
+  }
+  const icon = getAppIcon(name);
+  return `<div class="modes-banner-icon" style="background: ${icon.bg};">${icon.label}</div>`;
 }
 
 function renderBanner(categoryId) {
@@ -721,10 +1088,7 @@ function renderBanner(categoryId) {
   const visible = allItems.slice(0, MAX_VISIBLE);
   const overflow = allItems.length - MAX_VISIBLE;
 
-  const iconElements = visible.map((name) => {
-    const icon = getAppIcon(name);
-    return `<div class="modes-banner-icon" style="background: ${icon.bg};">${icon.label}</div>`;
-  }).join('');
+  const iconElements = visible.map((name) => getBannerIconHtml(name)).join('');
 
   const overflowEl = overflow > 0
     ? `<div class="modes-banner-icon overflow">+${overflow}</div>`
@@ -732,7 +1096,7 @@ function renderBanner(categoryId) {
 
   banner.innerHTML = `
     <div class="modes-banner-text">
-      <div class="modes-banner-title">This mode applies to:</div>
+      <div class="modes-banner-title">This profile applies to:</div>
     </div>
     <div class="modes-banner-icons">
       ${iconElements}
@@ -1037,14 +1401,7 @@ function saveCategoryConfig(categoryId, apps, urls) {
   if (!config.modes) config.modes = { selections: {}, categories: {} };
   if (!config.modes.categories) config.modes.categories = {};
   config.modes.categories[categoryId] = { linkedApps: [...apps], linkedUrls: [...urls] };
-  // Save immediately without debounce — prevents the 1-second polling loop from
-  // overwriting in-memory changes before they reach the backend.
-  clearTimeout(saveDebounce);
-  const toSave = { ...config };
-  if (toSave.api_provider === 'nemo' && nemoInstalled !== true) {
-    toSave.api_provider = 'openai';
-  }
-  window.api.saveConfig(toSave);
+  saveConfig();
 }
 
 function renderStyleCards(categoryId) {
@@ -1129,6 +1486,8 @@ function applyModesConfig() {
     if (row) row.classList.toggle('disabled', !enabled);
   }
 
+  updateModesLlmGate();
+
   // Re-render cards if modes tab is currently showing the selected category
   if (document.getElementById('tab-modes').classList.contains('active')) {
     updateDisabledNotice(selectedCategory);
@@ -1141,18 +1500,118 @@ function applyModesConfig() {
 // ---------------------------------------------------------------------------
 
 let saveDebounce = null;
+let saveInFlight = false;
 
 function saveConfig() {
+  saveInFlight = true;
   clearTimeout(saveDebounce);
   saveDebounce = setTimeout(async () => {
     if (!config) return;
-
-    // Don't save nemo as provider if not installed
-    const toSave = { ...config };
-    if (toSave.api_provider === 'nemo' && nemoInstalled !== true) {
-      toSave.api_provider = 'openai';
+    try {
+      await window.api.saveConfig({ ...config });
+    } finally {
+      saveInFlight = false;
     }
-
-    await window.api.saveConfig(toSave);
   }, 300);
+}
+
+// ---------------------------------------------------------------------------
+// History Tab
+// ---------------------------------------------------------------------------
+
+function setupHistoryTab() {
+  // Load history when the tab becomes active
+  document.querySelectorAll('.sidebar-item').forEach((item) => {
+    item.addEventListener('click', () => {
+      if (item.dataset.tab === 'history') {
+        loadHistory();
+      }
+    });
+  });
+
+  // Clear all button
+  document.getElementById('btn-clear-history').addEventListener('click', async () => {
+    await window.api.clearHistory();
+    renderHistory([]);
+  });
+}
+
+async function loadHistory() {
+  const entries = await window.api.getHistory();
+  renderHistory(entries || []);
+}
+
+function renderHistory(entries) {
+  const list = document.getElementById('history-list');
+  const empty = document.getElementById('history-empty');
+  const clearBtn = document.getElementById('btn-clear-history');
+
+  // Remove all entries but keep the empty placeholder
+  list.querySelectorAll('.history-entry').forEach((el) => el.remove());
+
+  if (!entries.length) {
+    empty.style.display = '';
+    clearBtn.style.display = 'none';
+    return;
+  }
+
+  empty.style.display = 'none';
+  clearBtn.style.display = '';
+
+  for (const entry of entries) {
+    const el = document.createElement('div');
+    el.className = 'history-entry';
+    el.innerHTML = `
+      <div class="history-entry-text">${escapeHtml(entry.text)}</div>
+      <div class="history-entry-meta">
+        <span class="history-entry-time">${formatTimestamp(entry.timestamp)}</span>
+        <div class="history-entry-actions">
+          <button class="history-action-btn copy" title="Copy to clipboard">Copy</button>
+          <button class="history-action-btn delete" title="Delete">Delete</button>
+        </div>
+      </div>
+    `;
+
+    el.querySelector('.copy').addEventListener('click', () => {
+      navigator.clipboard.writeText(entry.text);
+    });
+
+    el.querySelector('.delete').addEventListener('click', async () => {
+      await window.api.deleteHistoryEntry(entry.id);
+      el.remove();
+      // Check if list is now empty
+      if (!list.querySelector('.history-entry')) {
+        empty.style.display = '';
+        clearBtn.style.display = 'none';
+      }
+    });
+
+    list.appendChild(el);
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function formatTimestamp(iso) {
+  const date = new Date(iso);
+  const now = new Date();
+  const diff = now - date;
+
+  // Today: show time only
+  if (diff < 86400000 && date.getDate() === now.getDate()) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  // Yesterday
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth()) {
+    return 'Yesterday, ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  // Older
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
+    ', ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }

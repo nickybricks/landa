@@ -5,10 +5,45 @@
       "Bash(git init:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(git tag:*)",
+      "Bash(git remote:*)",
+      "Bash(git push:*)",
+      "Bash(gh release create v0.5.0 --repo nickybricks/FindMyVoice-2 --title 'v0.5.0: Initial release — FindMyVoice Electron app' --notes '## Changes:*)",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('backend/findmyvoice_core.py'\\).read\\(\\)\\); print\\('Syntax OK'\\)\")",
+      "Bash(gh release create v0.6.0 --title 'v0.6.0: Mode enable/disable toggles + raw transcription fix' --notes ':*)",
+      "Bash(grep -E \"\\\\.\\(js|json|html\\)$\")",
+      "Read(//Users/bricks/Developer/FinyMyVoice/**)",
+      "Read(//Users/bricks/.findmyvoice/**)",
+      "Bash(pip show:*)",
+      "Bash(python3 -c ':*)",
+      "Bash(node --check /Users/bricks/Developer/FinyMyVoice/electron-app/main.js)",
+      "Bash(node --check /Users/bricks/Developer/FinyMyVoice/electron-app/preload.js)",
+      "Bash(node --check /Users/bricks/Developer/FinyMyVoice/electron-app/renderer/settings.js)",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('/Users/bricks/Developer/FinyMyVoice/electron-app/backend/findmyvoice_core.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('/Users/bricks/Developer/FinyMyVoice/electron-app/backend/findmyvoice_core.py'\\).read\\(\\)\\); print\\('backend OK'\\)\")",
+      "Read(//Applications/**)",
+      "Bash(ls /Applications/*.app)",
+      "Bash(plutil -extract CFBundleIconFile raw -o - \"/Applications/Adobe Acrobat Reader.app/Contents/Info.plist\")",
+      "Bash(node -e ':*)",
+      "Read(//tmp/**)",
+      "Bash(sips -s format png \"/Applications/Adobe Acrobat Reader.app/Contents/Resources/AppIcon.icns\" --out /tmp/test-icon.png --resampleWidth 64)",
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "Read(//Users/bricks/.claude/skills/**)",
+      "Read(//Users/bricks/.agents/skills/web-design-guidelines/**)",
+      "Edit(/.claude/skills/review/**)",
+      "Read(//System/Library/Sounds/**)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('sound_start:', repr\\(d.get\\('sound_start'\\)\\)\\); print\\('sound_stop:', repr\\(d.get\\('sound_stop'\\)\\)\\)\")",
+      "Bash(python3 -m json.tool)",
+      "Bash(python3 -c \"import json,sys; c=json.load\\(sys.stdin\\); print\\('openai_model:', c.get\\('openai_model', 'NOT SET'\\)\\)\")",
+      "Bash(node -p \"require\\('./package.json'\\).version\")",
+      "Bash(git status:*)"
     ],
     "additionalDirectories": [
-      "/Users/bricks/Developer/FinyMyVoice/electron-app/.git"
+      "/Users/bricks/Developer/FinyMyVoice/electron-app/.git",
+      "/Users/bricks/.claude/plans",
+      "/Users/bricks/Developer/FinyMyVoice/electron-app/.claude/skills"
     ]
   }
 }

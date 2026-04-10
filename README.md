@@ -30,8 +30,11 @@ This will:
 
 - **Global hotkey** — Press the configured shortcut to start/stop recording. Transcribed text is auto-pasted into the active app.
 - **Tray menu** — Right-click (or click on macOS) the tray icon to toggle reformat, change modes, open settings, or quit.
+- **Cancel recording** — Press the cancel hotkey (default: `Escape`) to discard a recording in progress.
 - **Settings** — Click "Settings…" in the tray menu to configure API keys, hotkeys, sounds, and more.
 - **Modes** — Each mode category (Personal Message, Email) can be toggled on/off. When disabled, no reformatting is applied — raw transcription only. Modes only activate when you're in a linked app or URL; unlinked apps always get raw transcription.
+- **Transcription history** — View, copy, and delete past transcriptions from the History tab in Settings.
+- **Local Whisper** — Optionally run transcription locally using whisper.cpp instead of the OpenAI API.
 
 ## Config
 

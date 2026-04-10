@@ -3,6 +3,9 @@
 ## What This Is
 A cross-platform Electron app for FindMyVoice — global hotkey voice-to-text that pastes into any active app. Electron + Node.js frontend communicating with the Python backend over HTTP.
 
+## Platform Support
+**This app targets both macOS and Windows.** Every feature, fix, and new capability must work on both platforms. When writing any OS-level code (file paths, hotkeys, tray icons, app scanning, permissions, etc.), always implement and test both the macOS and Windows paths. Never leave a `// TODO: Windows` stub — implement it properly or raise it explicitly.
+
 ## File Structure
 - `main.js` — Electron main process (tray, hotkey, window management, backend subprocess)
 - `preload.js` — Context bridge between main and renderer
@@ -75,6 +78,18 @@ gh release create v{VERSION} --title "v{VERSION}: {Brief description}" --notes "
 - `npm run build:mac` — build macOS .dmg
 - `npm run build:win` — build Windows installer
 - `npm run build:linux` — build Linux AppImage
+
+## Design System
+
+**Every UI change must align with `DESIGN.md`.** Before touching any renderer file:
+
+1. Read `DESIGN.md` to understand the current design tokens and principles.
+2. Use CSS variables — never hard-code hex values, font names, or radius values.
+   - Colors: `var(--primary)`, `var(--secondary)`, `var(--tertiary)`, `var(--neutral)`
+   - Surfaces: `var(--bg)`, `var(--bg-card)`, `var(--bg-sidebar)`, `var(--border)`, `var(--text)`, `var(--text-secondary)`
+   - Typography: `var(--font-headline)` for headings, `var(--font-body)` for everything else
+   - Radii: `var(--radius-pill)` for controls/buttons, `var(--radius-card)` for containers
+3. If a design change is needed, update `DESIGN.md` first, then update the CSS tokens.
 
 ## Code Style
 - JavaScript: simple, minimal, no classes unless necessary. Use async/await over callbacks.

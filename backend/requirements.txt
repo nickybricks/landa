@@ -3,3 +3,8 @@ numpy>=1.24.0
 scipy>=1.10.0
 openai>=1.0.0
 flask>=3.0.0
+# faster-whisper is optional — installed on demand for local whisper-large-v3 / whisper-large-v3-turbo
+# huggingface_hub is required for model cache checks (auto-installed with faster-whisper)
+huggingface_hub>=0.20.0
+# anthropic is optional — only required when llm_provider == "anthropic"
+anthropic>=0.26.0
