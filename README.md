@@ -1,6 +1,6 @@
-# FindMyVoice — Electron App
+# Landa — Electron App
 
-Cross-platform Electron frontend for FindMyVoice. Replaces the native SwiftUI app while using the same Python backend.
+Cross-platform Electron frontend for Landa. Replaces the native SwiftUI app while using the same Python backend.
 
 ## Prerequisites
 
@@ -23,7 +23,7 @@ npm start
 
 This will:
 1. Show a microphone icon in your system tray / menu bar
-2. Automatically start the Python backend (`findmyvoice_core.py`) on `localhost:7890`
+2. Automatically start the Python backend (`landa_core.py`) on `localhost:7890`
 3. Register the global hotkey (default: `Cmd+Shift+F5` on macOS)
 
 ## Usage
@@ -38,7 +38,7 @@ This will:
 
 ## Config
 
-Configuration is stored at `~/.findmyvoice/config.json` — the same file used by the Python backend and the original Swift app. Changing settings in the Electron app updates this file.
+Configuration is stored at `~/.landa/config.json` — the same file used by the Python backend and the original Swift app. Changing settings in the Electron app updates this file.
 
 ## Build / Package
 

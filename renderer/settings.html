@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:;">
-  <title>FindMyVoice Settings</title>
+  <title>Landa Settings</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@600;700&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
@@ -78,14 +78,13 @@
       <main class="content" id="content">
         <!-- Home Tab -->
         <div class="tab-panel active" id="tab-home">
-          <div class="placeholder-view">
-            <img src="../brand-assets/FindMyVoice_v2-iOS-Default-1024x1024@1x.png" alt="FindMyVoice" class="placeholder-icon" style="width: 80px; height: 80px; border-radius: 18px;">
-            <h2>FindMyVoice</h2>
-            <p class="muted">Version 0.6.0</p>
-            <p class="muted" style="max-width: 300px; text-align: center;">
-              Lightweight voice-to-text for macOS &amp; Windows.<br>
-              Press your hotkey to record, release to transcribe and paste.
-            </p>
+          <div class="home-bg">
+            <div class="home-glass-card">
+              <img src="../brand-assets/FindMyVoice_v2-iOS-Default-1024x1024@1x.png" alt="Landa" class="home-app-icon">
+              <h2 class="home-title">Landa</h2>
+              <p class="home-version" id="app-version-label">Version …</p>
+              <p class="home-desc">Lightweight voice-to-text for macOS &amp; Windows.<br>Press your hotkey to record, release to transcribe and paste.</p>
+            </div>
           </div>
         </div>
 
@@ -107,7 +106,7 @@
                   <span class="modes-category-style" id="cat-style-personal-message">Formal</span>
                 </div>
                 <label class="mode-toggle" id="toggle-personal-message">
-                  <input type="checkbox">
+                  <input type="checkbox" disabled>
                   <span class="mode-toggle-slider"></span>
                 </label>
               </div>
@@ -120,7 +119,7 @@
                   <span class="modes-category-style" id="cat-style-email">Formal</span>
                 </div>
                 <label class="mode-toggle" id="toggle-email">
-                  <input type="checkbox">
+                  <input type="checkbox" disabled>
                   <span class="mode-toggle-slider"></span>
                 </label>
               </div>
@@ -133,7 +132,7 @@
             <div class="modes-scroll hidden" id="modes-llm-panel">
               <div class="llm-panel-header">
                 <div class="llm-panel-title">LLM Settings</div>
-                <div class="llm-panel-subtitle">Modes use a language model to reformat your transcribed speech. Choose a provider and enter your API key.</div>
+                <div class="llm-panel-subtitle" id="llm-panel-subtitle">Modes use a language model to reformat your transcribed speech. Choose a provider and enter your API key.</div>
               </div>
               <div class="settings-card">
                 <div class="picker-row">
@@ -141,22 +140,33 @@
                   <select id="sel-llm-provider">
                     <option value="openai">OpenAI</option>
                     <option value="anthropic">Anthropic</option>
+                    <option value="google">Google</option>
+                    <option value="local">Local (on-device)</option>
                   </select>
                 </div>
-                <div class="divider"></div>
-                <div class="picker-row">
+                <div class="divider" id="llm-api-key-divider"></div>
+                <div class="picker-row" id="llm-api-key-row">
                   <span>API Key</span>
+                  <span class="api-key-masked hidden" id="masked-llm-api-key"></span>
                   <input type="password" id="inp-llm-api-key" placeholder="Enter API key…" class="text-input">
                 </div>
                 <div class="divider"></div>
                 <div class="picker-row" id="llm-model-row">
                   <span>Model</span>
-                  <select id="sel-llm-model"></select>
+                  <div class="logo-select" id="sel-llm-model">
+                    <div class="logo-select-trigger">
+                      <img class="logo-select-icon" src="" width="16" height="16" alt="">
+                      <span class="logo-select-label">Select…</span>
+                      <svg class="logo-select-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <div class="logo-select-menu"></div>
+                  </div>
                 </div>
               </div>
               <div class="llm-autofill-notice hidden" id="llm-autofill-notice">
                 API key auto-filled from Settings.
               </div>
+              <div id="llm-local-status" class="hidden"></div>
             </div>
 
             <!-- Category content (shown when a category is selected) -->
@@ -179,6 +189,7 @@
 
               <!-- Style Cards -->
               <div class="modes-cards" id="modes-cards"></div>
+              <div class="modes-toggles" id="modes-toggles"></div>
             </div>
           </div>
         </div>
@@ -186,36 +197,26 @@
         <!-- Settings Tab -->
         <div class="tab-panel" id="tab-configuration">
           <div class="tab-scroll">
-            <!-- Provider -->
-            <section>
-              <h3 class="section-title">Provider</h3>
-              <div class="settings-card">
-                <div class="picker-row">
-                  <span>API Provider</span>
-                  <select id="sel-provider">
-                    <option value="openai">OpenAI</option>
-                    <option value="nemo">NeMo (Local)</option>
-                  </select>
-                </div>
-              </div>
-            </section>
-
-            <!-- OpenAI Settings -->
+            <!-- Model -->
             <section id="section-openai">
-              <h3 class="section-title">OpenAI Settings</h3>
+              <h3 class="section-title">Model</h3>
               <div class="settings-card">
                 <div class="picker-row hidden" id="row-api-key">
                   <span>API Key</span>
+                  <span class="api-key-masked hidden" id="masked-apiKey"></span>
                   <input type="password" id="inp-apiKey" placeholder="sk-..." class="text-input">
                 </div>
                 <div class="divider hidden" id="divider-api-key"></div>
                 <div class="picker-row">
                   <span>Model</span>
-                  <select id="sel-openaiModel">
-                    <option value="whisper-large-v3">whisper-large-v3</option>
-                    <option value="whisper-large-v3-turbo">whisper-large-v3-turbo</option>
-                    <option value="whisper-1">whisper-1</option>
-                  </select>
+                  <div class="logo-select" id="sel-openaiModel">
+                    <div class="logo-select-trigger">
+                      <img class="logo-select-icon" src="" width="16" height="16" alt="">
+                      <span class="logo-select-label">Select…</span>
+                      <svg class="logo-select-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <div class="logo-select-menu"></div>
+                  </div>
                 </div>
                 <div id="local-model-divider" class="divider"></div>
                 <div id="local-model-status"></div>
@@ -223,16 +224,6 @@
                 <div class="picker-row">
                   <span>Language</span>
                   <select id="sel-openaiLang"></select>
-                </div>
-              </div>
-            </section>
-
-            <!-- NeMo Settings -->
-            <section id="section-nemo" class="hidden">
-              <h3 class="section-title">NeMo Toolkit</h3>
-              <div class="settings-card">
-                <div id="nemo-content">
-                  <!-- Populated by JS -->
                 </div>
               </div>
             </section>
@@ -316,6 +307,14 @@
                   <div class="sound-controls">
                     <select id="sel-soundStop"></select>
                     <button class="play-btn" data-sound="stop" title="Preview">▶</button>
+                  </div>
+                </div>
+                <div class="divider"></div>
+                <div class="sound-row" id="sound-cancel-row">
+                  <span>Cancel sound</span>
+                  <div class="sound-controls">
+                    <select id="sel-soundCancel"></select>
+                    <button class="play-btn" data-sound="cancel" title="Preview">▶</button>
                   </div>
                 </div>
               </div>

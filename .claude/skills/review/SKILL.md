@@ -1,12 +1,12 @@
 ---
 name: review
-description: Full performance and accuracy audit of the FindMyVoice Electron app. Checks for race conditions, UI state drift, blocking main-process operations, IPC inefficiencies, backend sync issues, and code quality problems. Trigger with /review.
+description: Full performance and accuracy audit of the Landa Electron app. Checks for race conditions, UI state drift, blocking main-process operations, IPC inefficiencies, backend sync issues, and code quality problems. Trigger with /review.
 metadata:
-  author: findmyvoice
+  author: landa
   version: "1.0.0"
 ---
 
-# FindMyVoice App Review
+# Landa App Review
 
 Run a thorough performance and accuracy audit of this Electron app. Read the files below, then report every issue you find.
 
@@ -19,7 +19,7 @@ Always read all of these before reporting:
 - `renderer/settings.js` — settings UI logic
 - `renderer/settings.html` — settings UI markup
 - `renderer/settings.css` — styles
-- `backend/findmyvoice_core.py` — Python HTTP backend
+- `backend/landa_core.py` — Python HTTP backend
 
 ## What to Audit
 

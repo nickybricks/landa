@@ -12,7 +12,7 @@ const os = require('os');
 // ---------------------------------------------------------------------------
 
 const API_BASE = 'http://127.0.0.1:7890';
-const CONFIG_DIR = path.join(os.homedir(), '.findmyvoice');
+const CONFIG_DIR = path.join(os.homedir(), '.landa');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 const POLL_INTERVAL = 1000; // 1 second, matches Swift app
 
@@ -30,6 +30,7 @@ let reformatMode = 'default';
 let modesConfig = { selections: { 'personal-message': 'formal', 'email': 'formal' } };
 let currentShortcut = null; // Electron accelerator string
 let currentCancelShortcut = null; // Electron accelerator for cancel_recording
+let currentCancelSound = 'Funk'; // system sound name to play on cancel
 let lastHotkeyTime = 0;
 let hotkeyInFlight = false; // re-entrancy guard
 let lastSentConfigStr = null; // dedup config-updated pushes to settings window
@@ -93,6 +94,25 @@ const api = {
   deleteHistoryEntry: (id) => apiRequest('DELETE', `/history/${encodeURIComponent(id)}`),
 };
 
+function readConfigFromDisk() {
+  try {
+    if (!fs.existsSync(CONFIG_PATH)) return null;
+    return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+  } catch (err) {
+    console.error(`[Landa] Failed to read config from disk: ${err.message}`);
+    return null;
+  }
+}
+
+async function getBestAvailableConfig() {
+  try {
+    return await api.fetchConfig();
+  } catch (err) {
+    console.log(`[Landa] Backend config fetch failed, falling back to disk: ${err.message}`);
+    return readConfigFromDisk();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Hotkey helpers
 // ---------------------------------------------------------------------------
@@ -143,12 +163,12 @@ function registerHotkey(combo) {
     const ok = globalShortcut.register(accelerator, handleHotkeyPress);
     if (ok) {
       currentShortcut = accelerator;
-      console.log(`[FindMyVoice] Registered hotkey: ${accelerator}`);
+      console.log(`[Landa] Registered hotkey: ${accelerator}`);
     } else {
-      console.error(`[FindMyVoice] Failed to register hotkey: ${accelerator}`);
+      console.error(`[Landa] Failed to register hotkey: ${accelerator}`);
     }
   } catch (err) {
-    console.error(`[FindMyVoice] Hotkey registration error: ${err.message}`);
+    console.error(`[Landa] Hotkey registration error: ${err.message}`);
   }
 }
 
@@ -174,10 +194,10 @@ async function handleHotkeyPress() {
   if (hotkeyInFlight) {
     if (isRecording) {
       // Let the stop through even if a previous action is in-flight
-      console.log(`[FindMyVoice] Hotkey in-flight but recording active — forcing stop`);
+      console.log(`[Landa] Hotkey in-flight but recording active — forcing stop`);
       forceStopRecording();
     } else {
-      console.log(`[FindMyVoice] Hotkey ignored — previous action still in-flight`);
+      console.log(`[Landa] Hotkey ignored — previous action still in-flight`);
     }
     return;
   }
@@ -185,7 +205,7 @@ async function handleHotkeyPress() {
 
   const action = isRecording ? 'stop' : 'start';
   const t0 = Date.now();
-  console.log(`[FindMyVoice] Hotkey pressed — action: ${action}`);
+  console.log(`[Landa] Hotkey pressed — action: ${action}`);
   try {
     try {
       if (isRecording) {
@@ -193,22 +213,22 @@ async function handleHotkeyPress() {
       } else {
         await api.startRecording();
       }
-      console.log(`[FindMyVoice] ${action} API responded in ${Date.now() - t0}ms`);
+      console.log(`[Landa] ${action} API responded in ${Date.now() - t0}ms`);
     } catch (err) {
-      console.error(`[FindMyVoice] Hotkey action failed (${action}) after ${Date.now() - t0}ms: ${err.message}`);
+      console.error(`[Landa] Hotkey action failed (${action}) after ${Date.now() - t0}ms: ${err.message}`);
     }
 
     // Always sync state — even after a timeout the backend may have acted
     try {
       const t1 = Date.now();
       const status = await api.fetchStatus();
-      console.log(`[FindMyVoice] Status sync responded in ${Date.now() - t1}ms — recording: ${status.recording}`);
+      console.log(`[Landa] Status sync responded in ${Date.now() - t1}ms — recording: ${status.recording}`);
       setRecordingState(status.recording);
     } catch {
       // Backend unreachable — keep current state
     }
   } finally {
-    console.log(`[FindMyVoice] Hotkey handling complete in ${Date.now() - t0}ms total`);
+    console.log(`[Landa] Hotkey handling complete in ${Date.now() - t0}ms total`);
     hotkeyInFlight = false;
   }
 }
@@ -216,12 +236,12 @@ async function handleHotkeyPress() {
 /** Force-stop: fire-and-forget, no guards. Used as escape hatch. */
 async function forceStopRecording() {
   const t0 = Date.now();
-  console.log(`[FindMyVoice] Force stop — sending /stop`);
+  console.log(`[Landa] Force stop — sending /stop`);
   try {
     await api.stopRecording();
-    console.log(`[FindMyVoice] Force stop API responded in ${Date.now() - t0}ms`);
+    console.log(`[Landa] Force stop API responded in ${Date.now() - t0}ms`);
   } catch (err) {
-    console.error(`[FindMyVoice] Force stop failed: ${err.message}`);
+    console.error(`[Landa] Force stop failed: ${err.message}`);
   }
   try {
     const status = await api.fetchStatus();
@@ -233,12 +253,13 @@ async function forceStopRecording() {
 async function handleCancelPress() {
   if (!isRecording) return; // nothing to cancel
   const t0 = Date.now();
-  console.log(`[FindMyVoice] Cancel hotkey pressed — discarding recording`);
+  console.log(`[Landa] Cancel hotkey pressed — discarding recording`);
+  playSound(currentCancelSound);
   try {
     await api.cancelRecording();
-    console.log(`[FindMyVoice] Cancel API responded in ${Date.now() - t0}ms`);
+    console.log(`[Landa] Cancel API responded in ${Date.now() - t0}ms`);
   } catch (err) {
-    console.error(`[FindMyVoice] Cancel failed: ${err.message}`);
+    console.error(`[Landa] Cancel failed: ${err.message}`);
   }
   try {
     const status = await api.fetchStatus();
@@ -265,10 +286,10 @@ function activateCancelHotkey() {
     const ok = globalShortcut.register(accelerator, handleCancelPress);
     if (ok) {
       currentCancelShortcut = accelerator;
-      console.log(`[FindMyVoice] Activated cancel hotkey: ${accelerator}`);
+      console.log(`[Landa] Activated cancel hotkey: ${accelerator}`);
     }
   } catch (err) {
-    console.error(`[FindMyVoice] Cancel hotkey activation error: ${err.message}`);
+    console.error(`[Landa] Cancel hotkey activation error: ${err.message}`);
   }
 }
 
@@ -297,7 +318,7 @@ function createTray() {
   icon.setTemplateImage(true);
 
   tray = new Tray(icon);
-  tray.setToolTip('FindMyVoice');
+  tray.setToolTip('Landa');
   updateTray();
 }
 
@@ -373,7 +394,7 @@ function updateTray() {
     },
     { type: 'separator' },
     {
-      label: 'Quit FindMyVoice',
+      label: 'Quit Landa',
       accelerator: 'CommandOrControl+Q',
       click: () => app.quit(),
     },
@@ -415,10 +436,10 @@ function openSettings() {
 
   settingsWindow = new BrowserWindow({
     width: 1050,
-    height: 830,
+    height: 750,
     minWidth: 1050,
     minHeight: 650,
-    title: 'FindMyVoice Settings',
+    title: 'Landa Settings',
     resizable: true,
     ...titleBarOptions,
     webPreferences: {
@@ -430,7 +451,20 @@ function openSettings() {
 
   settingsWindow.loadFile(path.join(__dirname, 'renderer', 'settings.html'));
 
-  // Reset so the next poll re-sends config to the new window
+  // Prevent Cmd+R / Ctrl+R / F5 from reloading the settings window.
+  // Reloading races with debounced config saves and causes settings to revert.
+  settingsWindow.webContents.on('before-input-event', (_event, input) => {
+    if (
+      (input.key === 'r' && (input.meta || input.control)) ||
+      input.key === 'F5'
+    ) {
+      _event.preventDefault();
+    }
+  });
+
+  // Reset so the next poll sends config to the new window.  The renderer
+  // registers its config-updated listener before DOMContentLoaded awaits IPC
+  // calls, so the first poll event will always be received.
   lastSentConfigStr = null;
 
   settingsWindow.on('closed', () => {
@@ -443,19 +477,19 @@ function openSettings() {
 // ---------------------------------------------------------------------------
 
 function findBackendRoot() {
-  const script = path.join('backend', 'findmyvoice_core.py');
+  const script = path.join('backend', 'landa_core.py');
 
   // 1. Bundled in resources (packaged app)
   const resourcePath = process.resourcesPath;
   if (fs.existsSync(path.join(resourcePath, script))) {
-    console.log('[FindMyVoice] Found backend in app resources');
+    console.log('[Landa] Found backend in app resources');
     return resourcePath;
   }
 
-  // 2. ~/.findmyvoice/backend/
+  // 2. ~/.landa/backend/
   const homeBackend = CONFIG_DIR;
   if (fs.existsSync(path.join(homeBackend, script))) {
-    console.log('[FindMyVoice] Found backend in ~/.findmyvoice/');
+    console.log('[Landa] Found backend in ~/.landa/');
     return homeBackend;
   }
 
@@ -463,7 +497,7 @@ function findBackendRoot() {
   let dir = __dirname;
   for (let i = 0; i < 10; i++) {
     if (fs.existsSync(path.join(dir, script))) {
-      console.log(`[FindMyVoice] Found backend at: ${dir}`);
+      console.log(`[Landa] Found backend at: ${dir}`);
       return dir;
     }
     const parent = path.dirname(dir);
@@ -478,8 +512,8 @@ function findPython(projectRoot) {
   const candidates = [
     path.join(projectRoot, 'backend', 'venv', 'bin', 'python'),
     path.join(projectRoot, 'backend', 'venv', 'Scripts', 'python.exe'), // Windows
-    path.join(os.homedir(), '.findmyvoice', 'backend', 'venv', 'bin', 'python'),
-    path.join(os.homedir(), '.findmyvoice', 'backend', 'venv', 'Scripts', 'python.exe'),
+    path.join(os.homedir(), '.landa', 'backend', 'venv', 'bin', 'python'),
+    path.join(os.homedir(), '.landa', 'backend', 'venv', 'Scripts', 'python.exe'),
   ];
 
   for (const p of candidates) {
@@ -493,13 +527,13 @@ function findPython(projectRoot) {
 function startBackend() {
   const backendRoot = findBackendRoot();
   if (!backendRoot) {
-    console.error('[FindMyVoice] Could not find findmyvoice_core.py — backend will not start');
+    console.error('[Landa] Could not find landa_core.py — backend will not start');
     return;
   }
 
-  const scriptPath = path.join(backendRoot, 'backend', 'findmyvoice_core.py');
+  const scriptPath = path.join(backendRoot, 'backend', 'landa_core.py');
   const pythonPath = findPython(backendRoot);
-  console.log(`[FindMyVoice] Starting backend: ${pythonPath} ${scriptPath}`);
+  console.log(`[Landa] Starting backend: ${pythonPath} ${scriptPath}`);
 
   backendProcess = spawn(pythonPath, [scriptPath], {
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -513,21 +547,21 @@ function startBackend() {
   });
 
   backendProcess.on('error', (err) => {
-    console.error(`[FindMyVoice] Failed to start backend: ${err.message}`);
+    console.error(`[Landa] Failed to start backend: ${err.message}`);
   });
 
   backendProcess.on('exit', (code) => {
-    console.log(`[FindMyVoice] Backend exited with code ${code}`);
+    console.log(`[Landa] Backend exited with code ${code}`);
     backendProcess = null;
   });
 
-  console.log(`[FindMyVoice] Backend started (pid=${backendProcess.pid})`);
+  console.log(`[Landa] Backend started (pid=${backendProcess.pid})`);
 }
 
 function stopBackend() {
   if (backendProcess) {
     backendProcess.kill();
-    console.log('[FindMyVoice] Backend stopped');
+    console.log('[Landa] Backend stopped');
     backendProcess = null;
   }
 }
@@ -570,6 +604,9 @@ function startStatusPolling() {
         registerCancelHotkey(cancelCombo);
       }
 
+      // Update cancel sound
+      currentCancelSound = config.sound_cancel || 'Funk';
+
       // Update reformat state
       const reformatChanged = reformatEnabled !== config.reformat_enabled ||
                                reformatMode !== config.reformat_mode;
@@ -609,7 +646,7 @@ function requestPermissions() {
     const micStatus = systemPreferences.getMediaAccessStatus('microphone');
     if (micStatus !== 'granted') {
       systemPreferences.askForMediaAccess('microphone').then((granted) => {
-        console.log(`[FindMyVoice] Microphone permission: ${granted ? 'granted' : 'denied'}`);
+        console.log(`[Landa] Microphone permission: ${granted ? 'granted' : 'denied'}`);
       });
     }
 
@@ -617,7 +654,7 @@ function requestPermissions() {
     // We check and prompt via a dialog if not trusted
     try {
       const trusted = systemPreferences.isTrustedAccessibilityClient(true);
-      console.log(`[FindMyVoice] Accessibility trusted: ${trusted}`);
+      console.log(`[Landa] Accessibility trusted: ${trusted}`);
     } catch {
       // Not available on all versions
     }
@@ -762,15 +799,48 @@ async function getInstalledAppsWin() {
   return apps;
 }
 
+function playSound(name) {
+  if (process.platform === 'darwin') {
+    const soundPath = `/System/Library/Sounds/${name}.aiff`;
+    if (fs.existsSync(soundPath)) {
+      spawn('afplay', [soundPath], { stdio: 'ignore' });
+    }
+  }
+  // Windows: could use powershell to play system sounds
+}
+
 function setupIpcHandlers() {
   ipcMain.handle('get-config', async () => {
-    try { return await api.fetchConfig(); }
-    catch { return null; }
+    return await getBestAvailableConfig();
   });
 
   ipcMain.handle('save-config', async (_event, config) => {
     try { return await api.saveConfig(config); }
     catch { return null; }
+  });
+
+  // Synchronous variant for beforeunload — writes config to disk AND updates
+  // the backend's in-memory state so the next GET /config returns fresh data.
+  ipcMain.on('save-config-sync', (event, cfg) => {
+    try {
+      fs.mkdirSync(CONFIG_DIR, { recursive: true });
+      fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+      // Synchronously POST to backend so its in-memory config is also updated
+      // before the renderer reloads and calls GET /config.
+      try {
+        require('child_process').execSync(
+          `curl -s -X POST -H "Content-Type: application/json" -d @"${CONFIG_PATH}" http://127.0.0.1:7890/config`,
+          { timeout: 2000 }
+        );
+      } catch { /* backend may not be running */ }
+      event.returnValue = true;
+    } catch {
+      event.returnValue = false;
+    }
+  });
+
+  ipcMain.on('debug-log', (_event, msg) => {
+    console.log('[RENDERER]', msg);
   });
 
   ipcMain.handle('patch-config', async (_event, patch) => {
@@ -876,6 +946,55 @@ function setupIpcHandlers() {
     catch (err) { return { error: err.message }; }
   });
 
+  // ---- Local LLM ----
+
+  ipcMain.handle('get-llm-local-status', async (_event, modelId) => {
+    try { return await apiRequest('GET', `/llm-local/status?model=${encodeURIComponent(modelId)}`); }
+    catch { return null; }
+  });
+
+  ipcMain.handle('install-llm-deps', async () => {
+    return new Promise((resolve) => {
+      const url = new URL('/llm-local/install-deps', API_BASE);
+      const options = {
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: 'POST',
+        timeout: 600000, // 10 min
+      };
+
+      const req = http.request(options, (res) => {
+        let buffer = '';
+        res.on('data', (chunk) => {
+          buffer += chunk.toString();
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const content = line.slice(6);
+              if (content === '__DONE__') { resolve({ success: true }); return; }
+              if (content.startsWith('__ERROR__')) { resolve({ success: false, error: content }); return; }
+              if (settingsWindow && !settingsWindow.isDestroyed()) {
+                settingsWindow.webContents.send('llm-deps-progress', content);
+              }
+            }
+          }
+        });
+        res.on('end', () => resolve({ success: false, error: 'Stream ended unexpectedly' }));
+      });
+
+      req.on('error', (err) => resolve({ success: false, error: err.message }));
+      req.on('timeout', () => { req.destroy(); resolve({ success: false, error: 'Timeout' }); });
+      req.end();
+    });
+  });
+
+  ipcMain.handle('download-llm-model', async (_event, modelId) => {
+    try { return await apiRequest('POST', '/llm-local/download', { model: modelId }); }
+    catch (err) { return { error: err.message }; }
+  });
+
   ipcMain.handle('get-system-sounds', () => {
     if (process.platform === 'darwin') {
       const soundsDir = '/System/Library/Sounds';
@@ -890,17 +1009,10 @@ function setupIpcHandlers() {
     return ['Default', 'Notify', 'Alert'];
   });
 
-  ipcMain.handle('play-sound', (_event, name) => {
-    if (process.platform === 'darwin') {
-      const soundPath = `/System/Library/Sounds/${name}.aiff`;
-      if (fs.existsSync(soundPath)) {
-        spawn('afplay', [soundPath], { stdio: 'ignore' });
-      }
-    }
-    // Windows: could use powershell to play system sounds
-  });
+  ipcMain.handle('play-sound', (_event, name) => playSound(name));
 
   ipcMain.handle('get-platform', () => process.platform);
+  ipcMain.handle('get-app-version', () => app.getVersion());
 
   ipcMain.handle('get-history', async () => {
     try { return await api.fetchHistory(); }

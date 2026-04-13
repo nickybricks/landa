@@ -6,8 +6,7 @@ let config = null;
 let platform = 'darwin';
 let systemSounds = [];
 let recordingAction = null; // which shortcut is being recorded
-let nemoInstalled = null;
-let nemoInstalling = false;
+let _setupDone = false; // true once UI is populated & first applyConfig has run
 
 // Default shortcuts (must match Python backend's DEFAULT_CONFIG)
 const DEFAULTS = {
@@ -30,25 +29,54 @@ const OPENAI_LANGUAGES = [
   ['ja', 'Japanese'], ['ko', 'Korean'], ['zh', 'Chinese'],
 ];
 
-// NeMo languages (matches Swift ModelsLibraryView)
-const NEMO_LANGUAGES = [
-  ['auto', 'Auto-detect'], ['en', 'English'], ['bg', 'Bulgarian'], ['hr', 'Croatian'],
-  ['cs', 'Czech'], ['da', 'Danish'], ['nl', 'Dutch'], ['et', 'Estonian'],
-  ['fi', 'Finnish'], ['fr', 'French'], ['de', 'German'], ['el', 'Greek'],
-  ['hu', 'Hungarian'], ['it', 'Italian'], ['lv', 'Latvian'], ['lt', 'Lithuanian'],
-  ['mt', 'Maltese'], ['pl', 'Polish'], ['pt', 'Portuguese'], ['ro', 'Romanian'],
-  ['ru', 'Russian'], ['sk', 'Slovak'], ['sl', 'Slovenian'], ['es', 'Spanish'],
-  ['sv', 'Swedish'], ['uk', 'Ukrainian'],
+const WHISPER_MODELS = [
+  { value: 'whisper-large-v3', label: 'whisper-large-v3', logo: 'openai' },
+  { value: 'whisper-large-v3-turbo', label: 'whisper-large-v3-turbo', logo: 'openai' },
+  { value: 'whisper-1', label: 'whisper-1', logo: 'openai' },
+  { value: 'nemo', label: 'NeMo Parakeet', logo: 'nvidia' },
 ];
 
 // ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
 
+// Flush any pending debounced save when the window is about to close
+// so that settings changes are never lost on quit.
+window.addEventListener('beforeunload', () => {
+  if (saveDebounce) {
+    clearTimeout(saveDebounce);
+    saveDebounce = null;
+  }
+  // Always flush config on unload (Cmd+R, window close) via synchronous IPC
+  // so the save completes before the page tears down.
+  if (config) {
+    window.api.saveConfigSync({ ...config });
+  }
+});
+
+// Register config-updated listener early so events from the main process's
+// did-finish-load handler are never lost.  If setup isn't done yet we stash
+// the latest config and apply it once the UI is ready.
+let _pendingConfig = null;
+window.api.onConfigUpdated((updated) => {
+  if (!_setupDone) {
+    _pendingConfig = updated;
+    return;
+  }
+  // Skip if a save is pending/in-flight — the frontend is the source of truth
+  // during edits. Applying a stale polled value would reset dropdowns/inputs.
+  if (saveInFlight) return;
+  config = updated;
+  applyConfig(config, { fromPoll: true });
+});
+
 document.addEventListener('DOMContentLoaded', async () => {
   platform = await window.api.getPlatform();
   document.body.classList.add('platform-' + platform);
   systemSounds = await window.api.getSystemSounds();
+
+  const version = await window.api.getAppVersion();
+  document.getElementById('app-version-label').textContent = `Version ${version}`;
 
   // Load config first (retry if backend isn't ready yet)
   config = await window.api.getConfig();
@@ -59,15 +87,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // If getConfig() still returned null but we received a config-updated event
+  // from the main process while awaiting, use that instead.
+  if (!config && _pendingConfig) {
+    config = _pendingConfig;
+  }
+
+  // Fire installed-apps scan immediately so the cache is warm before the user
+  // opens the linked-apps popup (no await — runs in background).
+  preloadInstalledApps();
+
   populateSoundSelects();
   populateLanguageSelect();
+  initLogoSelect('sel-openaiModel', WHISPER_MODELS);
   populateLlmModelSelect('openai');
   setupSidebarToggle();
   setupSidebarNav();
   setupShortcutCapture();
   setupOptionToggles();
   setupSoundControls();
-  setupProviderSwitch();
   setupApiKeyInput();
   setupLlmSettings();
   setupModesTab();
@@ -75,31 +113,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (config) applyConfig(config);
 
-  // Check NeMo if provider is nemo
-  if (config && config.api_provider === 'nemo') {
-    await checkNemoStatus();
-  }
+  // Mark setup as done — any future config-updated events apply immediately.
+  _setupDone = true;
 
-  // Listen for config updates from main process polling
-  window.api.onConfigUpdated((updated) => {
-    // Skip if a save is pending/in-flight — the frontend is the source of truth
-    // during edits. Applying a stale polled value would reset dropdowns/inputs.
-    if (saveInFlight) return;
-    config = updated;
+  // If a config-updated event arrived after getConfig() but before we finished
+  // setup, apply it now (it may be newer than what getConfig() returned).
+  if (_pendingConfig && _pendingConfig !== config) {
+    config = _pendingConfig;
     applyConfig(config, { fromPoll: true });
-  });
-
-  // Listen for NeMo install progress
-  window.api.onNemoInstallProgress((line) => {
-    const el = document.getElementById('nemo-status-line');
-    if (el) el.textContent = line;
-  });
+  }
+  _pendingConfig = null;
 
   // Listen for tab navigation from tray menu
   window.api.onNavigateTab((tab) => {
     const item = document.querySelector(`.sidebar-item[data-tab="${tab}"]`);
     if (item) item.click();
   });
+
 });
 
 // ---------------------------------------------------------------------------
@@ -161,24 +191,18 @@ function applyConfig(cfg, { fromPoll = false } = {}) {
   document.getElementById('opt-soundMuted').checked = cfg.sound_muted || false;
   document.getElementById('sel-soundStart').value = cfg.sound_start || 'Tink';
   document.getElementById('sel-soundStop').value = cfg.sound_stop || 'Pop';
+  document.getElementById('sel-soundCancel').value = cfg.sound_cancel || 'Funk';
   updateSoundRowsDisabled(cfg.sound_muted || false);
 
-  // Provider
-  document.getElementById('sel-provider').value = cfg.api_provider;
-  // Only toggle section visibility from polls — skip renderNemoContent to
-  // avoid destroying open dropdowns (language select, etc.)
-  if (fromPoll) {
-    document.getElementById('section-openai').classList.toggle('hidden', cfg.api_provider !== 'openai');
-    document.getElementById('section-nemo').classList.toggle('hidden', cfg.api_provider !== 'nemo');
-  } else {
-    updateProviderSections(cfg.api_provider);
-  }
-
-  // OpenAI (transcription)
-  document.getElementById('inp-apiKey').value = cfg.api_key || '';
-  const openaiModel = cfg.openai_model || 'whisper-large-v3';
-  document.getElementById('sel-openaiModel').value = openaiModel;
-  document.getElementById('sel-openaiLang').value = cfg.openai_language || 'auto';
+  // Transcription model
+  const apiKeyInput = document.getElementById('inp-apiKey');
+  apiKeyInput.value = cfg.api_key || '';
+  if (apiKeyInput._showMasked) apiKeyInput._showMasked();
+  // If the backend provider is nemo, show nemo in the model dropdown
+  const openaiModel = cfg.api_provider === 'nemo' ? 'nemo' : (cfg.openai_model || 'whisper-large-v3');
+  setLogoSelect('sel-openaiModel', openaiModel);
+  const langSel = document.getElementById('sel-openaiLang');
+  langSel.value = cfg.openai_language || 'auto';
   if (!fromPoll) updateLocalModelStatus(openaiModel);
 
   // LLM Settings — auto-populate key from transcription api_key when openai+unset
@@ -202,6 +226,7 @@ const KEY_DISPLAY = {
 
 function renderShortcutBadges(action, combo) {
   const container = document.getElementById(`badge-${action}`);
+  if (!container) return;
   container.innerHTML = '';
 
   if (recordingAction === action) {
@@ -238,6 +263,7 @@ function renderShortcutBadges(action, combo) {
 
 function updateResetButton(action, combo, defaultCombo) {
   const btn = document.querySelector(`.shortcut-reset[data-action="${action}"]`);
+  if (!btn) return;
   const isDifferent = combo.key !== defaultCombo.key ||
     JSON.stringify(combo.modifiers) !== JSON.stringify(defaultCombo.modifiers);
   btn.classList.toggle('hidden', !isDifferent);
@@ -397,6 +423,7 @@ function setupOptionToggles() {
 function updateSoundRowsDisabled(muted) {
   document.getElementById('sound-start-row').classList.toggle('disabled', muted);
   document.getElementById('sound-stop-row').classList.toggle('disabled', muted);
+  document.getElementById('sound-cancel-row').classList.toggle('disabled', muted);
 }
 
 // ---------------------------------------------------------------------------
@@ -406,12 +433,15 @@ function updateSoundRowsDisabled(muted) {
 function populateSoundSelects() {
   const startSel = document.getElementById('sel-soundStart');
   const stopSel = document.getElementById('sel-soundStop');
+  const cancelSel = document.getElementById('sel-soundCancel');
   const startVal = (config && config.sound_start) || 'Tink';
   const stopVal = (config && config.sound_stop) || 'Pop';
+  const cancelVal = (config && config.sound_cancel) || 'Funk';
 
   for (const sound of systemSounds) {
     startSel.add(new Option(sound, sound, false, sound === startVal));
     stopSel.add(new Option(sound, sound, false, sound === stopVal));
+    cancelSel.add(new Option(sound, sound, false, sound === cancelVal));
   }
 }
 
@@ -430,47 +460,56 @@ function setupSoundControls() {
     saveConfig();
   });
 
+  document.getElementById('sel-soundCancel').addEventListener('change', (e) => {
+    if (!config) return;
+    config.sound_cancel = e.target.value;
+    window.api.playSound(e.target.value);
+    saveConfig();
+  });
+
   document.querySelectorAll('.play-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const which = btn.dataset.sound;
-      const sel = which === 'start' ? 'sel-soundStart' : 'sel-soundStop';
-      window.api.playSound(document.getElementById(sel).value);
+      const selId = which === 'start' ? 'sel-soundStart'
+                  : which === 'stop'  ? 'sel-soundStop'
+                  : 'sel-soundCancel';
+      window.api.playSound(document.getElementById(selId).value);
     });
   });
 }
 
-// ---------------------------------------------------------------------------
-// Provider Switch
-// ---------------------------------------------------------------------------
-
-function setupProviderSwitch() {
-  document.getElementById('sel-provider').addEventListener('change', async (e) => {
-    if (!config) return;
-    const provider = e.target.value;
-    config.api_provider = provider;
-    updateProviderSections(provider);
-    if (provider === 'nemo') {
-      await checkNemoStatus();
-    }
-    saveConfig();
-  });
-}
-
-function updateProviderSections(provider) {
-  document.getElementById('section-openai').classList.toggle('hidden', provider !== 'openai');
-  document.getElementById('section-nemo').classList.toggle('hidden', provider !== 'nemo');
-
-  if (provider === 'nemo') {
-    renderNemoContent();
-  }
-}
 
 // ---------------------------------------------------------------------------
 // API Key Input
 // ---------------------------------------------------------------------------
 
+function maskKey(key) {
+  if (!key || key.trim() === '') return '';
+  if (key.length <= 8) return '••••••••';
+  return key.slice(0, 3) + '...' + key.slice(-4);
+}
+
+function showMaskedKey(inputEl, maskedEl, key) {
+  if (!key || key.trim() === '') {
+    maskedEl.classList.add('hidden');
+    inputEl.classList.remove('hidden');
+    return;
+  }
+  maskedEl.textContent = maskKey(key);
+  maskedEl.classList.remove('hidden');
+  inputEl.classList.add('hidden');
+}
+
+function showKeyInput(inputEl, maskedEl) {
+  maskedEl.classList.add('hidden');
+  inputEl.classList.remove('hidden');
+  inputEl.focus();
+  inputEl.select();
+}
+
 function setupApiKeyInput() {
   const input = document.getElementById('inp-apiKey');
+  const masked = document.getElementById('masked-apiKey');
   let debounce = null;
 
   input.addEventListener('input', () => {
@@ -487,27 +526,39 @@ function setupApiKeyInput() {
     debounce = setTimeout(saveConfig, 500);
   });
 
-  // Also save on blur
+  // On blur: save immediately then show masked display
   input.addEventListener('blur', () => {
     if (!config) return;
     config.api_key = input.value;
     clearTimeout(debounce);
+    debounce = null;
     saveConfig();
+    showMaskedKey(input, masked, input.value);
   });
 
-  // Model picker
-  document.getElementById('sel-openaiModel').addEventListener('change', async (e) => {
+  // Click masked span to edit
+  masked.addEventListener('click', () => showKeyInput(input, masked));
+
+  // Expose so applyConfig can trigger masked display
+  input._showMasked = () => showMaskedKey(input, masked, input.value);
+
+  // Model picker — save immediately (custom logo dropdown)
+  document.getElementById('sel-openaiModel').addEventListener('logo-select-change', async (e) => {
     if (!config) return;
-    config.openai_model = e.target.value;
-    saveConfig();
-    await updateLocalModelStatus(e.target.value);
+    const model = e.detail.value;
+    config.openai_model = model;
+    // Sync api_provider for the backend
+    config.api_provider = model === 'nemo' ? 'nemo' : 'openai';
+    saveConfigNow();
+    await updateLocalModelStatus(model);
   });
 
-  // Language picker
+  // Language picker — save immediately so the setting persists even if the
+  // window is closed right after the change (no 300ms debounce).
   document.getElementById('sel-openaiLang').addEventListener('change', (e) => {
     if (!config) return;
     config.openai_language = e.target.value;
-    saveConfig();
+    saveConfigNow();
   });
 }
 
@@ -533,11 +584,11 @@ async function updateLocalModelStatus(modelName) {
   const apiKeyDivider = document.getElementById('divider-api-key');
   if (!statusEl || !dividerEl) return;
 
-  const isLocal = LOCAL_WHISPER_MODELS.has(modelName);
+  const isLocal = LOCAL_WHISPER_MODELS.has(modelName) || modelName === 'nemo';
   if (apiKeyRow) apiKeyRow.classList.toggle('hidden', isLocal);
   if (apiKeyDivider) apiKeyDivider.classList.toggle('hidden', isLocal);
 
-  if (!isLocal) {
+  if (!isLocal || modelName === 'nemo') {
     statusEl.classList.add('hidden');
     dividerEl.classList.add('hidden');
     clearInterval(_whisperStatusPollTimer);
@@ -663,31 +714,332 @@ async function downloadWhisperModel(modelName) {
 }
 
 // ---------------------------------------------------------------------------
+// Local LLM Status (llama-cpp-python + GGUF model download)
+// ---------------------------------------------------------------------------
+
+let _llmStatusPollTimer = null;
+let _llmDepsInstalling = false;
+let _llmLocalCached = false; // used by hasLlmApiKey()
+let _llmInstallLog = []; // rolling pip output for error display
+
+async function updateLlmLocalStatus(modelId) {
+  const el = document.getElementById('llm-local-status');
+  if (!el) return;
+
+  const status = await window.api.getLlmLocalStatus(modelId);
+  _llmLocalCached = !!(status && status.cached);
+  renderLlmLocalStatus(status, modelId);
+  updateModesLlmGate();
+  // Re-sync mode toggle checked states now that _llmLocalCached is resolved
+  applyModesConfig();
+
+  clearInterval(_llmStatusPollTimer);
+  if (status && status.downloading) {
+    _llmStatusPollTimer = setInterval(async () => {
+      const s = await window.api.getLlmLocalStatus(modelId);
+      _llmLocalCached = !!(s && s.cached);
+      renderLlmLocalStatus(s, modelId);
+      updateModesLlmGate();
+      applyModesConfig();
+      if (s && !s.downloading) {
+        clearInterval(_llmStatusPollTimer);
+        _llmStatusPollTimer = null;
+      }
+    }, 2000);
+  }
+}
+
+function renderLlmLocalStatus(status, modelId) {
+  const el = document.getElementById('llm-local-status');
+  if (!el) return;
+
+  if (!status) {
+    el.innerHTML = `<div class="local-model-row"><span class="local-model-note muted">Could not reach backend.</span></div>`;
+    return;
+  }
+
+  if (!status.deps_installed) {
+    const engineLabel = platform === 'darwin' ? 'mlx-lm' : 'llama-cpp-python';
+    if (_llmDepsInstalling) {
+      el.innerHTML = `
+        <div class="local-model-row">
+          <span class="local-model-note">Installing ${engineLabel}…</span>
+          <button class="btn-local-model" disabled style="opacity:0.5">Installing…</button>
+        </div>
+        <pre class="llm-install-log" id="llm-deps-log">${_llmInstallLog.slice(-8).map(escapeHtml).join('\n')}</pre>
+      `;
+    } else if (status.deps_error) {
+      // pip install succeeded but import still fails — show the actual error
+      el.innerHTML = `
+        <div class="local-model-row">
+          <span class="local-model-note error">Engine installed but failed to load. See error below.</span>
+          <button class="btn-local-model" id="btn-install-llm-deps">Retry</button>
+        </div>
+        <pre class="llm-install-log error">${escapeHtml(status.deps_error)}</pre>
+      `;
+      const btn = document.getElementById('btn-install-llm-deps');
+      if (btn) btn.addEventListener('click', installLlmDeps);
+    } else {
+      el.innerHTML = `
+        <div class="local-model-row">
+          <span class="local-model-note">Runs entirely on your device — your data never leaves this computer.</span>
+          <button class="btn-local-model" id="btn-install-llm-deps">Install engine</button>
+        </div>
+      `;
+      const btn = document.getElementById('btn-install-llm-deps');
+      if (btn) btn.addEventListener('click', installLlmDeps);
+    }
+    return;
+  }
+
+  if (status.downloading) {
+    const pct = status.total_bytes > 0
+      ? Math.round((status.progress_bytes / status.total_bytes) * 100)
+      : null;
+    const label = pct !== null ? `Downloading… ${pct}%` : 'Downloading…';
+    el.innerHTML = `
+      <div class="local-model-row">
+        <span class="local-model-note">${label}</span>
+        <span class="local-model-badge downloading">⏳ Downloading</span>
+      </div>
+      ${pct !== null ? `<div class="llm-progress-bar"><div class="llm-progress-fill" style="width:${pct}%"></div></div>` : ''}
+    `;
+    return;
+  }
+
+  if (status.error) {
+    const row = document.createElement('div');
+    row.className = 'local-model-row';
+    const note = document.createElement('span');
+    note.className = 'local-model-note error';
+    note.textContent = `Download failed: ${status.error}`;
+    const btn = document.createElement('button');
+    btn.className = 'btn-local-model';
+    btn.textContent = 'Retry';
+    btn.addEventListener('click', () => startLlmModelDownload(modelId));
+    row.appendChild(note);
+    row.appendChild(btn);
+    el.innerHTML = '';
+    el.appendChild(row);
+    return;
+  }
+
+  if (!status.cached) {
+    el.innerHTML = `
+      <div class="local-model-row">
+        <span class="local-model-note">Gemma 3 4B · runs entirely on your device · ~2.5 GB download.</span>
+        <button class="btn-local-model" id="btn-download-llm">Download</button>
+      </div>
+    `;
+    const btn = document.getElementById('btn-download-llm');
+    if (btn) btn.addEventListener('click', () => startLlmModelDownload(modelId));
+    return;
+  }
+
+  // Cached and ready
+  el.innerHTML = `
+    <div class="local-model-row">
+      <span class="local-model-note">Gemma 3 4B · runs entirely on your device · your data never leaves this computer.</span>
+      <span class="local-model-badge ready">✓ Ready</span>
+    </div>
+  `;
+}
+
+async function installLlmDeps() {
+  _llmDepsInstalling = true;
+  _llmInstallLog = [];
+  const modelId = config ? (config.llm_model || 'gemma-3-4b') : 'gemma-3-4b';
+  renderLlmLocalStatus({ deps_installed: false }, modelId);
+
+  window.api.onLlmDepsProgress((line) => {
+    _llmInstallLog.push(line);
+    if (_llmInstallLog.length > 200) _llmInstallLog.shift();
+    // Live-update the log display
+    const logEl = document.getElementById('llm-deps-log');
+    if (logEl) logEl.textContent = _llmInstallLog.slice(-8).join('\n');
+  });
+
+  const result = await window.api.installLlmDeps();
+  _llmDepsInstalling = false;
+
+  if (result && result.success) {
+    _llmInstallLog = [];
+    await updateLlmLocalStatus(modelId);
+  } else {
+    // Show the actual pip error output
+    const errorLines = _llmInstallLog.slice(-15).join('\n');
+    const el = document.getElementById('llm-local-status');
+    if (el) {
+      el.innerHTML = `
+        <div class="local-model-row">
+          <span class="local-model-note error">Install failed — see error below.</span>
+          <button class="btn-local-model" id="btn-install-llm-deps">Retry</button>
+        </div>
+        <pre class="llm-install-log error">${escapeHtml(errorLines)}</pre>
+      `;
+      const btn = document.getElementById('btn-install-llm-deps');
+      if (btn) btn.addEventListener('click', installLlmDeps);
+    }
+  }
+}
+
+async function startLlmModelDownload(modelId) {
+  await window.api.downloadLlmModel(modelId);
+  await updateLlmLocalStatus(modelId);
+}
+
+// ---------------------------------------------------------------------------
+// Logo Select Helpers
+// ---------------------------------------------------------------------------
+
+function logoSrc(name) {
+  return `../assets/logos/${name}.svg`;
+}
+
+/**
+ * Build (or rebuild) a custom logo-select dropdown.
+ * options: [{ value, label, logo }]
+ */
+function closeAllLogoSelects() {
+  const overlay = document.getElementById('logo-select-overlay');
+  if (overlay) overlay.style.display = 'none';
+  document.querySelectorAll('.logo-select.open').forEach((el) => {
+    el.classList.remove('open');
+  });
+  // Hide all menus directly — handles cases where .open may have been lost
+  document.querySelectorAll('.logo-select-menu').forEach((menu) => {
+    menu.style.display = 'none';
+  });
+}
+
+function getOrCreateOverlay() {
+  let overlay = document.getElementById('logo-select-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'logo-select-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9998;display:none;';
+    overlay.addEventListener('click', closeAllLogoSelects);
+    document.body.appendChild(overlay);
+  }
+  return overlay;
+}
+
+function initLogoSelect(id, options) {
+  const root = document.getElementById(id);
+  if (!root) return;
+
+  // Reuse existing detached menu, or grab the placeholder from the DOM on first call
+  let menu = root._logoMenu;
+  if (!menu) {
+    menu = root.querySelector('.logo-select-menu');
+    if (!menu) return;
+    menu.style.display = 'none';
+    document.body.appendChild(menu);
+    root._logoMenu = menu;
+
+    // Wire trigger click directly (not via delegation)
+    const trigger = root.querySelector('.logo-select-trigger');
+    if (trigger) {
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = root.classList.contains('open');
+        closeAllLogoSelects();
+        if (!isOpen) {
+          const rect = trigger.getBoundingClientRect();
+          menu.style.top = `${rect.bottom + 4}px`;
+          menu.style.left = `${rect.left}px`;
+          menu.style.minWidth = `${rect.width}px`;
+          menu.style.display = 'block';
+          root.classList.add('open');
+          getOrCreateOverlay().style.display = 'block';
+        }
+      });
+    }
+  }
+
+  // Populate menu
+  menu.innerHTML = '';
+  for (const opt of options) {
+    const item = document.createElement('div');
+    item.className = 'logo-select-option';
+    item.dataset.value = opt.value;
+    item.innerHTML = `
+      <img src="${logoSrc(opt.logo)}" width="16" height="16" alt="">
+      <span class="logo-select-option-label">${opt.label}</span>
+      <span class="logo-select-check">✓</span>
+    `;
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const value = item.dataset.value;
+      closeAllLogoSelects();
+      setLogoSelect(id, value);
+      root.dispatchEvent(new CustomEvent('logo-select-change', { detail: { value } }));
+    });
+    menu.appendChild(item);
+  }
+
+  // Default to first
+  if (options.length) setLogoSelect(id, options[0].value);
+}
+
+function setLogoSelect(id, value) {
+  const root = document.getElementById(id);
+  if (!root) return;
+  const trigger = root.querySelector('.logo-select-trigger');
+  const menu = root._logoMenu;
+  if (!trigger || !menu) return;
+
+  // Update trigger display
+  const matchedOption = menu.querySelector(`[data-value="${CSS.escape(value)}"]`);
+  const triggerIcon = trigger.querySelector('.logo-select-icon');
+  const triggerLabel = trigger.querySelector('.logo-select-label');
+
+  if (matchedOption) {
+    const optImg = matchedOption.querySelector('img');
+    const optLabel = matchedOption.querySelector('.logo-select-option-label');
+    if (triggerIcon && optImg) triggerIcon.src = optImg.src;
+    if (triggerLabel && optLabel) triggerLabel.textContent = optLabel.textContent;
+  }
+
+  // Update selected state
+  menu.querySelectorAll('.logo-select-option').forEach((el) => {
+    el.classList.toggle('selected', el.dataset.value === value);
+  });
+
+  // Store current value on root element for later reads
+  root.dataset.value = value;
+}
+
+// ---------------------------------------------------------------------------
 // LLM Settings
 // ---------------------------------------------------------------------------
 
 const LLM_MODELS = {
   openai: [
-    { value: 'gpt-4o', label: 'GPT-4o' },
-    { value: 'gpt-4o-mini', label: 'GPT-4o mini' },
-    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
-    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
+    { value: 'gpt-4o', label: 'GPT-4o', logo: 'openai' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o mini', logo: 'openai' },
+    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo', logo: 'openai' },
+    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', logo: 'openai' },
   ],
   anthropic: [
-    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-    { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
-    { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
+    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', logo: 'anthropic' },
+    { value: 'claude-opus-4-6', label: 'Claude Opus 4.6', logo: 'anthropic' },
+    { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', logo: 'anthropic' },
+  ],
+  google: [
+    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', logo: 'gemini' },
+    { value: 'gemini-2.0-pro', label: 'Gemini 2.0 Pro', logo: 'gemini' },
+    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', logo: 'gemini' },
+    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', logo: 'gemini' },
+  ],
+  local: [
+    { value: 'gemma-3-4b', label: 'Gemma 3 4B — Local', logo: 'gemini' },
   ],
 };
 
 function populateLlmModelSelect(provider) {
-  const sel = document.getElementById('sel-llm-model');
-  if (!sel) return;
   const models = LLM_MODELS[provider] || LLM_MODELS.openai;
-  sel.innerHTML = '';
-  for (const m of models) {
-    sel.add(new Option(m.label, m.value));
-  }
+  initLogoSelect('sel-llm-model', models);
 }
 
 function setupLlmSettings() {
@@ -710,13 +1062,18 @@ function setupLlmSettings() {
     const firstModel = (LLM_MODELS[e.target.value] || [])[0];
     if (firstModel) {
       config.llm_model = firstModel.value;
-      document.getElementById('sel-llm-model').value = firstModel.value;
+      setLogoSelect('sel-llm-model', firstModel.value);
+    }
+    applyLlmProviderVisibility(e.target.value);
+    if (e.target.value === 'local' && firstModel) {
+      updateLlmLocalStatus(firstModel.value);
     }
     saveConfig();
   });
 
   // API key input
   const llmKeyInput = document.getElementById('inp-llm-api-key');
+  const llmMasked = document.getElementById('masked-llm-api-key');
   let debounce = null;
   llmKeyInput.addEventListener('input', () => {
     if (!config) return;
@@ -730,13 +1087,24 @@ function setupLlmSettings() {
     if (!config) return;
     config.llm_api_key = llmKeyInput.value;
     clearTimeout(debounce);
+    debounce = null;
     saveConfig();
+    showMaskedKey(llmKeyInput, llmMasked, llmKeyInput.value);
   });
 
+  // Click masked span to edit
+  llmMasked.addEventListener('click', () => showKeyInput(llmKeyInput, llmMasked));
+
+  // Expose so applyLlmConfig can trigger masked display
+  llmKeyInput._showMasked = () => showMaskedKey(llmKeyInput, llmMasked, llmKeyInput.value);
+
   // Model selector
-  document.getElementById('sel-llm-model').addEventListener('change', (e) => {
+  document.getElementById('sel-llm-model').addEventListener('logo-select-change', (e) => {
     if (!config) return;
-    config.llm_model = e.target.value;
+    config.llm_model = e.detail.value;
+    if (config.llm_provider === 'local') {
+      updateLlmLocalStatus(e.detail.value);
+    }
     saveConfig();
   });
 }
@@ -754,21 +1122,46 @@ function applyLlmConfig(cfg, { fromPoll = false } = {}) {
 
   document.getElementById('sel-llm-provider').value = provider;
   populateLlmModelSelect(provider);
+  applyLlmProviderVisibility(provider);
 
-  document.getElementById('inp-llm-api-key').value = cfg.llm_api_key || '';
+  const llmApiKeyInput = document.getElementById('inp-llm-api-key');
+  llmApiKeyInput.value = cfg.llm_api_key || '';
+  if (llmApiKeyInput._showMasked) llmApiKeyInput._showMasked();
 
   // Set model — default to first for provider if not set
   const models = LLM_MODELS[provider] || LLM_MODELS.openai;
   const savedModel = cfg.llm_model || '';
   const modelExists = models.some((m) => m.value === savedModel);
   const modelToUse = modelExists ? savedModel : (models[0] ? models[0].value : '');
-  document.getElementById('sel-llm-model').value = modelToUse;
+  setLogoSelect('sel-llm-model', modelToUse);
   if (!cfg.llm_model && modelToUse) {
     cfg.llm_model = modelToUse;
   }
 
+  if (provider === 'local') {
+    // async — will set _llmLocalCached and call updateModesLlmGate when done
+    if (!fromPoll) updateLlmLocalStatus(modelToUse);
+  } else {
+    updateModesLlmGate();
+  }
+
   updateLlmAutofillNotice(autofilled);
-  updateModesLlmGate();
+}
+
+function applyLlmProviderVisibility(provider) {
+  const isLocal = provider === 'local';
+  const apiKeyRow = document.getElementById('llm-api-key-row');
+  const apiKeyDivider = document.getElementById('llm-api-key-divider');
+  const localStatus = document.getElementById('llm-local-status');
+  const subtitle = document.getElementById('llm-panel-subtitle');
+  if (apiKeyRow) apiKeyRow.classList.toggle('hidden', isLocal);
+  if (apiKeyDivider) apiKeyDivider.classList.toggle('hidden', isLocal);
+  if (localStatus) localStatus.classList.toggle('hidden', !isLocal);
+  if (subtitle) {
+    subtitle.textContent = isLocal
+      ? 'Modes use a local on-device model to reformat your transcribed speech. No API key required — your data never leaves this computer.'
+      : 'Modes use a language model to reformat your transcribed speech. Choose a provider and enter your API key.';
+  }
 }
 
 function updateLlmAutofillNotice(show) {
@@ -777,6 +1170,9 @@ function updateLlmAutofillNotice(show) {
 }
 
 function hasLlmApiKey() {
+  if (config && config.llm_provider === 'local') {
+    return _llmLocalCached;
+  }
   return !!(config && config.llm_api_key && config.llm_api_key.trim());
 }
 
@@ -785,6 +1181,11 @@ function updateModesLlmGate() {
   if (!notice) return;
   const hasKey = hasLlmApiKey();
   notice.classList.toggle('hidden', hasKey);
+  // Update notice text for local provider
+  if (config && config.llm_provider === 'local' && !hasKey) {
+    const textEl = notice.querySelector('.modes-no-llm-text');
+    if (textEl) textEl.innerHTML = '<strong>Model not downloaded</strong><span>Download Gemma 3 4B in LLM Settings to use modes.</span>';
+  }
   // Disable only the enable/disable toggles when no key — categories stay clickable
   document.querySelectorAll('.mode-toggle input').forEach((inp) => {
     inp.disabled = !hasKey;
@@ -800,6 +1201,10 @@ function openLlmPanel() {
   document.querySelectorAll('.modes-category').forEach((el) => el.classList.remove('active'));
   document.getElementById('modes-llm-panel').classList.remove('hidden');
   document.getElementById('modes-category-panel').classList.add('hidden');
+  // Refresh local model status each time the panel opens
+  if (config && config.llm_provider === 'local') {
+    updateLlmLocalStatus(config.llm_model || 'gemma-3-4b');
+  }
 }
 
 function closeLlmPanel() {
@@ -808,95 +1213,6 @@ function closeLlmPanel() {
   document.getElementById('modes-category-panel').classList.remove('hidden');
 }
 
-// ---------------------------------------------------------------------------
-// NeMo
-// ---------------------------------------------------------------------------
-
-async function checkNemoStatus() {
-  const result = await window.api.getNemoStatus();
-  nemoInstalled = result ? result.installed : null;
-  renderNemoContent();
-}
-
-function renderNemoContent() {
-  const container = document.getElementById('nemo-content');
-
-  if (nemoInstalling) {
-    container.innerHTML = `
-      <div class="nemo-installing">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span>⏳</span>
-          <strong>Installing NeMo...</strong>
-        </div>
-        <div class="status-line" id="nemo-status-line">Starting installation...</div>
-      </div>
-    `;
-    return;
-  }
-
-  if (nemoInstalled === true) {
-    const nemoLangOptions = NEMO_LANGUAGES.map(([code, name]) => {
-      const selected = config && config.nemo_language === code ? 'selected' : '';
-      return `<option value="${code}" ${selected}>${name}</option>`;
-    }).join('');
-
-    container.innerHTML = `
-      <div class="nemo-installed">
-        <div class="model-row">
-          <span>parakeet-tdt-0.6b-v3</span>
-          <span class="check">✓</span>
-        </div>
-        <p class="muted" style="font-size:12px;">Runs fully on-device. No API key required.</p>
-        <div class="nemo-lang-row">
-          <span>Language</span>
-          <select id="sel-nemoLang" style="min-width:160px;">${nemoLangOptions}</select>
-        </div>
-      </div>
-    `;
-
-    document.getElementById('sel-nemoLang').addEventListener('change', (e) => {
-      if (!config) return;
-      config.nemo_language = e.target.value;
-      saveConfig();
-    });
-    return;
-  }
-
-  // Not installed
-  container.innerHTML = `
-    <div class="nemo-not-installed">
-      <h4>NeMo is not installed.</h4>
-      <p>To use local AI transcription, the NeMo toolkit needs to be downloaded (~2 GB).</p>
-      <div id="nemo-error-msg"></div>
-      <button class="btn-primary" id="btn-installNemo">Install NeMo — Free</button>
-    </div>
-  `;
-
-  document.getElementById('btn-installNemo').addEventListener('click', startNemoInstall);
-}
-
-async function startNemoInstall() {
-  nemoInstalling = true;
-  renderNemoContent();
-
-  const result = await window.api.installNemo();
-
-  nemoInstalling = false;
-  if (result && result.success) {
-    nemoInstalled = true;
-    saveConfig();
-  } else {
-    nemoInstalled = false;
-  }
-  renderNemoContent();
-
-  if (result && !result.success) {
-    const errEl = document.getElementById('nemo-error-msg');
-    if (errEl) {
-      errEl.innerHTML = `<div class="nemo-error">Installation failed. Check logs and try again.</div>`;
-    }
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Modes Tab
@@ -934,11 +1250,11 @@ const KNOWN_APP_ICONS = {
 // Default linked apps/URLs per category (used if config has none yet)
 const DEFAULT_CATEGORIES = {
   'email': {
-    linkedApps: ['Mail', 'Outlook', 'Superhuman'],
+    linkedApps: [],
     linkedUrls: ['mail.google.com', 'outlook.live.com', 'outlook.office.com'],
   },
   'personal-message': {
-    linkedApps: ['Slack', 'Discord', 'WhatsApp', 'Telegram', 'Signal'],
+    linkedApps: [],
     linkedUrls: [],
   },
 };
@@ -960,6 +1276,16 @@ const MODES_PREVIEWS = {
     casual: 'Hi Oscar, great talking with you today. Looking forward to catching up again soon\n\nBest,\nLotti',
     excited: 'Hi Oscar,\n\nIt was great talking with you today! Really looking forward to our next chat!\n\nBest,\nLotti',
   },
+};
+
+const CATEGORY_TOGGLES = {
+  'email': [
+    { key: 'include_greeting', label: 'Include greeting', default: true },
+    { key: 'include_sign_off', label: 'Include sign-off', default: true },
+  ],
+  'personal-message': [
+    { key: 'use_emoji', label: 'Use emoji', default: false },
+  ],
 };
 
 let selectedCategory = 'personal-message';
@@ -1007,8 +1333,11 @@ function setupModesTab() {
   // Render initial state
   selectCategory('personal-message');
 
-  // Pre-load installed apps so banner icons show real icons immediately
-  preloadInstalledApps();
+  // Gate toggles immediately — don't wait for applyConfig
+  updateModesLlmGate();
+
+  // Installed apps are preloaded at DOMContentLoaded (above) so the cache
+  // is warm before the user opens the linked-apps popup.
 }
 
 function selectCategory(categoryId) {
@@ -1022,6 +1351,7 @@ function selectCategory(categoryId) {
   updateDisabledNotice(categoryId);
   renderBanner(categoryId);
   renderStyleCards(categoryId);
+  renderCategoryToggles(categoryId);
 }
 
 function updateDisabledNotice(categoryId) {
@@ -1076,10 +1406,8 @@ function renderBanner(categoryId) {
   const apps = catCfg.linkedApps || [];
   const urls = catCfg.linkedUrls || [];
 
-  // Show up to 5 app icons, then overflow
   const MAX_VISIBLE = 5;
   const allItems = [...apps];
-  // Add URL-based items (show domain as icon)
   for (const url of urls) {
     const domain = url.replace(/^https?:\/\//, '').split('/')[0];
     allItems.push(domain);
@@ -1094,9 +1422,14 @@ function renderBanner(categoryId) {
     ? `<div class="modes-banner-icon overflow">+${overflow}</div>`
     : '';
 
+  const emptySubtext = allItems.length === 0
+    ? `<div class="modes-banner-subtitle">Click + to link apps or URLs to this profile</div>`
+    : '';
+
   banner.innerHTML = `
     <div class="modes-banner-text">
       <div class="modes-banner-title">This profile applies to:</div>
+      ${emptySubtext}
     </div>
     <div class="modes-banner-icons">
       ${iconElements}
@@ -1105,9 +1438,8 @@ function renderBanner(categoryId) {
     </div>
   `;
 
-  document.getElementById('banner-add-btn').addEventListener('click', () => {
-    openLinkedAppsPopup(categoryId);
-  });
+  banner.style.cursor = 'pointer';
+  banner.addEventListener('click', () => openLinkedAppsPopup(categoryId));
 }
 
 // ---------------------------------------------------------------------------
@@ -1404,6 +1736,27 @@ function saveCategoryConfig(categoryId, apps, urls) {
   saveConfig();
 }
 
+function getToggleState(categoryId, styleId, toggleKey, defaultVal) {
+  const toggles = config?.modes?.toggles?.[categoryId]?.[styleId] ?? {};
+  return toggleKey in toggles ? toggles[toggleKey] : defaultVal;
+}
+
+function saveToggleState(categoryId, styleId, toggleKey, value) {
+  if (!config) return;
+  config.modes ??= {};
+  config.modes.toggles ??= {};
+  config.modes.toggles[categoryId] ??= {};
+  config.modes.toggles[categoryId][styleId] ??= {};
+  config.modes.toggles[categoryId][styleId][toggleKey] = value;
+  saveConfig();
+}
+
+function renderCategoryToggles() {
+  const container = document.getElementById('modes-toggles');
+  if (container) container.innerHTML = '';
+  // Toggles are now rendered inside each style card by renderStyleCards
+}
+
 function renderStyleCards(categoryId) {
   const container = document.getElementById('modes-cards');
   const selections = (config && config.modes && config.modes.selections) || {};
@@ -1436,6 +1789,34 @@ function renderStyleCards(categoryId) {
       ${bodyHTML}
     `;
 
+    // Append category toggles at the bottom of each card
+    const defs = CATEGORY_TOGGLES[categoryId] || [];
+    if (defs.length > 0) {
+      const togglesWrap = document.createElement('div');
+      togglesWrap.className = 'mode-card-toggles';
+      for (const { key, label, default: defaultVal } of defs) {
+        const checked = getToggleState(categoryId, styleId, key, defaultVal);
+        const row = document.createElement('div');
+        row.className = 'mode-card-toggle-row';
+        row.innerHTML = `
+          <span class="modes-toggle-label">${label}</span>
+          <label class="mode-toggle">
+            <input type="checkbox" ${checked ? 'checked' : ''}>
+            <span class="mode-toggle-slider"></span>
+          </label>
+        `;
+        const input = row.querySelector('input');
+        input.addEventListener('click', (e) => e.stopPropagation());
+        input.addEventListener('change', (e) => {
+          e.stopPropagation();
+          saveToggleState(categoryId, styleId, key, e.target.checked);
+        });
+        row.addEventListener('click', (e) => e.stopPropagation());
+        togglesWrap.appendChild(row);
+      }
+      card.appendChild(togglesWrap);
+    }
+
     card.addEventListener('click', () => {
       selectStyle(categoryId, styleId);
     });
@@ -1466,7 +1847,7 @@ function selectStyle(categoryId, styleId) {
 
 function updateCategorySubtitles() {
   const selections = (config && config.modes && config.modes.selections) || {};
-  for (const [catId, catData] of Object.entries(MODES_CATEGORIES)) {
+  for (const [catId] of Object.entries(MODES_CATEGORIES)) {
     const styleId = selections[catId] || 'formal';
     const styleName = MODES_STYLES[styleId] ? MODES_STYLES[styleId].name.replace(/[.!]$/, '') : 'Formal';
     const el = document.getElementById(`cat-style-${catId}`);
@@ -1492,6 +1873,7 @@ function applyModesConfig() {
   if (document.getElementById('tab-modes').classList.contains('active')) {
     updateDisabledNotice(selectedCategory);
     renderStyleCards(selectedCategory);
+    renderCategoryToggles(selectedCategory);
   }
 }
 
@@ -1513,6 +1895,15 @@ function saveConfig() {
       saveInFlight = false;
     }
   }, 300);
+}
+
+/** Save immediately — used for dropdown/toggle changes that should persist
+ *  even if the window closes right after. Skips the 300ms debounce. */
+function saveConfigNow() {
+  saveInFlight = true;
+  clearTimeout(saveDebounce);
+  if (!config) { saveInFlight = false; return; }
+  window.api.saveConfig({ ...config }).finally(() => { saveInFlight = false; });
 }
 
 // ---------------------------------------------------------------------------

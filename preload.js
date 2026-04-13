@@ -4,7 +4,9 @@ contextBridge.exposeInMainWorld('api', {
   // Config
   getConfig: () => ipcRenderer.invoke('get-config'),
   saveConfig: (config) => ipcRenderer.invoke('save-config', config),
+  saveConfigSync: (config) => ipcRenderer.sendSync('save-config-sync', config),
   patchConfig: (patch) => ipcRenderer.invoke('patch-config', patch),
+  debugLog: (msg) => ipcRenderer.send('debug-log', msg),
 
   // NeMo
   getNemoStatus: () => ipcRenderer.invoke('get-nemo-status'),
@@ -23,12 +25,24 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('whisper-deps-progress', (_event, line) => callback(line));
   },
 
+  // Local LLM
+  getLlmLocalStatus: (modelId) => ipcRenderer.invoke('get-llm-local-status', modelId),
+  installLlmDeps: () => ipcRenderer.invoke('install-llm-deps'),
+  downloadLlmModel: (modelId) => ipcRenderer.invoke('download-llm-model', modelId),
+  onLlmDepsProgress: (callback) => {
+    ipcRenderer.removeAllListeners('llm-deps-progress');
+    ipcRenderer.on('llm-deps-progress', (_event, line) => callback(line));
+  },
+
   // Sounds
   getSystemSounds: () => ipcRenderer.invoke('get-system-sounds'),
   playSound: (name) => ipcRenderer.invoke('play-sound', name),
 
   // Platform
   getPlatform: () => ipcRenderer.invoke('get-platform'),
+
+  // App version
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
   // History
   getHistory: () => ipcRenderer.invoke('get-history'),

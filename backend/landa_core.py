@@ -24,11 +24,13 @@ from flask import Flask, Response, jsonify, request
 from scipy.io import wavfile
 from openai import OpenAI
 
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
-CONFIG_DIR = Path.home() / ".findmyvoice"
+CONFIG_DIR = Path.home() / ".landa"
 CONFIG_PATH = CONFIG_DIR / "config.json"
 HISTORY_PATH = CONFIG_DIR / "history.json"
 
@@ -68,9 +70,20 @@ DEFAULT_CONFIG: dict = {
                 "linkedUrls": [],
             },
         },
+        "toggles": {
+            "email": {
+                "formal": {"include_greeting": True, "include_sign_off": True},
+                "casual": {"include_greeting": True, "include_sign_off": True},
+                "excited": {"include_greeting": True, "include_sign_off": True},
+            },
+            "personal-message": {
+                "formal": {"use_emoji": False},
+                "casual": {"use_emoji": False},
+                "excited": {"use_emoji": False},
+            },
+        },
     },
 }
-
 
 def _migrate(cfg: dict) -> tuple[dict, bool]:
     """Migrate old config schema to new schema. Returns (cfg, changed)."""
@@ -169,8 +182,12 @@ def _migrate(cfg: dict) -> tuple[dict, bool]:
 def load_config() -> dict:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     if CONFIG_PATH.exists():
-        with open(CONFIG_PATH) as f:
-            saved = json.load(f)
+        try:
+            with open(CONFIG_PATH) as f:
+                saved = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            save_config(DEFAULT_CONFIG)
+            return dict(DEFAULT_CONFIG)
         saved, changed = _migrate(saved)
         merged = {**DEFAULT_CONFIG, **saved}
         if changed:
@@ -252,21 +269,20 @@ MODE_SYSTEM_PROMPTS: dict[str, dict[str, str]] = {
         "formal": (
             "Reformat the following dictated text into a professional email body. "
             "Use proper capitalization, full punctuation, and formal tone. Structure into clear paragraphs. "
-            "Include an appropriate greeting and sign-off (e.g. 'Best regards,'). "
             "Fix grammar and remove filler words. Do not add content that wasn't spoken. "
             "Do not include a subject line. Return only the email body."
         ),
         "casual": (
             "Reformat the following dictated text into a casual but professional email body. "
             "Use capitalization but lighter punctuation. Keep sentences flowing naturally. "
-            "Include a friendly greeting and casual sign-off. Fix grammar and filler words. "
+            "Fix grammar and filler words. "
             "Do not add content that wasn't spoken. Do not include a subject line. "
             "Return only the email body."
         ),
         "excited": (
             "Reformat the following dictated text into an enthusiastic email body. "
             "Use exclamation marks to convey energy and positivity. "
-            "Keep the tone warm, upbeat, and professional. Include a greeting and sign-off. "
+            "Keep the tone warm, upbeat, and professional. "
             "Fix grammar and filler words. Do not add content that wasn't spoken. "
             "Do not include a subject line. Return only the email body."
         ),
@@ -376,14 +392,43 @@ def get_mode_prompt() -> str | None:
         return None
     selections = config.get("modes", {}).get("selections", {})
     style = selections.get(category, "formal")
-    return MODE_SYSTEM_PROMPTS.get(category, MODE_SYSTEM_PROMPTS["personal-message"]).get(
+    prompt = MODE_SYSTEM_PROMPTS.get(category, MODE_SYSTEM_PROMPTS["personal-message"]).get(
         style, MODE_SYSTEM_PROMPTS["personal-message"]["formal"]
     )
+    toggles = config.get("modes", {}).get("toggles", {}).get(category, {}).get(style, {})
+    if category == "email":
+        if toggles.get("include_greeting", True):
+            prompt += " Include an appropriate greeting or opening salutation."
+        else:
+            prompt += " Do not include a greeting or opening salutation."
+        if toggles.get("include_sign_off", True):
+            prompt += " Include an appropriate sign-off or closing."
+        else:
+            prompt += " Do not include a sign-off or closing."
+    elif category == "personal-message":
+        if toggles.get("use_emoji", False):
+            prompt += " Use relevant emoji to add expressiveness."
+    return prompt
 
 
 def reformat_text(text: str, mode: str | None = None) -> str:
     """Post-process transcription via configured LLM. Falls back to original text on any error."""
+    if not config.get("reformat_enabled", False):
+        return text
     llm_provider = config.get("llm_provider", "openai")
+
+    if mode and mode in REFORMAT_PROMPTS:
+        prompt = REFORMAT_PROMPTS[mode]
+    else:
+        prompt = get_mode_prompt()
+        if prompt is None:
+            return text
+
+    # Local model path — no API key needed
+    if llm_provider == "local":
+        model_id = config.get("llm_model", "gemma-3-4b")
+        return reformat_text_local(text, prompt, model_id)
+
     # Use dedicated LLM key; fall back to transcription key when both providers are openai
     api_key = config.get("llm_api_key", "") or (
         config.get("api_key", "") if llm_provider == "openai" else ""
@@ -394,13 +439,6 @@ def reformat_text(text: str, mode: str | None = None) -> str:
     llm_model = config.get("llm_model", "") or (
         "gpt-4o-mini" if llm_provider == "openai" else "claude-haiku-4-5-20251001"
     )
-
-    if mode and mode in REFORMAT_PROMPTS:
-        prompt = REFORMAT_PROMPTS[mode]
-    else:
-        prompt = get_mode_prompt()
-        if prompt is None:
-            return text
 
     try:
         if llm_provider == "anthropic":
@@ -563,15 +601,43 @@ _HALLUCINATION_PHRASES = {
     ".",
 }
 
-# Minimum RMS energy threshold — below this the audio is considered silence
-_SILENCE_RMS_THRESHOLD = 0.005
+# Silence detection should only catch obviously empty taps/clicks. For real
+# recordings, even quiet speech should still reach transcription.
+_SILENCE_RMS_THRESHOLD = 0.0015
+_SILENCE_PEAK_THRESHOLD = 0.008
+_MIN_SKIP_DURATION_S = 0.2
 
 
-def _is_silent(audio: np.ndarray) -> bool:
-    """Return True if the recorded audio is effectively silence."""
-    rms = np.sqrt(np.mean(audio ** 2))
-    logging.info("[silence_check] RMS energy: %.6f (threshold: %.6f)", rms, _SILENCE_RMS_THRESHOLD)
-    return rms < _SILENCE_RMS_THRESHOLD
+def _analyze_audio(audio: np.ndarray) -> tuple[float, float, float]:
+    """Return (duration_s, rms, peak) for the captured audio."""
+    flat = np.asarray(audio, dtype=np.float32).reshape(-1)
+    if flat.size == 0:
+        return (0.0, 0.0, 0.0)
+
+    duration_s = flat.size / SAMPLE_RATE
+    rms = float(np.sqrt(np.mean(flat ** 2)))
+    peak = float(np.max(np.abs(flat)))
+    return (duration_s, rms, peak)
+
+
+def _should_skip_transcription(audio: np.ndarray) -> bool:
+    """Skip only truly empty or ultra-short near-zero audio clips."""
+    duration_s, rms, peak = _analyze_audio(audio)
+    logging.info(
+        "[silence_check] duration=%.3fs rms=%.6f (threshold=%.6f) peak=%.6f (threshold=%.6f)",
+        duration_s,
+        rms,
+        _SILENCE_RMS_THRESHOLD,
+        peak,
+        _SILENCE_PEAK_THRESHOLD,
+    )
+    if duration_s == 0:
+        return True
+    return (
+        duration_s < _MIN_SKIP_DURATION_S
+        and rms < _SILENCE_RMS_THRESHOLD
+        and peak < _SILENCE_PEAK_THRESHOLD
+    )
 
 
 def _is_hallucination(text: str) -> bool:
@@ -705,9 +771,8 @@ def _transcribe_and_paste() -> None:
     # Write wav to a temp file
     audio = np.concatenate(audio_frames, axis=0)
 
-    # Skip transcription entirely if the audio is silence
-    if _is_silent(audio):
-        logging.info("[transcribe] Skipping — audio is silence")
+    if _should_skip_transcription(audio):
+        logging.info("[transcribe] Skipping — audio buffer is effectively empty")
         return
 
     audio_int16 = np.int16(audio * 32767)
@@ -818,9 +883,17 @@ def transcribe_whisper_local(wav_path: str, model_name: str) -> str:
 
     pipe = _whisper_local_pipeline_cache[model_name]
     language = config.get("openai_language", "auto")
+
+    # Always explicitly reset forced_decoder_ids so that a previous language
+    # selection doesn't leak into subsequent "auto-detect" calls.  The
+    # transformers Whisper pipeline may cache forced_decoder_ids on the model
+    # config when a language is specified via generate_kwargs.
+    if hasattr(pipe, "model") and hasattr(pipe.model, "config"):
+        pipe.model.config.forced_decoder_ids = None
+
     generate_kwargs = {} if language == "auto" else {"language": language}
 
-    result = pipe(wav_path, chunk_length_s=30, generate_kwargs=generate_kwargs)
+    result = pipe(wav_path, return_timestamps=True, generate_kwargs=generate_kwargs)
     return result["text"].strip()
 
 
@@ -860,6 +933,236 @@ def _startup_whisper_check() -> None:
     with _whisper_download_lock:
         _whisper_download_state[model] = {"downloading": False, "cached": True, "error": None}
     _warmup_whisper_pipeline(model)
+
+
+# ---------------------------------------------------------------------------
+# Local LLM — mlx-lm on macOS, llama-cpp-python (GGUF) on Windows
+# ---------------------------------------------------------------------------
+
+MODELS_DIR = CONFIG_DIR / "models"
+
+# Registry — add new models here only. One entry per model supports both platforms.
+#   mlx_repo  : HuggingFace repo for the MLX-quantized model (macOS)
+#   hf_repo   : HuggingFace repo for the GGUF model (Windows)
+#   filename  : GGUF filename stored in MODELS_DIR (Windows only)
+LLM_LOCAL_MODELS: dict[str, dict] = {
+    "gemma-3-4b": {
+        "name": "Gemma 3 4B",
+        "mlx_repo": "mlx-community/gemma-3-4b-it-4bit",
+        "hf_repo": "bartowski/gemma-3-4b-it-GGUF",
+        "filename": "gemma-3-4b-it-Q4_K_M.gguf",
+        "size_label": "~2.5 GB",
+        "size_bytes": 2_670_000_000,
+    },
+}
+
+_llm_model_cache: dict = {}     # model_id -> loaded model object
+_llm_download_state: dict = {}  # model_id -> {downloading, cached, error, progress_bytes, total_bytes}
+_llm_download_lock = threading.Lock()
+
+
+def is_llm_deps_installed() -> tuple[bool, str | None]:
+    """Check whether the platform-appropriate inference library is installed.
+    Returns (installed, error_message_or_None).
+    """
+    if sys.platform == "darwin":
+        try:
+            import mlx_lm  # noqa: F401
+            return True, None
+        except Exception as e:
+            logging.warning(f"[FindMyVoice] mlx_lm import failed: {e}")
+            return False, str(e)
+    else:
+        try:
+            import llama_cpp  # noqa: F401
+            return True, None
+        except Exception as e:
+            logging.warning(f"[FindMyVoice] llama_cpp import failed: {e}")
+            return False, str(e)
+
+
+def is_llm_model_cached(model_id: str) -> bool:
+    info = LLM_LOCAL_MODELS.get(model_id)
+    if not info:
+        return False
+    if sys.platform == "darwin":
+        try:
+            from huggingface_hub import snapshot_download
+            snapshot_download(info["mlx_repo"], local_files_only=True)
+            return True
+        except Exception:
+            return False
+    else:
+        return (MODELS_DIR / info["filename"]).exists()
+
+
+def _do_llm_download(model_id: str) -> None:
+    info = LLM_LOCAL_MODELS[model_id]
+    with _llm_download_lock:
+        _llm_download_state[model_id] = {
+            "downloading": True, "cached": False, "error": None,
+            "progress_bytes": 0, "total_bytes": info.get("size_bytes", 0),
+        }
+    try:
+        if sys.platform == "darwin":
+            # macOS: download the MLX HuggingFace repo (HF handles caching/resume)
+            from huggingface_hub import snapshot_download
+            print(f"[FindMyVoice] Downloading MLX model: {info['mlx_repo']}")
+            snapshot_download(info["mlx_repo"])
+        else:
+            # Windows: stream the GGUF file with byte-level progress
+            MODELS_DIR.mkdir(parents=True, exist_ok=True)
+            dest = MODELS_DIR / info["filename"]
+            url = f"https://huggingface.co/{info['hf_repo']}/resolve/main/{info['filename']}"
+            print(f"[FindMyVoice] Downloading GGUF: {url}")
+            with httpx.stream("GET", url, follow_redirects=True, timeout=None) as resp:
+                resp.raise_for_status()
+                total = int(resp.headers.get("content-length", info.get("size_bytes", 0)))
+                with _llm_download_lock:
+                    _llm_download_state[model_id]["total_bytes"] = total
+                downloaded = 0
+                with open(dest, "wb") as f:
+                    for chunk in resp.iter_bytes(chunk_size=1024 * 1024):
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        with _llm_download_lock:
+                            _llm_download_state[model_id]["progress_bytes"] = downloaded
+
+        with _llm_download_lock:
+            _llm_download_state[model_id] = {
+                "downloading": False, "cached": True, "error": None,
+                "progress_bytes": 0, "total_bytes": 0,
+            }
+        print(f"[FindMyVoice] LLM download complete: {model_id}")
+    except Exception as e:
+        # Clean up partial GGUF on failure (macOS uses HF cache, no cleanup needed)
+        if sys.platform != "darwin":
+            dest = MODELS_DIR / info["filename"]
+            if dest.exists():
+                dest.unlink()
+        with _llm_download_lock:
+            _llm_download_state[model_id] = {
+                "downloading": False, "cached": False, "error": str(e),
+                "progress_bytes": 0, "total_bytes": 0,
+            }
+        print(f"[FindMyVoice] LLM download failed: {e}")
+
+
+def start_llm_download(model_id: str) -> None:
+    with _llm_download_lock:
+        state = _llm_download_state.get(model_id, {})
+        if state.get("downloading"):
+            return
+    threading.Thread(target=_do_llm_download, args=(model_id,), daemon=True).start()
+
+
+def _get_llm_model(model_id: str):
+    """Lazy-load the inference model into memory on first call."""
+    if model_id in _llm_model_cache:
+        return _llm_model_cache[model_id]
+    info = LLM_LOCAL_MODELS.get(model_id)
+    if not info:
+        return None
+    try:
+        if sys.platform == "darwin":
+            from mlx_lm import load
+            print(f"[FindMyVoice] Loading MLX model: {model_id}")
+            model, tokenizer = load(info["mlx_repo"])
+            _llm_model_cache[model_id] = (model, tokenizer)
+            print(f"[FindMyVoice] MLX model ready: {model_id}")
+            return (model, tokenizer)
+        else:
+            from llama_cpp import Llama
+            model_path = MODELS_DIR / info["filename"]
+            if not model_path.exists():
+                return None
+            print(f"[FindMyVoice] Loading GGUF model: {model_id}")
+            llm = Llama(model_path=str(model_path), n_ctx=2048, n_gpu_layers=-1, verbose=False)
+            _llm_model_cache[model_id] = llm
+            print(f"[FindMyVoice] GGUF model ready: {model_id}")
+            return llm
+    except Exception as e:
+        print(f"[FindMyVoice] Failed to load local LLM {model_id}: {e}")
+        return None
+
+
+# ISO 639-1 code → language name for explicit LLM instructions
+_LANG_CODE_TO_NAME: dict[str, str] = {
+    "af": "Afrikaans", "ar": "Arabic", "hy": "Armenian", "az": "Azerbaijani",
+    "be": "Belarusian", "bs": "Bosnian", "bg": "Bulgarian", "ca": "Catalan",
+    "zh": "Chinese", "hr": "Croatian", "cs": "Czech", "da": "Danish",
+    "nl": "Dutch", "en": "English", "et": "Estonian", "fi": "Finnish",
+    "fr": "French", "gl": "Galician", "de": "German", "el": "Greek",
+    "he": "Hebrew", "hi": "Hindi", "hu": "Hungarian", "is": "Icelandic",
+    "id": "Indonesian", "it": "Italian", "ja": "Japanese", "kn": "Kannada",
+    "kk": "Kazakh", "ko": "Korean", "lv": "Latvian", "lt": "Lithuanian",
+    "mk": "Macedonian", "ms": "Malay", "mr": "Marathi", "mi": "Maori",
+    "ne": "Nepali", "no": "Norwegian", "fa": "Persian", "pl": "Polish",
+    "pt": "Portuguese", "ro": "Romanian", "ru": "Russian", "sr": "Serbian",
+    "sk": "Slovak", "sl": "Slovenian", "es": "Spanish", "sw": "Swahili",
+    "sv": "Swedish", "tl": "Tagalog", "ta": "Tamil", "th": "Thai",
+    "tr": "Turkish", "uk": "Ukrainian", "ur": "Urdu", "vi": "Vietnamese",
+    "cy": "Welsh",
+}
+
+
+def reformat_text_local(text: str, prompt: str, model_id: str) -> str:
+    """Run reformatting inference locally. Uses mlx-lm on macOS, llama-cpp on Windows."""
+    loaded = _get_llm_model(model_id)
+    if loaded is None:
+        print(f"[FindMyVoice] Local LLM not available: {model_id}")
+        return text
+
+    # Small local models default to English when given an English system prompt.
+    # Build an explicit language instruction. If the user has configured a specific
+    # transcription language, name it directly — that's far more reliable than
+    # "respond in the same language", which 4B-class models often ignore.
+    lang_code = config.get("openai_language", "auto")
+    lang_name = _LANG_CODE_TO_NAME.get(lang_code)
+    if lang_name:
+        lang_instruction = (
+            f"IMPORTANT: You MUST respond in {lang_name}. Do not translate the text. "
+            f"Apply all correct grammatical conventions of {lang_name}, including language-specific capitalization rules."
+        )
+    else:
+        lang_instruction = (
+            "IMPORTANT: You MUST respond in the same language as the input text. Do not translate. "
+            "Apply all correct grammatical conventions of that language, including language-specific capitalization rules."
+        )
+
+    # Place the language rule first so the model sees it before the task.
+    prompt = lang_instruction + "\n\n" + prompt
+
+    # Also inject it into the user turn — Gemma3's chat template may fold or
+    # drop the system role, so this ensures the instruction survives either way.
+    user_content = f"[{lang_instruction}]\n\n{text}"
+
+    try:
+        if sys.platform == "darwin":
+            from mlx_lm import generate
+            model, tokenizer = loaded
+            messages = [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": user_content},
+            ]
+            formatted = tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+            result = generate(model, tokenizer, prompt=formatted, max_tokens=1024, verbose=False)
+            return result.strip()
+        else:
+            response = loaded.create_chat_completion(
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": user_content},
+                ],
+                max_tokens=1024,
+                temperature=0.1,
+            )
+            return response["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        print(f"[FindMyVoice] Local LLM inference error: {e}")
+        return text
 
 
 _nemo_model = None
@@ -963,6 +1266,17 @@ def update_config():
             config.setdefault("modes", {}).setdefault("categories", {}).update(incoming_modes["categories"])
         if "enabled" in incoming_modes:
             config.setdefault("modes", {}).setdefault("enabled", {}).update(incoming_modes["enabled"])
+        if "toggles" in incoming_modes:
+            existing = config.setdefault("modes", {}).setdefault("toggles", {})
+            for cat, cat_toggles in incoming_modes["toggles"].items():
+                existing.setdefault(cat, {})
+                for style_key, style_toggles in cat_toggles.items():
+                    if isinstance(style_toggles, dict):
+                        if not isinstance(existing[cat].get(style_key), dict):
+                            existing[cat][style_key] = {}
+                        existing[cat][style_key].update(style_toggles)
+                    else:
+                        existing[cat][style_key] = style_toggles
         del data["modes"]
     config.update(data)
     save_config(config)
@@ -1168,6 +1482,111 @@ def whisper_local_download():
     if not is_transformers_installed():
         return jsonify({"error": "transformers/torch not installed"}), 400
     start_whisper_download(model_name)
+    return jsonify({"started": True})
+
+
+# ---------------------------------------------------------------------------
+# Local LLM endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/llm-local/status")
+def llm_local_status():
+    model_id = request.args.get("model") or config.get("llm_model", "gemma-3-4b")
+    if model_id not in LLM_LOCAL_MODELS:
+        return jsonify({"model": model_id, "is_local": False})
+
+    deps_installed, deps_error = is_llm_deps_installed()
+    with _llm_download_lock:
+        state = dict(_llm_download_state.get(model_id, {}))
+
+    downloading = state.get("downloading", False)
+    cached = state.get("cached", False)
+    error = state.get("error")
+    progress_bytes = state.get("progress_bytes", 0)
+    total_bytes = state.get("total_bytes", 0)
+
+    # If no in-memory state yet, check disk
+    if not state and not downloading:
+        cached = is_llm_model_cached(model_id)
+        with _llm_download_lock:
+            _llm_download_state[model_id] = {
+                "downloading": False, "cached": cached, "error": None,
+                "progress_bytes": 0, "total_bytes": 0,
+            }
+
+    return jsonify({
+        "model": model_id,
+        "is_local": True,
+        "deps_installed": deps_installed,
+        "deps_error": deps_error,
+        "cached": cached,
+        "downloading": downloading,
+        "error": error,
+        "progress_bytes": progress_bytes,
+        "total_bytes": total_bytes,
+    })
+
+
+_llm_deps_installing = False
+_llm_deps_install_lock = threading.Lock()
+
+
+@app.post("/llm-local/install-deps")
+def llm_local_install_deps():
+    global _llm_deps_installing
+    with _llm_deps_install_lock:
+        if _llm_deps_installing:
+            return jsonify({"error": "Installation already in progress"}), 409
+        _llm_deps_installing = True
+
+    def generate():
+        global _llm_deps_installing
+        try:
+            python = sys.executable
+            if sys.platform == "darwin":
+                # mlx-lm: Apple's ML framework for Apple Silicon — pure pip, no compilation
+                pkg = "mlx-lm"
+            else:
+                # Windows: pre-built llama-cpp-python wheel
+                pkg = "llama-cpp-python"
+
+            cmd = [python, "-m", "pip", "install", pkg, "--upgrade"]
+            if sys.platform != "darwin":
+                cmd.append("--prefer-binary")
+
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, bufsize=1,
+            )
+            for line in proc.stdout:
+                yield f"data: {line.rstrip()}\n\n"
+            proc.wait()
+            if proc.returncode == 0:
+                yield "data: __DONE__\n\n"
+            else:
+                yield f"data: __ERROR__ pip exited with code {proc.returncode}\n\n"
+
+        except Exception as e:
+            yield f"data: __ERROR__ {e}\n\n"
+        finally:
+            with _llm_deps_install_lock:
+                _llm_deps_installing = False
+
+    return Response(generate(), mimetype="text/event-stream")
+
+
+@app.post("/llm-local/download")
+def llm_local_download():
+    data = request.get_json(force=True)
+    model_id = data.get("model") or config.get("llm_model", "gemma-3-4b")
+    if model_id not in LLM_LOCAL_MODELS:
+        return jsonify({"error": "unknown local model"}), 400
+    deps_ok, _ = is_llm_deps_installed()
+    if not deps_ok:
+        return jsonify({"error": "inference engine not installed"}), 400
+    start_llm_download(model_id)
     return jsonify({"started": True})
 
 

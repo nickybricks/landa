@@ -1,7 +1,46 @@
-# FindMyVoice — Electron App
+# Landa — Electron App
 
 ## What This Is
-A cross-platform Electron app for FindMyVoice — global hotkey voice-to-text that pastes into any active app. Electron + Node.js frontend communicating with the Python backend over HTTP.
+A cross-platform Electron app for Landa — global hotkey voice-to-text that pastes into any active app. Electron + Node.js frontend communicating with the Python backend over HTTP.
+
+## Claude Code Behavior
+
+### Planning
+- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
+- If something goes sideways, STOP and re-plan — don't keep pushing
+- Write the plan before writing code
+- Use plan mode for verification steps, not just building
+- Write detailed specs upfront to reduce ambiguity
+
+### Verification
+- Never mark a task complete without proving it works
+- Backend: confirm the HTTP API responds on localhost:7890
+- Electron: confirm `npm start` launches without errors
+- Test the full flow: hotkey → record → transcribe → paste
+- Diff behavior between main and your changes when relevant
+- Ask yourself: "Would a staff engineer approve this?"
+- Run tests, check logs, demonstrate correctness
+
+### Code Quality
+- Simplicity first — make every change as simple as possible. Impact minimal code.
+- For non-trivial logic, pause and ask "is there a more elegant way?"
+- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
+- Skip this for obvious, simple fixes — don't over-engineer
+- No temporary hacks. Find root causes. Senior developer standards.
+
+### Subagents
+- Use subagents to keep main context window clean when possible
+- Offload research, exploration, and parallel analysis to subagents
+- One task per subagent for focused execution
+
+### Task Tracking
+- Write plan to `tasks/todo.md` with checkable items before starting
+- Check in before starting implementation
+- Mark items complete as you go
+- High-level summary at each step
+- Add a review section to `tasks/todo.md` when done
+
+
 
 ## Platform Support
 **This app targets both macOS and Windows.** Every feature, fix, and new capability must work on both platforms. When writing any OS-level code (file paths, hotkeys, tray icons, app scanning, permissions, etc.), always implement and test both the macOS and Windows paths. Never leave a `// TODO: Windows` stub — implement it properly or raise it explicitly.
@@ -107,39 +146,3 @@ gh release create v{VERSION} --title "v{VERSION}: {Brief description}" --notes "
 - Global hotkeys via `globalShortcut` — always unregister on app quit
 - Use `contextIsolation: true` and `nodeIntegration: false` in all BrowserWindow configs
 
-## Claude Code Behavior
-
-### Planning
-- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
-- If something goes sideways, STOP and re-plan — don't keep pushing
-- Write the plan before writing code
-- Use plan mode for verification steps, not just building
-- Write detailed specs upfront to reduce ambiguity
-
-### Verification
-- Never mark a task complete without proving it works
-- Backend: confirm the HTTP API responds on localhost:7890
-- Electron: confirm `npm start` launches without errors
-- Test the full flow: hotkey → record → transcribe → paste
-- Diff behavior between main and your changes when relevant
-- Ask yourself: "Would a staff engineer approve this?"
-- Run tests, check logs, demonstrate correctness
-
-### Code Quality
-- Simplicity first — make every change as simple as possible. Impact minimal code.
-- For non-trivial logic, pause and ask "is there a more elegant way?"
-- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
-- Skip this for obvious, simple fixes — don't over-engineer
-- No temporary hacks. Find root causes. Senior developer standards.
-
-### Subagents
-- Use subagents to keep main context window clean when possible
-- Offload research, exploration, and parallel analysis to subagents
-- One task per subagent for focused execution
-
-### Task Tracking
-- Write plan to `tasks/todo.md` with checkable items before starting
-- Check in before starting implementation
-- Mark items complete as you go
-- High-level summary at each step
-- Add a review section to `tasks/todo.md` when done

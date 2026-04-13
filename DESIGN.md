@@ -1,6 +1,6 @@
-# FindMyVoice — Design System
+# Landa — Design System
 
-This document defines the core design principles and token values for FindMyVoice. All UI changes must align with this system.
+This document defines the core design principles and token values for Landa. All UI changes must align with this system.
 
 ## Theme Overview
 
