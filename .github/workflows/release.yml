@@ -23,7 +23,7 @@ jobs:
         run: npm ci
 
       - name: Build macOS DMG
-        run: npm run build:mac
+        run: npx electron-builder --mac --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
@@ -46,7 +46,7 @@ jobs:
         run: npm ci
 
       - name: Build Windows installer
-        run: npm run build:win
+        run: npx electron-builder --win --publish never
 
       - name: Upload EXE to release
         uses: softprops/action-gh-release@v2
