@@ -30,11 +30,342 @@ const OPENAI_LANGUAGES = [
 ];
 
 const WHISPER_MODELS = [
-  { value: 'whisper-large-v3', label: 'whisper-large-v3', logo: 'openai' },
-  { value: 'whisper-large-v3-turbo', label: 'whisper-large-v3-turbo', logo: 'openai' },
-  { value: 'whisper-1', label: 'whisper-1', logo: 'openai' },
+  { value: 'whisper-large-v3-turbo', label: 'Whisper Large V3 Turbo', logo: 'openai' },
+  { value: 'whisper-large-v3', label: 'Whisper Large V3', logo: 'openai' },
+  { value: 'whisper-medium', label: 'Whisper Medium', logo: 'openai' },
+  { value: 'whisper-small', label: 'Whisper Small', logo: 'openai' },
+  { value: 'whisper-base', label: 'Whisper Base', logo: 'openai' },
+  { value: 'whisper-1', label: 'whisper-1 (API)', logo: 'openai' },
   { value: 'nemo', label: 'NeMo Parakeet', logo: 'nvidia' },
 ];
+
+// ---------------------------------------------------------------------------
+// i18n — UI Language
+// ---------------------------------------------------------------------------
+
+const TRANSLATIONS = {
+  en: {
+    // Sidebar
+    'nav.home': 'Home',
+    'nav.profiles': 'Profiles',
+    'nav.settings': 'Settings',
+    'nav.history': 'History',
+    // Home
+    'home.desc': 'Lightweight voice-to-text for macOS & Windows.<br>Press your hotkey to record, release to transcribe and paste.',
+    // Settings tab — language section
+    'settings.language.section': 'Language',
+    'settings.language.label': 'App Language',
+    // Settings tab — model section
+    'settings.model.section': 'Model',
+    'settings.model.apikey': 'API Key',
+    'settings.model.model': 'Model',
+    'settings.model.language': 'Language',
+    // Settings tab — shortcuts
+    'settings.shortcuts.section': 'Keyboard Shortcuts',
+    'settings.shortcuts.toggle': 'Toggle Recording',
+    'settings.shortcuts.toggle.sub': 'Starts and stops recordings',
+    'settings.shortcuts.cancel': 'Cancel Recording',
+    'settings.shortcuts.cancel.sub': 'Discards active recording',
+    'settings.shortcuts.record': 'Record shortcut',
+    'settings.shortcuts.recording': 'Press shortcut…',
+    // Settings tab — application
+    'settings.app.section': 'Application',
+    'settings.app.autopaste': 'Auto-paste into active app',
+    'settings.app.autocapitalize': 'Auto-capitalize',
+    'settings.app.autopunctuate': 'Auto-punctuate',
+    // Settings tab — sounds
+    'settings.sounds.section': 'Recording Sounds',
+    'settings.sounds.mute': 'Mute all sounds',
+    'settings.sounds.start': 'Start sound',
+    'settings.sounds.stop': 'Stop sound',
+    'settings.sounds.cancel': 'Cancel sound',
+    // Modes tab
+    'modes.llm.btn': 'LLM Settings',
+    'modes.llm.title': 'LLM Settings',
+    'modes.llm.subtitle.cloud': 'Modes use a language model to reformat your transcribed speech. Choose a provider and enter your API key.',
+    'modes.llm.subtitle.local': 'Modes use a local on-device model to reformat your transcribed speech. No API key required — your data never leaves this computer.',
+    'modes.llm.provider': 'Provider',
+    'modes.llm.apikey': 'API Key',
+    'modes.llm.apikey.placeholder': 'Enter API key…',
+    'modes.llm.model': 'Model',
+    'modes.llm.local.option': 'Local (on-device)',
+    'modes.llm.autofill': 'API key auto-filled from Settings.',
+    'modes.nollm.title': 'LLM not configured',
+    'modes.nollm.text': 'Set up an API key in LLM Settings to use modes.',
+    'modes.nollm.btn': 'Open LLM Settings',
+    'modes.nollm.local': 'Download Gemma 3 4B in LLM Settings to use modes.',
+    'modes.disabled': 'This mode is currently disabled. Enable it to activate auto-detection and reformatting.',
+    'modes.banner.title': 'This profile applies to:',
+    'modes.banner.empty': 'Click + to link apps or URLs to this profile',
+    'modes.category.personal': 'Personal Message',
+    'modes.category.email': 'Email',
+    // Modes styles
+    'modes.style.formal': 'Formal.',
+    'modes.style.formal.sub': 'Caps + Punctuation',
+    'modes.style.casual': 'Casual',
+    'modes.style.casual.sub': 'Caps + Less punctuation',
+    'modes.style.excited': 'Excited!',
+    'modes.style.excited.sub': 'More exclamations',
+    // Modes card toggles
+    'modes.toggle.include_greeting': 'Include greeting',
+    'modes.toggle.include_sign_off': 'Include sign-off',
+    'modes.toggle.use_emoji': 'Use emoji',
+    // Modes card UI
+    'modes.card.just_now': 'just now',
+    'modes.card.to': 'To: Oscar',
+    // Local Whisper model status
+    'local.no_backend': 'Could not reach backend.',
+    'local.whisper.tagline': 'Open source · runs entirely on your device · your voice never leaves this computer.',
+    'local.whisper.tagline.size': 'Open source · runs entirely on your device · your voice never leaves this computer. (~1.5 GB)',
+    'local.install': 'Install',
+    'local.installing': 'Installing…',
+    'local.downloading.note': 'Downloading model…',
+    'local.downloading.badge': '⏳ Downloading',
+    'local.download': 'Download',
+    'local.retry': 'Retry',
+    'local.ready': '✓ Ready',
+    'local.download_failed': 'Download failed: ',
+    'local.install_failed': 'Install failed. Check logs and try again.',
+    // Local LLM model status
+    'local.llm.tagline': 'Runs entirely on your device — your data never leaves this computer.',
+    'local.llm.tagline.size': 'Gemma 3 4B · runs entirely on your device · ~2.5 GB download.',
+    'local.llm.tagline.ready': 'Gemma 3 4B · runs entirely on your device · your data never leaves this computer.',
+    'local.llm.install_engine': 'Install engine',
+    'local.llm.downloading': 'Downloading…',
+    'local.llm.engine_error': 'Engine installed but failed to load. See error below.',
+    'local.llm.install_failed': 'Install failed — see error below.',
+    // History tab
+    'history.title': 'History',
+    'history.clear': 'Clear All',
+    'history.empty.title': 'No transcriptions yet',
+    'history.empty.sub': 'Your transcription history will appear here.',
+    'history.yesterday': 'Yesterday',
+    'history.copy': 'Copy',
+    'history.delete': 'Delete',
+    // Home stats
+    'home.stats.empty': 'Record your first transcription to see your stats here.',
+    'home.stats.transcriptions': 'Transcriptions',
+    'home.stats.words': 'Words',
+    'home.stats.saved': 'Time Saved',
+    'home.stats.streak': 'Day Streak',
+    'home.stats.longest': 'Longest',
+    'home.stats.bestday': 'Best Day',
+    // Linked apps popup
+    'popup.title': 'Add Apps & URLs',
+    'popup.linked_apps': 'Linked Apps',
+    'popup.no_apps': 'No apps linked — select apps below to add',
+    'popup.search': 'Search apps…',
+    'popup.loading': 'Loading apps…',
+    'popup.urls': 'Website URLs',
+    'popup.urls.hint': 'Mode activates when you visit this site in your browser.',
+    'popup.url.placeholder': 'e.g. mail.google.com',
+    'popup.url.add': 'Add website',
+    'popup.done': 'Done',
+    'popup.no_apps_found': 'No apps found',
+    'popup.no_installed': 'No installed apps found',
+    // Modes card preview text
+    'modes.preview.personal-message.formal': 'Hey, are you free for lunch tomorrow?\nLet\'s do 12 if that works for you.',
+    'modes.preview.personal-message.casual': 'Hey are you free for lunch tomorrow?\nLet\'s do 12 if that works for you',
+    'modes.preview.personal-message.excited': 'Hey, are you free for lunch tomorrow?\nLet\'s do 12 if that works for you!',
+    'modes.preview.email.formal': 'Hi Oscar,\n\nI wanted to follow up regarding our conversation earlier today. It was a pleasure discussing the project details with you.\n\nPlease don\'t hesitate to reach out if you have any further questions.\n\nBest regards,\nLotti',
+    'modes.preview.email.casual': 'Hi Oscar, great talking with you today. Looking forward to catching up again soon\n\nBest,\nLotti',
+    'modes.preview.email.excited': 'Hi Oscar,\n\nIt was great talking with you today! Really looking forward to our next chat!\n\nBest,\nLotti',
+  },
+  de: {
+    // Sidebar
+    'nav.home': 'Startseite',
+    'nav.profiles': 'Profile',
+    'nav.settings': 'Einstellungen',
+    'nav.history': 'Verlauf',
+    // Home
+    'home.desc': 'Schlanke Sprach-zu-Text-App für macOS & Windows.<br>Drücke deinen Hotkey zum Aufnehmen, loslassen zum Transkribieren und Einfügen.',
+    // Settings tab — language section
+    'settings.language.section': 'Sprache',
+    'settings.language.label': 'App-Sprache',
+    // Settings tab — model section
+    'settings.model.section': 'Modell',
+    'settings.model.apikey': 'API-Schlüssel',
+    'settings.model.model': 'Modell',
+    'settings.model.language': 'Sprache',
+    // Settings tab — shortcuts
+    'settings.shortcuts.section': 'Tastaturkürzel',
+    'settings.shortcuts.toggle': 'Aufnahme umschalten',
+    'settings.shortcuts.toggle.sub': 'Startet und stoppt Aufnahmen',
+    'settings.shortcuts.cancel': 'Aufnahme abbrechen',
+    'settings.shortcuts.cancel.sub': 'Bricht aktive Aufnahme ab',
+    'settings.shortcuts.record': 'Kürzel aufzeichnen',
+    'settings.shortcuts.recording': 'Kürzel drücken…',
+    // Settings tab — application
+    'settings.app.section': 'Anwendung',
+    'settings.app.autopaste': 'Automatisch in aktive App einfügen',
+    'settings.app.autocapitalize': 'Automatisch großschreiben',
+    'settings.app.autopunctuate': 'Automatisch interpunktieren',
+    // Settings tab — sounds
+    'settings.sounds.section': 'Aufnahmetöne',
+    'settings.sounds.mute': 'Alle Töne stummschalten',
+    'settings.sounds.start': 'Starton',
+    'settings.sounds.stop': 'Stopton',
+    'settings.sounds.cancel': 'Abbrechen-Ton',
+    // Modes tab
+    'modes.llm.btn': 'KI-Einstellungen',
+    'modes.llm.title': 'KI-Einstellungen',
+    'modes.llm.subtitle.cloud': 'Profile nutzen ein Sprachmodell, um deine Sprache umzuformatieren. Wähle einen Anbieter und gib deinen API-Schlüssel ein.',
+    'modes.llm.subtitle.local': 'Profile nutzen ein lokales Modell auf deinem Gerät. Kein API-Schlüssel erforderlich — deine Daten verlassen diesen Computer nicht.',
+    'modes.llm.provider': 'Anbieter',
+    'modes.llm.apikey': 'API-Schlüssel',
+    'modes.llm.apikey.placeholder': 'API-Schlüssel eingeben…',
+    'modes.llm.model': 'Modell',
+    'modes.llm.local.option': 'Lokal (auf Gerät)',
+    'modes.llm.autofill': 'API-Schlüssel aus Einstellungen übernommen.',
+    'modes.nollm.title': 'KI nicht konfiguriert',
+    'modes.nollm.text': 'Richte einen API-Schlüssel in den KI-Einstellungen ein, um Profile zu nutzen.',
+    'modes.nollm.btn': 'KI-Einstellungen öffnen',
+    'modes.nollm.local': 'Gemma 3 4B in den KI-Einstellungen herunterladen, um Profile zu nutzen.',
+    'modes.disabled': 'Dieser Modus ist derzeit deaktiviert. Aktiviere ihn, um automatische Erkennung und Umformatierung zu nutzen.',
+    'modes.banner.title': 'Dieses Profil gilt für:',
+    'modes.banner.empty': 'Klicke auf +, um Apps oder URLs zu verknüpfen',
+    'modes.category.personal': 'Persönliche Nachricht',
+    'modes.category.email': 'E-Mail',
+    // Modes styles
+    'modes.style.formal': 'Formell.',
+    'modes.style.formal.sub': 'Großschreibung + Satzzeichen',
+    'modes.style.casual': 'Locker',
+    'modes.style.casual.sub': 'Großschreibung + weniger Satzzeichen',
+    'modes.style.excited': 'Begeistert!',
+    'modes.style.excited.sub': 'Mehr Ausrufezeichen',
+    // Modes card toggles
+    'modes.toggle.include_greeting': 'Begrüßung einschließen',
+    'modes.toggle.include_sign_off': 'Abschlussformel einschließen',
+    'modes.toggle.use_emoji': 'Emoji verwenden',
+    // Modes card UI
+    'modes.card.just_now': 'gerade eben',
+    'modes.card.to': 'An: Oscar',
+    // Local Whisper model status
+    'local.no_backend': 'Backend nicht erreichbar.',
+    'local.whisper.tagline': 'Open Source · läuft vollständig auf deinem Gerät · deine Stimme verlässt diesen Computer nicht.',
+    'local.whisper.tagline.size': 'Open Source · läuft vollständig auf deinem Gerät · deine Stimme verlässt diesen Computer nicht. (~1,5 GB)',
+    'local.install': 'Installieren',
+    'local.installing': 'Installiert…',
+    'local.downloading.note': 'Modell wird heruntergeladen…',
+    'local.downloading.badge': '⏳ Wird geladen',
+    'local.download': 'Herunterladen',
+    'local.retry': 'Erneut versuchen',
+    'local.ready': '✓ Bereit',
+    'local.download_failed': 'Download fehlgeschlagen: ',
+    'local.install_failed': 'Installation fehlgeschlagen. Logs prüfen und erneut versuchen.',
+    // Local LLM model status
+    'local.llm.tagline': 'Läuft vollständig auf deinem Gerät — deine Daten verlassen diesen Computer nicht.',
+    'local.llm.tagline.size': 'Gemma 3 4B · läuft vollständig auf deinem Gerät · ~2,5 GB Download.',
+    'local.llm.tagline.ready': 'Gemma 3 4B · läuft vollständig auf deinem Gerät · deine Daten verlassen diesen Computer nicht.',
+    'local.llm.install_engine': 'Engine installieren',
+    'local.llm.downloading': 'Wird heruntergeladen…',
+    'local.llm.engine_error': 'Engine installiert, aber Laden fehlgeschlagen. Fehler unten ansehen.',
+    'local.llm.install_failed': 'Installation fehlgeschlagen — Fehler unten ansehen.',
+    // History tab
+    'history.title': 'Verlauf',
+    'history.clear': 'Alles löschen',
+    'history.empty.title': 'Noch keine Transkriptionen',
+    'history.empty.sub': 'Dein Transkriptionsverlauf erscheint hier.',
+    'history.yesterday': 'Gestern',
+    'history.copy': 'Kopieren',
+    'history.delete': 'Löschen',
+    // Home stats
+    'home.stats.empty': 'Nimm deine erste Transkription auf, um deine Statistiken zu sehen.',
+    'home.stats.transcriptions': 'Transkriptionen',
+    'home.stats.words': 'Wörter',
+    'home.stats.saved': 'Zeit gespart',
+    'home.stats.streak': 'Tage-Streak',
+    'home.stats.longest': 'Längste',
+    'home.stats.bestday': 'Bester Tag',
+    // Linked apps popup
+    'popup.title': 'Apps & URLs hinzufügen',
+    'popup.linked_apps': 'Verknüpfte Apps',
+    'popup.no_apps': 'Keine Apps verknüpft — Apps unten auswählen',
+    'popup.search': 'Apps suchen…',
+    'popup.loading': 'Apps werden geladen…',
+    'popup.urls': 'Website-URLs',
+    'popup.urls.hint': 'Modus aktiviert sich, wenn du diese Seite im Browser besuchst.',
+    'popup.url.placeholder': 'z.B. mail.google.com',
+    'popup.url.add': 'Website hinzufügen',
+    'popup.done': 'Fertig',
+    'popup.no_apps_found': 'Keine Apps gefunden',
+    'popup.no_installed': 'Keine installierten Apps gefunden',
+    // Modes card preview text
+    'modes.preview.personal-message.formal': 'Hey, hast du morgen Zeit zum Mittagessen?\nUm 12 Uhr würde mir passen, wenn es dir passt.',
+    'modes.preview.personal-message.casual': 'Hey hast du morgen Zeit zum Mittagessen?\nUm 12 würde passen wenn es dir passt',
+    'modes.preview.personal-message.excited': 'Hey, hast du morgen Zeit zum Mittagessen?\nUm 12 Uhr würde mir passen, wenn es dir passt!',
+    'modes.preview.email.formal': 'Hallo Oscar,\n\nich wollte mich bezüglich unseres heutigen Gesprächs nochmals melden. Es war mir eine Freude, die Projektdetails mit dir zu besprechen.\n\nBei weiteren Fragen stehe ich gerne zur Verfügung.\n\nMit freundlichen Grüßen,\nLotti',
+    'modes.preview.email.casual': 'Hi Oscar, tolles Gespräch heute. Freue mich schon auf unser nächstes Treffen\n\nBeste Grüße,\nLotti',
+    'modes.preview.email.excited': 'Hi Oscar,\n\nes war wirklich toll, heute mit dir zu sprechen! Ich freue mich sehr auf unser nächstes Gespräch!\n\nBeste Grüße,\nLotti',
+  },
+};
+
+function getCurrentLang() {
+  return localStorage.getItem('ui-lang') || 'en';
+}
+
+function t(key) {
+  const lang = getCurrentLang();
+  const dict = TRANSLATIONS[lang] || TRANSLATIONS.en;
+  return dict[key] !== undefined ? dict[key] : (TRANSLATIONS.en[key] || key);
+}
+
+function applyTranslations() {
+  const lang = getCurrentLang();
+  document.documentElement.lang = lang;
+
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    const val = t(el.dataset.i18n);
+    if (val !== undefined) el.textContent = val;
+  });
+
+  document.querySelectorAll('[data-i18n-html]').forEach((el) => {
+    const val = t(el.dataset.i18nHtml);
+    if (val !== undefined) el.innerHTML = val;
+  });
+
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+    const val = t(el.dataset.i18nPlaceholder);
+    if (val !== undefined) el.placeholder = val;
+  });
+
+  document.querySelectorAll('[data-i18n-option]').forEach((el) => {
+    const val = t(el.dataset.i18nOption);
+    if (val !== undefined) el.textContent = val;
+  });
+}
+
+const UI_LANG_OPTIONS = [
+  { value: 'en', label: 'English' },
+  { value: 'de', label: 'Deutsch' },
+];
+
+function setupLanguagePicker() {
+  initLogoSelect('sel-ui-lang', UI_LANG_OPTIONS);
+  setLogoSelect('sel-ui-lang', getCurrentLang());
+
+  document.getElementById('sel-ui-lang').addEventListener('logo-select-change', (e) => {
+    localStorage.setItem('ui-lang', e.detail.value);
+    applyTranslations();
+    // Re-render dynamic content that's currently visible
+    if (config) {
+      for (const action of Object.keys(DEFAULTS)) {
+        renderShortcutBadges(action, config[action] || DEFAULTS[action]);
+      }
+    }
+    const modesTab = document.getElementById('tab-modes');
+    if (modesTab && modesTab.classList.contains('active')) {
+      renderBanner(selectedCategory);
+      renderStyleCards(selectedCategory);
+      updateModesLlmGate();
+      const llmProvider = config ? (config.llm_provider || 'openai') : 'openai';
+      applyLlmProviderVisibility(llmProvider);
+    }
+    if (document.getElementById('tab-history').classList.contains('active')) {
+      loadHistory();
+    }
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Init
@@ -101,6 +432,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   populateLanguageSelect();
   initLogoSelect('sel-openaiModel', WHISPER_MODELS);
   populateLlmModelSelect('openai');
+  setupLanguagePicker();
+  applyTranslations();
   setupSidebarToggle();
   setupSidebarNav();
   setupShortcutCapture();
@@ -110,6 +443,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupLlmSettings();
   setupModesTab();
   setupHistoryTab();
+  setupHomeTab();
 
   if (config) applyConfig(config);
 
@@ -232,7 +566,7 @@ function renderShortcutBadges(action, combo) {
   if (recordingAction === action) {
     const label = document.createElement('span');
     label.className = 'recording-label';
-    label.textContent = 'Press shortcut...';
+    label.textContent = t('settings.shortcuts.recording');
     container.appendChild(label);
     return;
   }
@@ -240,7 +574,7 @@ function renderShortcutBadges(action, combo) {
   if (!combo.key || combo.key === '') {
     const label = document.createElement('span');
     label.className = 'record-label';
-    label.textContent = 'Record shortcut';
+    label.textContent = t('settings.shortcuts.record');
     container.appendChild(label);
     return;
   }
@@ -573,7 +907,9 @@ function populateLanguageSelect() {
 // Local Whisper Model Status
 // ---------------------------------------------------------------------------
 
-const LOCAL_WHISPER_MODELS = new Set(['whisper-large-v3', 'whisper-large-v3-turbo']);
+const LOCAL_WHISPER_MODELS = new Set([
+  'whisper-large-v3-turbo', 'whisper-large-v3', 'whisper-medium', 'whisper-small', 'whisper-base',
+]);
 let _whisperStatusPollTimer = null;
 let _whisperDepsInstalling = false;
 
@@ -621,17 +957,17 @@ function renderLocalModelStatus(status, modelName) {
   if (!el) return;
 
   if (!status) {
-    el.innerHTML = `<div class="local-model-row"><span class="local-model-note muted">Could not reach backend.</span></div>`;
+    el.innerHTML = `<div class="local-model-row"><span class="local-model-note muted">${t('local.no_backend')}</span></div>`;
     return;
   }
 
   if (!status.deps_installed) {
     el.innerHTML = `
       <div class="local-model-row">
-        <span class="local-model-note">Open source · runs entirely on your device · your voice never leaves this computer.</span>
-        <button class="btn-local-model" id="btn-install-whisper-deps">Install (~2 GB)</button>
+        <span class="local-model-note">${t('local.whisper.tagline')}</span>
+        <button class="btn-local-model" id="btn-install-whisper-deps">${t('local.install')}</button>
       </div>
-      ${_whisperDepsInstalling ? `<div class="local-model-installing"><span>⏳ Installing…</span><div class="status-line" id="whisper-deps-status-line"></div></div>` : ''}
+      ${_whisperDepsInstalling ? `<div class="local-model-installing"><span>⏳ ${t('local.installing')}</span><div class="status-line" id="whisper-deps-status-line"></div></div>` : ''}
     `;
     const btn = document.getElementById('btn-install-whisper-deps');
     if (btn) btn.addEventListener('click', installWhisperDeps);
@@ -641,8 +977,8 @@ function renderLocalModelStatus(status, modelName) {
   if (status.downloading) {
     el.innerHTML = `
       <div class="local-model-row">
-        <span class="local-model-note">Downloading model…</span>
-        <span class="local-model-badge downloading">⏳ Downloading</span>
+        <span class="local-model-note">${t('local.downloading.note')}</span>
+        <span class="local-model-badge downloading">${t('local.downloading.badge')}</span>
       </div>
     `;
     return;
@@ -653,10 +989,10 @@ function renderLocalModelStatus(status, modelName) {
     row.className = 'local-model-row';
     const note = document.createElement('span');
     note.className = 'local-model-note error';
-    note.textContent = `Download failed: ${status.error}`;
+    note.textContent = `${t('local.download_failed')}${status.error}`;
     const btn = document.createElement('button');
     btn.className = 'btn-local-model';
-    btn.textContent = 'Retry';
+    btn.textContent = t('local.retry');
     btn.addEventListener('click', () => downloadWhisperModel(modelName));
     row.appendChild(note);
     row.appendChild(btn);
@@ -668,8 +1004,8 @@ function renderLocalModelStatus(status, modelName) {
   if (!status.cached) {
     el.innerHTML = `
       <div class="local-model-row">
-        <span class="local-model-note">Open source · runs entirely on your device · your voice never leaves this computer. (~1.5 GB)</span>
-        <button class="btn-local-model" id="btn-download-whisper">Download</button>
+        <span class="local-model-note">${t('local.whisper.tagline.size')}</span>
+        <button class="btn-local-model" id="btn-download-whisper">${t('local.download')}</button>
       </div>
     `;
     const btn = document.getElementById('btn-download-whisper');
@@ -680,8 +1016,8 @@ function renderLocalModelStatus(status, modelName) {
   // Cached and ready
   el.innerHTML = `
     <div class="local-model-row">
-      <span class="local-model-note">Open source · runs entirely on your device · your voice never leaves this computer.</span>
-      <span class="local-model-badge ready">✓ Ready</span>
+      <span class="local-model-note">${t('local.whisper.tagline')}</span>
+      <span class="local-model-badge ready">${t('local.ready')}</span>
     </div>
   `;
 }
@@ -703,7 +1039,7 @@ async function installWhisperDeps() {
     await updateLocalModelStatus(modelName);
   } else {
     const el = document.getElementById('local-model-status');
-    if (el) el.innerHTML += `<div class="local-model-note error">Install failed. Check logs and try again.</div>`;
+    if (el) el.innerHTML += `<div class="local-model-note error">${t('local.install_failed')}</div>`;
   }
 }
 
@@ -754,7 +1090,7 @@ function renderLlmLocalStatus(status, modelId) {
   if (!el) return;
 
   if (!status) {
-    el.innerHTML = `<div class="local-model-row"><span class="local-model-note muted">Could not reach backend.</span></div>`;
+    el.innerHTML = `<div class="local-model-row"><span class="local-model-note muted">${t('local.no_backend')}</span></div>`;
     return;
   }
 
@@ -763,8 +1099,8 @@ function renderLlmLocalStatus(status, modelId) {
     if (_llmDepsInstalling) {
       el.innerHTML = `
         <div class="local-model-row">
-          <span class="local-model-note">Installing ${engineLabel}…</span>
-          <button class="btn-local-model" disabled style="opacity:0.5">Installing…</button>
+          <span class="local-model-note">${t('local.installing')} ${engineLabel}…</span>
+          <button class="btn-local-model" disabled style="opacity:0.5">${t('local.installing')}</button>
         </div>
         <pre class="llm-install-log" id="llm-deps-log">${_llmInstallLog.slice(-8).map(escapeHtml).join('\n')}</pre>
       `;
@@ -772,8 +1108,8 @@ function renderLlmLocalStatus(status, modelId) {
       // pip install succeeded but import still fails — show the actual error
       el.innerHTML = `
         <div class="local-model-row">
-          <span class="local-model-note error">Engine installed but failed to load. See error below.</span>
-          <button class="btn-local-model" id="btn-install-llm-deps">Retry</button>
+          <span class="local-model-note error">${t('local.llm.engine_error')}</span>
+          <button class="btn-local-model" id="btn-install-llm-deps">${t('local.retry')}</button>
         </div>
         <pre class="llm-install-log error">${escapeHtml(status.deps_error)}</pre>
       `;
@@ -782,8 +1118,8 @@ function renderLlmLocalStatus(status, modelId) {
     } else {
       el.innerHTML = `
         <div class="local-model-row">
-          <span class="local-model-note">Runs entirely on your device — your data never leaves this computer.</span>
-          <button class="btn-local-model" id="btn-install-llm-deps">Install engine</button>
+          <span class="local-model-note">${t('local.llm.tagline')}</span>
+          <button class="btn-local-model" id="btn-install-llm-deps">${t('local.llm.install_engine')}</button>
         </div>
       `;
       const btn = document.getElementById('btn-install-llm-deps');
@@ -796,11 +1132,11 @@ function renderLlmLocalStatus(status, modelId) {
     const pct = status.total_bytes > 0
       ? Math.round((status.progress_bytes / status.total_bytes) * 100)
       : null;
-    const label = pct !== null ? `Downloading… ${pct}%` : 'Downloading…';
+    const label = pct !== null ? `${t('local.llm.downloading')} ${pct}%` : t('local.llm.downloading');
     el.innerHTML = `
       <div class="local-model-row">
         <span class="local-model-note">${label}</span>
-        <span class="local-model-badge downloading">⏳ Downloading</span>
+        <span class="local-model-badge downloading">${t('local.downloading.badge')}</span>
       </div>
       ${pct !== null ? `<div class="llm-progress-bar"><div class="llm-progress-fill" style="width:${pct}%"></div></div>` : ''}
     `;
@@ -812,10 +1148,10 @@ function renderLlmLocalStatus(status, modelId) {
     row.className = 'local-model-row';
     const note = document.createElement('span');
     note.className = 'local-model-note error';
-    note.textContent = `Download failed: ${status.error}`;
+    note.textContent = `${t('local.download_failed')}${status.error}`;
     const btn = document.createElement('button');
     btn.className = 'btn-local-model';
-    btn.textContent = 'Retry';
+    btn.textContent = t('local.retry');
     btn.addEventListener('click', () => startLlmModelDownload(modelId));
     row.appendChild(note);
     row.appendChild(btn);
@@ -827,8 +1163,8 @@ function renderLlmLocalStatus(status, modelId) {
   if (!status.cached) {
     el.innerHTML = `
       <div class="local-model-row">
-        <span class="local-model-note">Gemma 3 4B · runs entirely on your device · ~2.5 GB download.</span>
-        <button class="btn-local-model" id="btn-download-llm">Download</button>
+        <span class="local-model-note">${t('local.llm.tagline.size')}</span>
+        <button class="btn-local-model" id="btn-download-llm">${t('local.download')}</button>
       </div>
     `;
     const btn = document.getElementById('btn-download-llm');
@@ -839,8 +1175,8 @@ function renderLlmLocalStatus(status, modelId) {
   // Cached and ready
   el.innerHTML = `
     <div class="local-model-row">
-      <span class="local-model-note">Gemma 3 4B · runs entirely on your device · your data never leaves this computer.</span>
-      <span class="local-model-badge ready">✓ Ready</span>
+      <span class="local-model-note">${t('local.llm.tagline.ready')}</span>
+      <span class="local-model-badge ready">${t('local.ready')}</span>
     </div>
   `;
 }
@@ -872,8 +1208,8 @@ async function installLlmDeps() {
     if (el) {
       el.innerHTML = `
         <div class="local-model-row">
-          <span class="local-model-note error">Install failed — see error below.</span>
-          <button class="btn-local-model" id="btn-install-llm-deps">Retry</button>
+          <span class="local-model-note error">${t('local.llm.install_failed')}</span>
+          <button class="btn-local-model" id="btn-install-llm-deps">${t('local.retry')}</button>
         </div>
         <pre class="llm-install-log error">${escapeHtml(errorLines)}</pre>
       `;
@@ -963,8 +1299,9 @@ function initLogoSelect(id, options) {
     const item = document.createElement('div');
     item.className = 'logo-select-option';
     item.dataset.value = opt.value;
+    const imgHtml = opt.logo ? `<img src="${logoSrc(opt.logo)}" width="16" height="16" alt="">` : '';
     item.innerHTML = `
-      <img src="${logoSrc(opt.logo)}" width="16" height="16" alt="">
+      ${imgHtml}
       <span class="logo-select-option-label">${opt.label}</span>
       <span class="logo-select-check">✓</span>
     `;
@@ -997,7 +1334,7 @@ function setLogoSelect(id, value) {
   if (matchedOption) {
     const optImg = matchedOption.querySelector('img');
     const optLabel = matchedOption.querySelector('.logo-select-option-label');
-    if (triggerIcon && optImg) triggerIcon.src = optImg.src;
+    if (triggerIcon) triggerIcon.src = optImg ? optImg.src : '';
     if (triggerLabel && optLabel) triggerLabel.textContent = optLabel.textContent;
   }
 
@@ -1159,8 +1496,8 @@ function applyLlmProviderVisibility(provider) {
   if (localStatus) localStatus.classList.toggle('hidden', !isLocal);
   if (subtitle) {
     subtitle.textContent = isLocal
-      ? 'Modes use a local on-device model to reformat your transcribed speech. No API key required — your data never leaves this computer.'
-      : 'Modes use a language model to reformat your transcribed speech. Choose a provider and enter your API key.';
+      ? t('modes.llm.subtitle.local')
+      : t('modes.llm.subtitle.cloud');
   }
 }
 
@@ -1184,7 +1521,7 @@ function updateModesLlmGate() {
   // Update notice text for local provider
   if (config && config.llm_provider === 'local' && !hasKey) {
     const textEl = notice.querySelector('.modes-no-llm-text');
-    if (textEl) textEl.innerHTML = '<strong>Model not downloaded</strong><span>Download Gemma 3 4B in LLM Settings to use modes.</span>';
+    if (textEl) textEl.innerHTML = `<strong>${t('modes.nollm.title')}</strong><span>${t('modes.nollm.local')}</span>`;
   }
   // Disable only the enable/disable toggles when no key — categories stay clickable
   document.querySelectorAll('.mode-toggle input').forEach((inp) => {
@@ -1251,7 +1588,7 @@ const KNOWN_APP_ICONS = {
 const DEFAULT_CATEGORIES = {
   'email': {
     linkedApps: [],
-    linkedUrls: ['mail.google.com', 'outlook.live.com', 'outlook.office.com'],
+    linkedUrls: [],
   },
   'personal-message': {
     linkedApps: [],
@@ -1263,19 +1600,6 @@ const MODES_STYLES = {
   formal: { name: 'Formal.', subtitle: 'Caps + Punctuation' },
   casual: { name: 'Casual', subtitle: 'Caps + Less punctuation' },
   excited: { name: 'Excited!', subtitle: 'More exclamations' },
-};
-
-const MODES_PREVIEWS = {
-  'personal-message': {
-    formal: 'Hey, are you free for lunch tomorrow?\nLet\'s do 12 if that works for you.',
-    casual: 'Hey are you free for lunch tomorrow?\nLet\'s do 12 if that works for you',
-    excited: 'Hey, are you free for lunch tomorrow?\nLet\'s do 12 if that works for you!',
-  },
-  'email': {
-    formal: 'Hi Oscar,\n\nI wanted to follow up regarding our conversation earlier today. It was a pleasure discussing the project details with you.\n\nPlease don\'t hesitate to reach out if you have any further questions.\n\nBest regards,\nLotti',
-    casual: 'Hi Oscar, great talking with you today. Looking forward to catching up again soon\n\nBest,\nLotti',
-    excited: 'Hi Oscar,\n\nIt was great talking with you today! Really looking forward to our next chat!\n\nBest,\nLotti',
-  },
 };
 
 const CATEGORY_TOGGLES = {
@@ -1423,12 +1747,12 @@ function renderBanner(categoryId) {
     : '';
 
   const emptySubtext = allItems.length === 0
-    ? `<div class="modes-banner-subtitle">Click + to link apps or URLs to this profile</div>`
+    ? `<div class="modes-banner-subtitle">${t('modes.banner.empty')}</div>`
     : '';
 
   banner.innerHTML = `
     <div class="modes-banner-text">
-      <div class="modes-banner-title">This profile applies to:</div>
+      <div class="modes-banner-title">${t('modes.banner.title')}</div>
       ${emptySubtext}
     </div>
     <div class="modes-banner-icons">
@@ -1490,30 +1814,30 @@ function openLinkedAppsPopup(categoryId) {
   function buildShell() {
     return `
       <div class="popup-header">
-        <div class="popup-title">Add Apps &amp; URLs</div>
+        <div class="popup-title">${t('popup.title')}</div>
         <button class="popup-close" id="popup-close-btn">&times;</button>
       </div>
       ${buildLinkedAppsSection()}
       <div class="popup-search-row">
         <input type="text" class="popup-search-input" id="popup-search"
-               placeholder="Search apps…" autocomplete="off">
+               placeholder="${t('popup.search')}" autocomplete="off">
       </div>
       <div class="app-grid-scroll" id="app-grid-scroll">
         <div class="apps-loading">
           <div class="apps-spinner"></div>
-          <span>Loading apps…</span>
+          <span>${t('popup.loading')}</span>
         </div>
       </div>
       ${buildUrlSection()}
       <div class="popup-footer">
-        <button class="popup-done-btn" id="popup-done-btn">Done</button>
+        <button class="popup-done-btn" id="popup-done-btn">${t('popup.done')}</button>
       </div>
     `;
   }
 
   function buildLinkedAppsSection() {
     const chips = apps.length === 0
-      ? `<span class="linked-apps-empty">No apps linked — select apps below to add</span>`
+      ? `<span class="linked-apps-empty">${t('popup.no_apps')}</span>`
       : apps.map((name, i) => `
           <div class="linked-app-chip" data-index="${i}" title="${name}">
             ${getLinkedAppIconHtml(name)}
@@ -1523,7 +1847,7 @@ function openLinkedAppsPopup(categoryId) {
 
     return `
       <div class="linked-apps-section" id="linked-apps-section">
-        <div class="popup-section-title">Linked Apps</div>
+        <div class="popup-section-title">${t('popup.linked_apps')}</div>
         <div class="linked-apps-strip">${chips}</div>
       </div>
     `;
@@ -1579,13 +1903,13 @@ function openLinkedAppsPopup(categoryId) {
 
     return `
       <div class="popup-section" id="popup-url-section">
-        <div class="popup-section-title">Website URLs</div>
-        <div class="popup-hint">Mode activates when you visit this site in your browser.</div>
+        <div class="popup-section-title">${t('popup.urls')}</div>
+        <div class="popup-hint">${t('popup.urls.hint')}</div>
         <div class="popup-url-tags" id="popup-url-tags">${tags}</div>
         <div class="popup-add-row">
           <input type="text" class="popup-input" id="popup-url-input"
-                 placeholder="e.g. mail.google.com">
-          <button class="popup-add-btn" id="popup-add-url">Add website</button>
+                 placeholder="${t('popup.url.placeholder')}">
+          <button class="popup-add-btn" id="popup-add-url">${t('popup.url.add')}</button>
         </div>
       </div>
     `;
@@ -1646,7 +1970,7 @@ function openLinkedAppsPopup(categoryId) {
       : allApps;
 
     if (list.length === 0) {
-      return `<div class="apps-empty">${filter ? 'No apps found' : 'No installed apps found'}</div>`;
+      return `<div class="apps-empty">${filter ? t('popup.no_apps_found') : t('popup.no_installed')}</div>`;
     }
 
     const items = list.map((appItem) => {
@@ -1765,7 +2089,7 @@ function renderStyleCards(categoryId) {
   container.innerHTML = '';
 
   for (const [styleId, style] of Object.entries(MODES_STYLES)) {
-    const preview = MODES_PREVIEWS[categoryId][styleId];
+    const preview = t(`modes.preview.${categoryId}.${styleId}`);
     const isSelected = styleId === currentStyle;
 
     const card = document.createElement('div');
@@ -1775,15 +2099,15 @@ function renderStyleCards(categoryId) {
     const bodyHTML = categoryId === 'personal-message'
       ? `<div class="mode-card-message-bubble">
           <div class="mode-card-message-text">${preview.replace(/\n/g, '<br>')}</div>
-          <div class="mode-card-message-time">just now</div>
+          <div class="mode-card-message-time">${t('modes.card.just_now')}</div>
         </div>`
-      : `<div class="mode-card-to">To: Oscar</div>
+      : `<div class="mode-card-to">${t('modes.card.to')}</div>
          <div class="mode-card-preview">${preview}</div>`;
 
     card.innerHTML = `
       <div class="mode-card-header">
-        <div class="mode-card-name">${style.name}</div>
-        <div class="mode-card-subtitle">${style.subtitle}</div>
+        <div class="mode-card-name">${t('modes.style.' + styleId)}</div>
+        <div class="mode-card-subtitle">${t('modes.style.' + styleId + '.sub')}</div>
       </div>
       <div class="mode-card-divider"></div>
       ${bodyHTML}
@@ -1794,12 +2118,12 @@ function renderStyleCards(categoryId) {
     if (defs.length > 0) {
       const togglesWrap = document.createElement('div');
       togglesWrap.className = 'mode-card-toggles';
-      for (const { key, label, default: defaultVal } of defs) {
+      for (const { key, default: defaultVal } of defs) {
         const checked = getToggleState(categoryId, styleId, key, defaultVal);
         const row = document.createElement('div');
         row.className = 'mode-card-toggle-row';
         row.innerHTML = `
-          <span class="modes-toggle-label">${label}</span>
+          <span class="modes-toggle-label">${t('modes.toggle.' + key)}</span>
           <label class="mode-toggle">
             <input type="checkbox" ${checked ? 'checked' : ''}>
             <span class="mode-toggle-slider"></span>
@@ -1849,7 +2173,7 @@ function updateCategorySubtitles() {
   const selections = (config && config.modes && config.modes.selections) || {};
   for (const [catId] of Object.entries(MODES_CATEGORIES)) {
     const styleId = selections[catId] || 'formal';
-    const styleName = MODES_STYLES[styleId] ? MODES_STYLES[styleId].name.replace(/[.!]$/, '') : 'Formal';
+    const styleName = MODES_STYLES[styleId] ? t('modes.style.' + styleId).replace(/[.!]$/, '') : t('modes.style.formal').replace(/[.!]$/, '');
     const el = document.getElementById(`cat-style-${catId}`);
     if (el) el.textContent = styleName;
   }
@@ -1957,8 +2281,8 @@ function renderHistory(entries) {
       <div class="history-entry-meta">
         <span class="history-entry-time">${formatTimestamp(entry.timestamp)}</span>
         <div class="history-entry-actions">
-          <button class="history-action-btn copy" title="Copy to clipboard">Copy</button>
-          <button class="history-action-btn delete" title="Delete">Delete</button>
+          <button class="history-action-btn copy" title="Copy to clipboard">${t('history.copy')}</button>
+          <button class="history-action-btn delete" title="Delete">${t('history.delete')}</button>
         </div>
       </div>
     `;
@@ -2000,9 +2324,107 @@ function formatTimestamp(iso) {
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
   if (date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth()) {
-    return 'Yesterday, ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return t('history.yesterday') + ', ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
   // Older
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
     ', ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+// ---------------------------------------------------------------------------
+// Home Tab — Usage Stats
+// ---------------------------------------------------------------------------
+
+function setupHomeTab() {
+  // Load stats immediately (home is the default active tab)
+  loadHomeStats();
+
+  // Reload when user navigates back to home
+  document.querySelectorAll('.sidebar-item').forEach((item) => {
+    item.addEventListener('click', () => {
+      if (item.dataset.tab === 'home') loadHomeStats();
+    });
+  });
+}
+
+async function loadHomeStats() {
+  const entries = await window.api.getHistory();
+  renderHomeStats(entries || []);
+}
+
+function computeStats(entries) {
+  if (!entries.length) return null;
+
+  const wordCounts = entries.map((e) => (e.text.trim() ? e.text.trim().split(/\s+/).length : 0));
+  const totalWords = wordCounts.reduce((a, b) => a + b, 0);
+  const totalTranscriptions = entries.length;
+
+  // Time saved: assume 50 wpm average typing speed
+  const minutesSaved = totalWords / 50;
+  let timeSaved;
+  if (minutesSaved < 1) {
+    timeSaved = '<1 min';
+  } else if (minutesSaved < 60) {
+    timeSaved = Math.round(minutesSaved) + ' min';
+  } else {
+    const h = Math.floor(minutesSaved / 60);
+    const m = Math.round(minutesSaved % 60);
+    timeSaved = m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+
+  // Current streak: consecutive days ending today
+  const daySet = new Set(entries.map((e) => e.timestamp.slice(0, 10)));
+  let streak = 0;
+  const cursor = new Date();
+  while (daySet.has(cursor.toISOString().slice(0, 10))) {
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  // Longest transcription (word count)
+  const longestWords = Math.max(...wordCounts);
+
+  // Best day (most transcriptions on a single day)
+  const dayCounts = {};
+  for (const e of entries) {
+    const day = e.timestamp.slice(0, 10);
+    dayCounts[day] = (dayCounts[day] || 0) + 1;
+  }
+  const bestDay = Math.max(...Object.values(dayCounts));
+
+  return { totalTranscriptions, totalWords, timeSaved, streak, longestWords, bestDay };
+}
+
+function renderHomeStats(entries) {
+  const card = document.getElementById('home-stats-card');
+  const empty = document.getElementById('home-stats-empty');
+  const grid = document.getElementById('home-stats-grid');
+
+  const stats = computeStats(entries);
+
+  if (!stats) {
+    card.classList.add('hidden');
+    empty.classList.remove('hidden');
+    empty.querySelector('p').textContent = t('home.stats.empty');
+    return;
+  }
+
+  empty.classList.add('hidden');
+  card.classList.remove('hidden');
+
+  const items = [
+    { value: stats.totalTranscriptions.toLocaleString(), label: t('home.stats.transcriptions') },
+    { value: stats.totalWords.toLocaleString(),          label: t('home.stats.words') },
+    { value: stats.timeSaved,                            label: t('home.stats.saved') },
+    { value: stats.streak > 0 ? stats.streak : '—',     label: t('home.stats.streak') },
+    { value: stats.longestWords.toLocaleString(),        label: t('home.stats.longest') },
+    { value: stats.bestDay.toLocaleString(),             label: t('home.stats.bestday') },
+  ];
+
+  grid.innerHTML = items.map(({ value, label }) => `
+    <div class="stat-item">
+      <span class="stat-value">${escapeHtml(String(value))}</span>
+      <span class="stat-label">${escapeHtml(label)}</span>
+    </div>
+  `).join('');
 }

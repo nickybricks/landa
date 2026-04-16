@@ -40,7 +40,7 @@
               <polyline points="9 22 9 12 15 12 15 22"/>
             </svg>
           </span>
-          <span>Home</span>
+          <span data-i18n="nav.home">Home</span>
         </div>
         <div class="sidebar-item" data-tab="modes">
           <span class="sidebar-icon">
@@ -51,7 +51,7 @@
               <rect x="3" y="14" width="7" height="7" rx="1"/>
             </svg>
           </span>
-          <span>Profiles</span>
+          <span data-i18n="nav.profiles">Profiles</span>
         </div>
         <div class="sidebar-item" data-tab="configuration">
           <span class="sidebar-icon">
@@ -60,7 +60,7 @@
               <circle cx="12" cy="12" r="3"/>
             </svg>
           </span>
-          <span>Settings</span>
+          <span data-i18n="nav.settings">Settings</span>
         </div>
         <div class="sidebar-item" data-tab="history">
           <span class="sidebar-icon">
@@ -70,7 +70,7 @@
               <path d="M12 7v5l4 2"/>
             </svg>
           </span>
-          <span>History</span>
+          <span data-i18n="nav.history">History</span>
         </div>
       </nav>
 
@@ -79,11 +79,18 @@
         <!-- Home Tab -->
         <div class="tab-panel active" id="tab-home">
           <div class="home-bg">
+            <!-- Stats Card -->
+            <div class="home-stats-card hidden" id="home-stats-card">
+              <div class="home-stats-grid" id="home-stats-grid"></div>
+            </div>
+            <div class="home-stats-empty hidden" id="home-stats-empty">
+              <p data-i18n="home.stats.empty">Record your first transcription to see your stats here.</p>
+            </div>
             <div class="home-glass-card">
               <img src="../brand-assets/FindMyVoice_v2-iOS-Default-1024x1024@1x.png" alt="Landa" class="home-app-icon">
               <h2 class="home-title">Landa</h2>
               <p class="home-version" id="app-version-label">Version …</p>
-              <p class="home-desc">Lightweight voice-to-text for macOS &amp; Windows.<br>Press your hotkey to record, release to transcribe and paste.</p>
+              <p class="home-desc" data-i18n-html="home.desc">Lightweight voice-to-text for macOS &amp; Windows.<br>Press your hotkey to record, release to transcribe and paste.</p>
             </div>
           </div>
         </div>
@@ -95,14 +102,14 @@
             <!-- LLM Settings header icon -->
             <div class="modes-llm-btn" id="modes-llm-btn" title="LLM Settings">
               <span class="modes-llm-icon">✦</span>
-              <span class="modes-llm-label">LLM Settings</span>
+              <span class="modes-llm-label" data-i18n="modes.llm.btn">LLM Settings</span>
             </div>
             <div class="modes-sidebar-divider"></div>
             <div class="modes-category active" data-category="personal-message">
               <div class="modes-category-row">
                 <span class="modes-category-icon">💬</span>
                 <div class="modes-category-text">
-                  <span class="modes-category-name">Personal Message</span>
+                  <span class="modes-category-name" data-i18n="modes.category.personal">Personal Message</span>
                   <span class="modes-category-style" id="cat-style-personal-message">Formal</span>
                 </div>
                 <label class="mode-toggle" id="toggle-personal-message">
@@ -115,7 +122,7 @@
               <div class="modes-category-row">
                 <span class="modes-category-icon">📧</span>
                 <div class="modes-category-text">
-                  <span class="modes-category-name">Email</span>
+                  <span class="modes-category-name" data-i18n="modes.category.email">Email</span>
                   <span class="modes-category-style" id="cat-style-email">Formal</span>
                 </div>
                 <label class="mode-toggle" id="toggle-email">
@@ -131,28 +138,28 @@
             <!-- LLM Settings Panel (shown when LLM icon selected) -->
             <div class="modes-scroll hidden" id="modes-llm-panel">
               <div class="llm-panel-header">
-                <div class="llm-panel-title">LLM Settings</div>
+                <div class="llm-panel-title" data-i18n="modes.llm.title">LLM Settings</div>
                 <div class="llm-panel-subtitle" id="llm-panel-subtitle">Modes use a language model to reformat your transcribed speech. Choose a provider and enter your API key.</div>
               </div>
               <div class="settings-card">
                 <div class="picker-row">
-                  <span>Provider</span>
+                  <span data-i18n="modes.llm.provider">Provider</span>
                   <select id="sel-llm-provider">
                     <option value="openai">OpenAI</option>
                     <option value="anthropic">Anthropic</option>
                     <option value="google">Google</option>
-                    <option value="local">Local (on-device)</option>
+                    <option value="local" data-i18n-option="modes.llm.local.option">Local (on-device)</option>
                   </select>
                 </div>
                 <div class="divider" id="llm-api-key-divider"></div>
                 <div class="picker-row" id="llm-api-key-row">
-                  <span>API Key</span>
+                  <span data-i18n="modes.llm.apikey">API Key</span>
                   <span class="api-key-masked hidden" id="masked-llm-api-key"></span>
-                  <input type="password" id="inp-llm-api-key" placeholder="Enter API key…" class="text-input">
+                  <input type="password" id="inp-llm-api-key" placeholder="Enter API key…" class="text-input" data-i18n-placeholder="modes.llm.apikey.placeholder">
                 </div>
                 <div class="divider"></div>
                 <div class="picker-row" id="llm-model-row">
-                  <span>Model</span>
+                  <span data-i18n="modes.llm.model">Model</span>
                   <div class="logo-select" id="sel-llm-model">
                     <div class="logo-select-trigger">
                       <img class="logo-select-icon" src="" width="16" height="16" alt="">
@@ -163,7 +170,7 @@
                   </div>
                 </div>
               </div>
-              <div class="llm-autofill-notice hidden" id="llm-autofill-notice">
+              <div class="llm-autofill-notice hidden" id="llm-autofill-notice" data-i18n="modes.llm.autofill">
                 API key auto-filled from Settings.
               </div>
               <div id="llm-local-status" class="hidden"></div>
@@ -175,13 +182,13 @@
               <div class="modes-no-llm-notice" id="modes-no-llm-notice">
                 <div class="modes-no-llm-icon">✦</div>
                 <div class="modes-no-llm-text">
-                  <strong>LLM not configured</strong>
-                  <span>Set up an API key in LLM Settings to use modes.</span>
+                  <strong data-i18n="modes.nollm.title">LLM not configured</strong>
+                  <span data-i18n="modes.nollm.text">Set up an API key in LLM Settings to use modes.</span>
                 </div>
-                <button class="modes-no-llm-btn" id="modes-no-llm-goto-btn">Open LLM Settings</button>
+                <button class="modes-no-llm-btn" id="modes-no-llm-goto-btn" data-i18n="modes.nollm.btn">Open LLM Settings</button>
               </div>
               <!-- Disabled notice (shown when selected category is toggled off) -->
-              <div class="modes-disabled-notice hidden" id="modes-disabled-notice">
+              <div class="modes-disabled-notice hidden" id="modes-disabled-notice" data-i18n="modes.disabled">
                 This mode is currently disabled. Enable it to activate auto-detection and reformatting.
               </div>
               <!-- Banner Card -->
@@ -197,18 +204,37 @@
         <!-- Settings Tab -->
         <div class="tab-panel" id="tab-configuration">
           <div class="tab-scroll">
+
+            <!-- App Language -->
+            <section id="section-language">
+              <h3 class="section-title" data-i18n="settings.language.section">Language</h3>
+              <div class="settings-card">
+                <div class="toggle-row">
+                  <span data-i18n="settings.language.label">App Language</span>
+                  <div class="logo-select" id="sel-ui-lang">
+                    <div class="logo-select-trigger">
+                      <img class="logo-select-icon" src="" width="16" height="16" alt="">
+                      <span class="logo-select-label">Select…</span>
+                      <svg class="logo-select-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <div class="logo-select-menu"></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
             <!-- Model -->
             <section id="section-openai">
-              <h3 class="section-title">Model</h3>
+              <h3 class="section-title" data-i18n="settings.model.section">Model</h3>
               <div class="settings-card">
                 <div class="picker-row hidden" id="row-api-key">
-                  <span>API Key</span>
+                  <span data-i18n="settings.model.apikey">API Key</span>
                   <span class="api-key-masked hidden" id="masked-apiKey"></span>
                   <input type="password" id="inp-apiKey" placeholder="sk-..." class="text-input">
                 </div>
                 <div class="divider hidden" id="divider-api-key"></div>
                 <div class="picker-row">
-                  <span>Model</span>
+                  <span data-i18n="settings.model.model">Model</span>
                   <div class="logo-select" id="sel-openaiModel">
                     <div class="logo-select-trigger">
                       <img class="logo-select-icon" src="" width="16" height="16" alt="">
@@ -222,7 +248,7 @@
                 <div id="local-model-status"></div>
                 <div class="divider"></div>
                 <div class="picker-row">
-                  <span>Language</span>
+                  <span data-i18n="settings.model.language">Language</span>
                   <select id="sel-openaiLang"></select>
                 </div>
               </div>
@@ -230,12 +256,12 @@
 
             <!-- Keyboard Shortcuts -->
             <section>
-              <h3 class="section-title">Keyboard Shortcuts</h3>
+              <h3 class="section-title" data-i18n="settings.shortcuts.section">Keyboard Shortcuts</h3>
               <div class="settings-card">
                 <div class="shortcut-row" data-action="toggle_recording">
                   <div class="shortcut-info">
-                    <div class="shortcut-title">Toggle Recording</div>
-                    <div class="shortcut-subtitle">Starts and stops recordings</div>
+                    <div class="shortcut-title" data-i18n="settings.shortcuts.toggle">Toggle Recording</div>
+                    <div class="shortcut-subtitle" data-i18n="settings.shortcuts.toggle.sub">Starts and stops recordings</div>
                   </div>
                   <div class="shortcut-badges" id="badge-toggle_recording"></div>
                   <button class="shortcut-reset hidden" data-action="toggle_recording" title="Reset to default">↺</button>
@@ -243,8 +269,8 @@
                 <div class="divider"></div>
                 <div class="shortcut-row" data-action="cancel_recording">
                   <div class="shortcut-info">
-                    <div class="shortcut-title">Cancel Recording</div>
-                    <div class="shortcut-subtitle">Discards active recording</div>
+                    <div class="shortcut-title" data-i18n="settings.shortcuts.cancel">Cancel Recording</div>
+                    <div class="shortcut-subtitle" data-i18n="settings.shortcuts.cancel.sub">Discards active recording</div>
                   </div>
                   <div class="shortcut-badges" id="badge-cancel_recording"></div>
                   <button class="shortcut-reset hidden" data-action="cancel_recording" title="Reset to default">↺</button>
@@ -254,10 +280,10 @@
 
             <!-- Application Options -->
             <section>
-              <h3 class="section-title">Application</h3>
+              <h3 class="section-title" data-i18n="settings.app.section">Application</h3>
               <div class="settings-card">
                 <div class="toggle-row">
-                  <span>Auto-paste into active app</span>
+                  <span data-i18n="settings.app.autopaste">Auto-paste into active app</span>
                   <label class="switch">
                     <input type="checkbox" id="opt-autoPaste" checked>
                     <span class="slider"></span>
@@ -265,7 +291,7 @@
                 </div>
                 <div class="divider"></div>
                 <div class="toggle-row">
-                  <span>Auto-capitalize</span>
+                  <span data-i18n="settings.app.autocapitalize">Auto-capitalize</span>
                   <label class="switch">
                     <input type="checkbox" id="opt-autoCapitalize" checked>
                     <span class="slider"></span>
@@ -273,7 +299,7 @@
                 </div>
                 <div class="divider"></div>
                 <div class="toggle-row">
-                  <span>Auto-punctuate</span>
+                  <span data-i18n="settings.app.autopunctuate">Auto-punctuate</span>
                   <label class="switch">
                     <input type="checkbox" id="opt-autoPunctuate" checked>
                     <span class="slider"></span>
@@ -284,10 +310,10 @@
 
             <!-- Recording Sounds -->
             <section>
-              <h3 class="section-title">Recording Sounds</h3>
+              <h3 class="section-title" data-i18n="settings.sounds.section">Recording Sounds</h3>
               <div class="settings-card">
                 <div class="toggle-row">
-                  <span>Mute all sounds</span>
+                  <span data-i18n="settings.sounds.mute">Mute all sounds</span>
                   <label class="switch">
                     <input type="checkbox" id="opt-soundMuted">
                     <span class="slider"></span>
@@ -295,7 +321,7 @@
                 </div>
                 <div class="divider"></div>
                 <div class="sound-row" id="sound-start-row">
-                  <span>Start sound</span>
+                  <span data-i18n="settings.sounds.start">Start sound</span>
                   <div class="sound-controls">
                     <select id="sel-soundStart"></select>
                     <button class="play-btn" data-sound="start" title="Preview">▶</button>
@@ -303,7 +329,7 @@
                 </div>
                 <div class="divider"></div>
                 <div class="sound-row" id="sound-stop-row">
-                  <span>Stop sound</span>
+                  <span data-i18n="settings.sounds.stop">Stop sound</span>
                   <div class="sound-controls">
                     <select id="sel-soundStop"></select>
                     <button class="play-btn" data-sound="stop" title="Preview">▶</button>
@@ -311,7 +337,7 @@
                 </div>
                 <div class="divider"></div>
                 <div class="sound-row" id="sound-cancel-row">
-                  <span>Cancel sound</span>
+                  <span data-i18n="settings.sounds.cancel">Cancel sound</span>
                   <div class="sound-controls">
                     <select id="sel-soundCancel"></select>
                     <button class="play-btn" data-sound="cancel" title="Preview">▶</button>
@@ -325,14 +351,14 @@
         <!-- History Tab -->
         <div class="tab-panel" id="tab-history">
           <div class="history-header">
-            <h2>History</h2>
-            <button class="btn-clear-history" id="btn-clear-history" title="Clear all history">Clear All</button>
+            <h2 data-i18n="history.title">History</h2>
+            <button class="btn-clear-history" id="btn-clear-history" title="Clear all history" data-i18n="history.clear">Clear All</button>
           </div>
           <div class="history-list" id="history-list">
             <div class="placeholder-view" id="history-empty">
               <div class="placeholder-icon">🕐</div>
-              <h2>No transcriptions yet</h2>
-              <p class="muted">Your transcription history will appear here.</p>
+              <h2 data-i18n="history.empty.title">No transcriptions yet</h2>
+              <p class="muted" data-i18n="history.empty.sub">Your transcription history will appear here.</p>
             </div>
           </div>
         </div>

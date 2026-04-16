@@ -98,7 +98,7 @@ def _migrate(cfg: dict) -> tuple[dict, bool]:
     if "model" in cfg:
         old_model = cfg.pop("model")
         if "openai_model" not in cfg:
-            allowed = {"whisper-1", "whisper-large-v3", "whisper-large-v3-turbo"}
+            allowed = {"whisper-1", "whisper-base", "whisper-small", "whisper-medium", "whisper-large-v3", "whisper-large-v3-turbo"}
             cfg["openai_model"] = old_model if old_model in allowed else "whisper-1"
         changed = True
 
@@ -411,10 +411,28 @@ def get_mode_prompt() -> str | None:
     return prompt
 
 
+def _build_lang_instruction() -> str:
+    """Build an explicit language instruction from the configured or detected language.
+    Uses the config setting first; falls back to the auto-detected language from
+    the last Whisper transcription. This ensures the LLM always gets an explicit
+    language name instead of a vague 'respond in the same language'."""
+    lang_code = config.get("openai_language", "auto")
+    if not lang_code or lang_code == "auto":
+        lang_code = _detected_language
+    lang_name = _LANG_CODE_TO_NAME.get(lang_code) if lang_code else None
+    if lang_name:
+        return (
+            f"IMPORTANT: You MUST respond in {lang_name}. Do not translate the text. "
+            f"Apply all correct grammatical conventions of {lang_name}, including language-specific capitalization rules."
+        )
+    return (
+        "IMPORTANT: You MUST respond in the same language as the input text. Do not translate. "
+        "Apply all correct grammatical conventions of that language, including language-specific capitalization rules."
+    )
+
+
 def reformat_text(text: str, mode: str | None = None) -> str:
     """Post-process transcription via configured LLM. Falls back to original text on any error."""
-    if not config.get("reformat_enabled", False):
-        return text
     llm_provider = config.get("llm_provider", "openai")
 
     if mode and mode in REFORMAT_PROMPTS:
@@ -423,6 +441,14 @@ def reformat_text(text: str, mode: str | None = None) -> str:
         prompt = get_mode_prompt()
         if prompt is None:
             return text
+
+    # Prepend language instruction so every provider (local, OpenAI, Anthropic)
+    # preserves the spoken language instead of defaulting to English.
+    lang_instruction = _build_lang_instruction()
+    prompt = lang_instruction + "\n\n" + prompt
+
+    print(f"[Landa] reformat_text: provider={llm_provider}, lang_instruction={lang_instruction[:80]!r}")
+    print(f"[Landa] reformat_text: input={text[:200]!r}")
 
     # Local model path — no API key needed
     if llm_provider == "local":
@@ -454,7 +480,9 @@ def reformat_text(text: str, mode: str | None = None) -> str:
                 system=prompt,
                 messages=[{"role": "user", "content": text}],
             )
-            return response.content[0].text.strip()
+            result = response.content[0].text.strip()
+            print(f"[Landa] reformat_text: output={result[:200]!r}")
+            return result
         else:
             client = OpenAI(api_key=api_key, timeout=httpx.Timeout(3.0))
             response = client.chat.completions.create(
@@ -464,7 +492,9 @@ def reformat_text(text: str, mode: str | None = None) -> str:
                     {"role": "user", "content": text},
                 ],
             )
-            return response.choices[0].message.content.strip()
+            result = response.choices[0].message.content.strip()
+            print(f"[Landa] reformat_text: output={result[:200]!r}")
+            return result
     except Exception as e:
         print(f"[FindMyVoice] Reformat error (falling back to raw text): {e}")
         return text
@@ -478,6 +508,7 @@ SAMPLE_RATE = 16000
 recording = False
 audio_frames: list[np.ndarray] = []
 stream: sd.InputStream | None = None
+_teardown_thread: threading.Thread | None = None  # tracks in-flight stream teardown
 lock = threading.Lock()
 
 # ---------------------------------------------------------------------------
@@ -578,29 +609,6 @@ def paste_text(text: str) -> None:
 
 
 # Known Whisper hallucination phrases produced on silence / background noise
-_HALLUCINATION_PHRASES = {
-    "thank you for watching",
-    "thanks for watching",
-    "thank you for listening",
-    "thanks for listening",
-    "subscribe",
-    "please subscribe",
-    "like and subscribe",
-    "see you next time",
-    "see you in the next video",
-    "bye",
-    "goodbye",
-    "the end",
-    "you",
-    "thank you",
-    "thanks",
-    "subtitles by",
-    "amara.org",
-    "translated by",
-    "...",
-    ".",
-}
-
 # Silence detection should only catch obviously empty taps/clicks. For real
 # recordings, even quiet speech should still reach transcription.
 _SILENCE_RMS_THRESHOLD = 0.0015
@@ -640,15 +648,6 @@ def _should_skip_transcription(audio: np.ndarray) -> bool:
     )
 
 
-def _is_hallucination(text: str) -> bool:
-    """Return True if the transcription looks like a Whisper hallucination."""
-    cleaned = text.strip().rstrip(".!?,").strip().lower()
-    if cleaned in _HALLUCINATION_PHRASES:
-        logging.info("[hallucination_filter] Rejected: %r", text)
-        return True
-    return False
-
-
 def post_process(text: str) -> str:
     """Apply auto-capitalize and auto-punctuate."""
     if not text:
@@ -671,35 +670,62 @@ def _audio_callback(indata: np.ndarray, frames: int, time_info, status) -> None:
 
 
 def start_recording() -> bool:
-    global recording, stream, audio_frames
+    global recording, stream, audio_frames, _teardown_thread
     t0 = time.time()
     logging.info("[start_recording] called")
+    # If a previous stream teardown is still running, wait for it to finish
+    # before creating a new InputStream to avoid PortAudio deadlocks.
+    if _teardown_thread is not None and _teardown_thread.is_alive():
+        logging.info("[start_recording] waiting for previous stream teardown...")
+        _teardown_thread.join(timeout=5.0)
+        if _teardown_thread.is_alive():
+            logging.warning("[start_recording] previous teardown still running after 5s — proceeding anyway")
+        else:
+            logging.info("[start_recording] previous teardown finished")
+        _teardown_thread = None
     with lock:
         if recording:
             logging.info("[start_recording] already recording, returning False")
             return False
         audio_frames = []
-        t1 = time.time()
-        logging.info("[start_recording] creating InputStream... (%.3fs since entry)", time.time() - t0)
+    # Create and start the InputStream OUTSIDE the lock — sd.InputStream()
+    # can hang if PortAudio is in a bad state, and holding the lock would
+    # deadlock all recording operations.  Use a thread with timeout so a
+    # hung PortAudio doesn't block the HTTP response forever.
+    t1 = time.time()
+    logging.info("[start_recording] creating InputStream... (%.3fs since entry)", time.time() - t0)
+    new_stream = None
+    create_error = None
+
+    def _create_stream():
+        nonlocal new_stream, create_error
         try:
-            stream = sd.InputStream(
+            s = sd.InputStream(
                 samplerate=SAMPLE_RATE,
                 channels=1,
                 dtype="float32",
                 callback=_audio_callback,
             )
+            s.start()
+            new_stream = s
         except Exception as e:
-            logging.error("[start_recording] InputStream creation failed after %.3fs: %s", time.time() - t1, e)
-            raise
-        t2 = time.time()
-        logging.info("[start_recording] InputStream created in %.3fs, starting stream...", t2 - t1)
-        try:
-            stream.start()
-        except Exception as e:
-            logging.error("[start_recording] stream.start() failed after %.3fs: %s", time.time() - t2, e)
-            raise
-        t3 = time.time()
-        logging.info("[start_recording] stream started in %.3fs", t3 - t2)
+            create_error = e
+
+    creator = threading.Thread(target=_create_stream, daemon=True)
+    creator.start()
+    creator.join(timeout=8.0)
+    if creator.is_alive():
+        logging.error("[start_recording] InputStream creation timed out after 8s")
+        return False
+    if create_error is not None:
+        logging.error("[start_recording] InputStream creation failed after %.3fs: %s", time.time() - t1, create_error)
+        raise create_error
+    if new_stream is None:
+        logging.error("[start_recording] InputStream creation returned None")
+        return False
+    logging.info("[start_recording] stream created+started in %.3fs", time.time() - t1)
+    with lock:
+        stream = new_stream
         recording = True
     play_sound(config.get("sound_start", "Tink"))
     logging.info("[start_recording] done in %.3fs total", time.time() - t0)
@@ -707,7 +733,7 @@ def start_recording() -> bool:
 
 
 def stop_recording() -> bool:
-    global recording, stream
+    global recording, stream, _teardown_thread
     t0 = time.time()
     logging.info("[stop_recording] called")
     old_stream = None
@@ -723,14 +749,24 @@ def stop_recording() -> bool:
     # the next start_recording call.  abort()+close() can block on macOS
     # CoreAudio, but doing this in a background thread caused PortAudio
     # deadlocks when a new InputStream was created before teardown finished.
+    # We use a thread + join(timeout) so a hung teardown doesn't block the
+    # entire /stop response (sound, transcription, and HTTP reply).
     if old_stream is not None:
         t1 = time.time()
-        try:
-            old_stream.abort()
-            old_stream.close()
+        def _teardown():
+            try:
+                old_stream.abort()
+                old_stream.close()
+            except Exception as e:
+                logging.error("[stop_recording] stream teardown error: %s", e)
+        td = threading.Thread(target=_teardown, daemon=True)
+        td.start()
+        td.join(timeout=3.0)
+        _teardown_thread = td
+        if td.is_alive():
+            logging.warning("[stop_recording] stream teardown still running after 3s — proceeding anyway (%.3fs)", time.time() - t1)
+        else:
             logging.info("[stop_recording] stream teardown completed in %.3fs", time.time() - t1)
-        except Exception as e:
-            logging.error("[stop_recording] stream teardown failed after %.3fs: %s", time.time() - t1, e)
     play_sound(config.get("sound_stop", "Pop"))
     threading.Thread(target=_transcribe_and_paste, daemon=True).start()
     logging.info("[stop_recording] done in %.3fs total", time.time() - t0)
@@ -739,7 +775,7 @@ def stop_recording() -> bool:
 
 def cancel_recording() -> bool:
     """Stop recording and discard audio — no transcription or paste."""
-    global recording, stream, audio_frames
+    global recording, stream, audio_frames, _teardown_thread
     t0 = time.time()
     logging.info("[cancel_recording] called")
     old_stream = None
@@ -754,12 +790,20 @@ def cancel_recording() -> bool:
     logging.info("[cancel_recording] state updated in %.3fs", time.time() - t0)
     if old_stream is not None:
         t1 = time.time()
-        try:
-            old_stream.abort()
-            old_stream.close()
+        def _teardown():
+            try:
+                old_stream.abort()
+                old_stream.close()
+            except Exception as e:
+                logging.error("[cancel_recording] stream teardown error: %s", e)
+        td = threading.Thread(target=_teardown, daemon=True)
+        td.start()
+        td.join(timeout=3.0)
+        _teardown_thread = td
+        if td.is_alive():
+            logging.warning("[cancel_recording] stream teardown still running after 3s — proceeding anyway (%.3fs)", time.time() - t1)
+        else:
             logging.info("[cancel_recording] stream teardown completed in %.3fs", time.time() - t1)
-        except Exception as e:
-            logging.error("[cancel_recording] stream teardown failed after %.3fs: %s", time.time() - t1, e)
     logging.info("[cancel_recording] done in %.3fs total — audio discarded", time.time() - t0)
     return True
 
@@ -782,8 +826,7 @@ def _transcribe_and_paste() -> None:
 
     try:
         text = transcribe(tmp.name)
-        # Filter out Whisper hallucinations before any processing
-        if not text or _is_hallucination(text):
+        if not text:
             return
         text = post_process(text)
         if text:
@@ -801,57 +844,111 @@ def _transcribe_and_paste() -> None:
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Local Whisper (transformers + torch via HuggingFace)
+# Local Whisper (whisper.cpp via pywhispercpp)
 # ---------------------------------------------------------------------------
 
-LOCAL_WHISPER_MODELS = {"whisper-large-v3", "whisper-large-v3-turbo"}
-
-# Official HuggingFace repo IDs (transformers-compatible)
-WHISPER_HF_REPOS = {
-    "whisper-large-v3": "openai/whisper-large-v3",
-    "whisper-large-v3-turbo": "openai/whisper-large-v3-turbo",
+LOCAL_WHISPER_MODELS = {
+    "whisper-base", "whisper-small", "whisper-medium",
+    "whisper-large-v3", "whisper-large-v3-turbo",
 }
 
-_whisper_local_pipeline_cache: dict = {}  # model_name -> transformers pipeline
-_whisper_download_state: dict = {}        # model_name -> {downloading, cached, error}
+WHISPER_GGML_MODELS: dict[str, dict] = {
+    "whisper-base": {
+        "name": "Whisper Base",
+        "filename": "ggml-base.bin",
+        "size_label": "~148 MB",
+        "size_bytes": 148_000_000,
+    },
+    "whisper-small": {
+        "name": "Whisper Small",
+        "filename": "ggml-small.bin",
+        "size_label": "~488 MB",
+        "size_bytes": 488_000_000,
+    },
+    "whisper-medium": {
+        "name": "Whisper Medium",
+        "filename": "ggml-medium.bin",
+        "size_label": "~1.5 GB",
+        "size_bytes": 1_530_000_000,
+    },
+    "whisper-large-v3": {
+        "name": "Whisper Large V3",
+        "filename": "ggml-large-v3.bin",
+        "size_label": "~3.1 GB",
+        "size_bytes": 3_100_000_000,
+    },
+    "whisper-large-v3-turbo": {
+        "name": "Whisper Large V3 Turbo",
+        "filename": "ggml-large-v3-turbo.bin",
+        "size_label": "~1.6 GB",
+        "size_bytes": 1_620_000_000,
+    },
+}
+
+WHISPER_GGML_BASE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main"
+WHISPER_MODELS_DIR = CONFIG_DIR / "models" / "whisper"
+
+_whisper_cpp_model_cache: dict = {}       # model_name -> pywhispercpp Model
+_detected_language: str | None = None     # last auto-detected language code (e.g. "de")
+_whisper_download_state: dict = {}        # model_name -> {downloading, cached, error, progress_bytes, total_bytes}
 _whisper_download_lock = threading.Lock()
 
 
-def is_transformers_installed() -> bool:
+def is_pywhispercpp_installed() -> bool:
     try:
-        import transformers  # noqa: F401
-        import torch         # noqa: F401
+        from pywhispercpp.model import Model as _WhisperModel  # noqa: F401
         return True
     except ImportError:
         return False
 
 
 def is_whisper_model_cached(model_name: str) -> bool:
-    hf_repo = WHISPER_HF_REPOS.get(model_name)
-    if not hf_repo:
+    info = WHISPER_GGML_MODELS.get(model_name)
+    if not info:
         return False
-    try:
-        from huggingface_hub import snapshot_download
-        snapshot_download(hf_repo, local_files_only=True, token=False)
-        return True
-    except Exception:
-        return False
+    return (WHISPER_MODELS_DIR / info["filename"]).exists()
 
 
 def _do_whisper_download(model_name: str) -> None:
-    hf_repo = WHISPER_HF_REPOS[model_name]
+    info = WHISPER_GGML_MODELS[model_name]
     with _whisper_download_lock:
-        _whisper_download_state[model_name] = {"downloading": True, "cached": False, "error": None}
+        _whisper_download_state[model_name] = {
+            "downloading": True, "cached": False, "error": None,
+            "progress_bytes": 0, "total_bytes": info.get("size_bytes", 0),
+        }
     try:
-        from huggingface_hub import snapshot_download
-        print(f"[FindMyVoice] Downloading local Whisper model: {model_name} ({hf_repo})")
-        snapshot_download(hf_repo, token=False)
+        WHISPER_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        dest = WHISPER_MODELS_DIR / info["filename"]
+        url = f"{WHISPER_GGML_BASE_URL}/{info['filename']}"
+        print(f"[FindMyVoice] Downloading whisper.cpp model: {url}")
+        with httpx.stream("GET", url, follow_redirects=True, timeout=None) as resp:
+            resp.raise_for_status()
+            total = int(resp.headers.get("content-length", info.get("size_bytes", 0)))
+            with _whisper_download_lock:
+                _whisper_download_state[model_name]["total_bytes"] = total
+            downloaded = 0
+            with open(dest, "wb") as f:
+                for chunk in resp.iter_bytes(chunk_size=1024 * 1024):
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    with _whisper_download_lock:
+                        _whisper_download_state[model_name]["progress_bytes"] = downloaded
+
         with _whisper_download_lock:
-            _whisper_download_state[model_name] = {"downloading": False, "cached": True, "error": None}
+            _whisper_download_state[model_name] = {
+                "downloading": False, "cached": True, "error": None,
+                "progress_bytes": 0, "total_bytes": 0,
+            }
         print(f"[FindMyVoice] Model download complete: {model_name}")
     except Exception as e:
+        dest = WHISPER_MODELS_DIR / info["filename"]
+        if dest.exists():
+            dest.unlink()
         with _whisper_download_lock:
-            _whisper_download_state[model_name] = {"downloading": False, "cached": False, "error": str(e)}
+            _whisper_download_state[model_name] = {
+                "downloading": False, "cached": False, "error": str(e),
+                "progress_bytes": 0, "total_bytes": 0,
+            }
         print(f"[FindMyVoice] Model download failed: {e}")
 
 
@@ -864,59 +961,66 @@ def start_whisper_download(model_name: str) -> None:
 
 
 def transcribe_whisper_local(wav_path: str, model_name: str) -> str:
+    global _detected_language
     try:
-        import torch
-        from transformers import pipeline as hf_pipeline
+        from pywhispercpp.model import Model as WhisperModel
     except ImportError:
-        return "[Error] transformers/torch not installed. Please install from the Settings page."
+        return "[Error] pywhispercpp not installed. Please install from the Settings page."
 
-    if model_name not in _whisper_local_pipeline_cache:
-        hf_repo = WHISPER_HF_REPOS[model_name]
-        device = "mps" if torch.backends.mps.is_available() else "cpu"
-        torch_dtype = torch.float16 if device == "mps" else torch.float32
-        _whisper_local_pipeline_cache[model_name] = hf_pipeline(
-            "automatic-speech-recognition",
-            model=hf_repo,
-            torch_dtype=torch_dtype,
-            device=device,
-        )
+    if model_name not in _whisper_cpp_model_cache:
+        info = WHISPER_GGML_MODELS.get(model_name)
+        if not info:
+            return f"[Error] Unknown local model: {model_name}"
+        model_path = WHISPER_MODELS_DIR / info["filename"]
+        if not model_path.exists():
+            return f"[Error] Model file not found: {model_path}. Please download from Settings."
+        _whisper_cpp_model_cache[model_name] = WhisperModel(str(model_path))
 
-    pipe = _whisper_local_pipeline_cache[model_name]
+    model = _whisper_cpp_model_cache[model_name]
     language = config.get("openai_language", "auto")
 
-    # Always explicitly reset forced_decoder_ids so that a previous language
-    # selection doesn't leak into subsequent "auto-detect" calls.  The
-    # transformers Whisper pipeline may cache forced_decoder_ids on the model
-    # config when a language is specified via generate_kwargs.
-    if hasattr(pipe, "model") and hasattr(pipe.model, "config"):
-        pipe.model.config.forced_decoder_ids = None
+    if language and language != "auto":
+        _detected_language = language
+    else:
+        # Explicitly detect the language before transcribing. Without this,
+        # Whisper often defaults to English on short clips or produces
+        # hallucinations like "(speaking in foreign language)".
+        try:
+            (detected_code, prob), _ = model.auto_detect_language(wav_path)
+            _detected_language = detected_code
+            print(f"[Landa] auto_detect_language: {detected_code} (prob={prob:.2f})")
+        except Exception as e:
+            print(f"[Landa] auto_detect_language failed, proceeding without: {e}")
+            _detected_language = None
 
-    generate_kwargs = {} if language == "auto" else {"language": language}
+    kwargs = {}
+    if _detected_language:
+        kwargs["language"] = _detected_language
 
-    result = pipe(wav_path, return_timestamps=True, generate_kwargs=generate_kwargs)
-    return result["text"].strip()
+    print(f"[Landa] transcribe_whisper_local: model={model_name}, language={_detected_language}, kwargs={kwargs}")
+    segments = model.transcribe(wav_path, **kwargs)
+    text = " ".join(seg.text for seg in segments).strip()
+    print(f"[Landa] transcribe_whisper_local: output={text[:200]!r}")
+    return text
 
 
 def _warmup_whisper_pipeline(model_name: str) -> None:
-    """Load the Whisper pipeline into memory so first transcription is instant."""
-    if model_name in _whisper_local_pipeline_cache:
+    """Load the whisper.cpp model into memory so first transcription is instant."""
+    if model_name in _whisper_cpp_model_cache:
         return
     try:
-        import torch
-        from transformers import pipeline as hf_pipeline
-        hf_repo = WHISPER_HF_REPOS[model_name]
-        device = "mps" if torch.backends.mps.is_available() else "cpu"
-        torch_dtype = torch.float16 if device == "mps" else torch.float32
-        print(f"[FindMyVoice] Warming up Whisper pipeline: {model_name} on {device}...")
-        _whisper_local_pipeline_cache[model_name] = hf_pipeline(
-            "automatic-speech-recognition",
-            model=hf_repo,
-            torch_dtype=torch_dtype,
-            device=device,
-        )
-        print(f"[FindMyVoice] Whisper pipeline ready: {model_name}")
+        from pywhispercpp.model import Model as WhisperModel
+        info = WHISPER_GGML_MODELS.get(model_name)
+        if not info:
+            return
+        model_path = WHISPER_MODELS_DIR / info["filename"]
+        if not model_path.exists():
+            return
+        print(f"[FindMyVoice] Loading whisper.cpp model: {model_name}...")
+        _whisper_cpp_model_cache[model_name] = WhisperModel(str(model_path))
+        print(f"[FindMyVoice] whisper.cpp model ready: {model_name}")
     except Exception as e:
-        print(f"[FindMyVoice] Pipeline warmup failed: {e}")
+        print(f"[FindMyVoice] Model warmup failed: {e}")
 
 
 def _startup_whisper_check() -> None:
@@ -924,14 +1028,17 @@ def _startup_whisper_check() -> None:
     model = config.get("openai_model", "whisper-1")
     if model not in LOCAL_WHISPER_MODELS:
         return
-    if not is_transformers_installed():
-        print(f"[FindMyVoice] Local model '{model}' selected but transformers/torch not installed.")
+    if not is_pywhispercpp_installed():
+        print(f"[FindMyVoice] Local model '{model}' selected but pywhispercpp not installed.")
         return
     if not is_whisper_model_cached(model):
         print(f"[FindMyVoice] Auto-downloading model '{model}' in background...")
         _do_whisper_download(model)  # block until downloaded, then warm up below
     with _whisper_download_lock:
-        _whisper_download_state[model] = {"downloading": False, "cached": True, "error": None}
+        _whisper_download_state[model] = {
+            "downloading": False, "cached": True, "error": None,
+            "progress_bytes": 0, "total_bytes": 0,
+        }
     _warmup_whisper_pipeline(model)
 
 
@@ -1107,34 +1214,16 @@ _LANG_CODE_TO_NAME: dict[str, str] = {
 
 
 def reformat_text_local(text: str, prompt: str, model_id: str) -> str:
-    """Run reformatting inference locally. Uses mlx-lm on macOS, llama-cpp on Windows."""
+    """Run reformatting inference locally. Uses mlx-lm on macOS, llama-cpp on Windows.
+    The prompt already contains the language instruction (prepended by reformat_text)."""
     loaded = _get_llm_model(model_id)
     if loaded is None:
         print(f"[FindMyVoice] Local LLM not available: {model_id}")
         return text
 
-    # Small local models default to English when given an English system prompt.
-    # Build an explicit language instruction. If the user has configured a specific
-    # transcription language, name it directly — that's far more reliable than
-    # "respond in the same language", which 4B-class models often ignore.
-    lang_code = config.get("openai_language", "auto")
-    lang_name = _LANG_CODE_TO_NAME.get(lang_code)
-    if lang_name:
-        lang_instruction = (
-            f"IMPORTANT: You MUST respond in {lang_name}. Do not translate the text. "
-            f"Apply all correct grammatical conventions of {lang_name}, including language-specific capitalization rules."
-        )
-    else:
-        lang_instruction = (
-            "IMPORTANT: You MUST respond in the same language as the input text. Do not translate. "
-            "Apply all correct grammatical conventions of that language, including language-specific capitalization rules."
-        )
-
-    # Place the language rule first so the model sees it before the task.
-    prompt = lang_instruction + "\n\n" + prompt
-
-    # Also inject it into the user turn — Gemma3's chat template may fold or
-    # drop the system role, so this ensures the instruction survives either way.
+    # Also inject the language instruction into the user turn — Gemma3's chat
+    # template may fold or drop the system role, so this ensures it survives.
+    lang_instruction = _build_lang_instruction()
     user_content = f"[{lang_instruction}]\n\n{text}"
 
     try:
@@ -1413,19 +1502,24 @@ def whisper_local_status():
     if model_name not in LOCAL_WHISPER_MODELS:
         return jsonify({"model": model_name, "is_local": False})
 
-    deps_installed = is_transformers_installed()
+    deps_installed = is_pywhispercpp_installed()
     with _whisper_download_lock:
         state = dict(_whisper_download_state.get(model_name, {}))
 
     downloading = state.get("downloading", False)
     cached = state.get("cached", False)
     error = state.get("error")
+    progress_bytes = state.get("progress_bytes", 0)
+    total_bytes = state.get("total_bytes", 0)
 
-    # If no state yet, check the HF cache on disk
-    if not state and deps_installed and not downloading:
+    # If no state yet, check disk
+    if not state and not downloading:
         cached = is_whisper_model_cached(model_name)
         with _whisper_download_lock:
-            _whisper_download_state[model_name] = {"downloading": False, "cached": cached, "error": None}
+            _whisper_download_state[model_name] = {
+                "downloading": False, "cached": cached, "error": None,
+                "progress_bytes": 0, "total_bytes": 0,
+            }
 
     return jsonify({
         "model": model_name,
@@ -1434,6 +1528,8 @@ def whisper_local_status():
         "cached": cached,
         "downloading": downloading,
         "error": error,
+        "progress_bytes": progress_bytes,
+        "total_bytes": total_bytes,
     })
 
 
@@ -1454,7 +1550,7 @@ def whisper_local_install_deps():
         try:
             python = sys.executable
             proc = subprocess.Popen(
-                [python, "-m", "pip", "install", "transformers", "torch"],
+                [python, "-m", "pip", "install", "pywhispercpp"],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
             )
             for line in proc.stdout:
@@ -1479,8 +1575,8 @@ def whisper_local_download():
     model_name = data.get("model") or config.get("openai_model", "whisper-1")
     if model_name not in LOCAL_WHISPER_MODELS:
         return jsonify({"error": "not a local model"}), 400
-    if not is_transformers_installed():
-        return jsonify({"error": "transformers/torch not installed"}), 400
+    if not is_pywhispercpp_installed():
+        return jsonify({"error": "pywhispercpp not installed"}), 400
     start_whisper_download(model_name)
     return jsonify({"started": True})
 
