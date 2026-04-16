@@ -2276,6 +2276,9 @@ function renderHistory(entries) {
   for (const entry of entries) {
     const el = document.createElement('div');
     el.className = 'history-entry';
+
+    const usageHtml = buildUsageHtml(entry.usage);
+
     el.innerHTML = `
       <div class="history-entry-text">${escapeHtml(entry.text)}</div>
       <div class="history-entry-meta">
@@ -2285,6 +2288,7 @@ function renderHistory(entries) {
           <button class="history-action-btn delete" title="Delete">${t('history.delete')}</button>
         </div>
       </div>
+      ${usageHtml}
     `;
 
     el.querySelector('.copy').addEventListener('click', () => {
@@ -2301,8 +2305,97 @@ function renderHistory(entries) {
       }
     });
 
+    const badge = el.querySelector('.usage-badge');
+    if (badge && entry.usage) {
+      badge.addEventListener('mouseenter', () => {
+        const tip = getUsageTooltip();
+        tip.innerHTML = buildTooltipContent(entry.usage);
+        tip.style.display = 'block';
+        const rect = badge.getBoundingClientRect();
+        tip.style.left = rect.left + 'px';
+        tip.style.top = (rect.bottom + 6) + 'px';
+      });
+      badge.addEventListener('mouseleave', (e) => {
+        if (!e.relatedTarget || !e.relatedTarget.closest('#usage-tooltip-overlay')) {
+          getUsageTooltip().style.display = 'none';
+        }
+      });
+    }
+
     list.appendChild(el);
   }
+}
+
+let _usageTooltipEl = null;
+function getUsageTooltip() {
+  if (!_usageTooltipEl) {
+    _usageTooltipEl = document.createElement('div');
+    _usageTooltipEl.id = 'usage-tooltip-overlay';
+    _usageTooltipEl.addEventListener('mouseleave', () => {
+      _usageTooltipEl.style.display = 'none';
+    });
+    document.body.appendChild(_usageTooltipEl);
+  }
+  return _usageTooltipEl;
+}
+
+function buildUsageHtml(usage) {
+  if (!usage?.steps?.length) return '';
+  const totalCost = typeof usage.total_cost === 'number' ? '$' + usage.total_cost.toFixed(4) : '—';
+  const totalTokens = typeof usage.total_tokens === 'number' ? usage.total_tokens.toLocaleString() : '—';
+  return `<div class="history-usage"><button class="usage-badge" type="button">${totalTokens} tokens · ${totalCost}</button></div>`;
+}
+
+function fmtLatency(ms) {
+  if (typeof ms !== 'number') return null;
+  return ms >= 1000 ? (ms / 1000).toFixed(1) + 's' : ms + 'ms';
+}
+
+function buildTooltipContent(usage) {
+  const steps = usage.steps || [];
+  const stepRows = steps.map((s) => {
+    const isLocal = s.local === true;
+    const costStr = isLocal ? '$0.00' : (typeof s.cost === 'number' ? '$' + s.cost.toFixed(4) : '—');
+    const latencyStr = fmtLatency(s.latency_ms);
+    if (s.step === 'transcription') {
+      const durStr = typeof s.duration_seconds === 'number' ? s.duration_seconds.toFixed(1) + 's' : null;
+      return `
+        <div class="usage-tooltip-row"><span class="usage-tooltip-label">Model</span><span class="usage-tooltip-value">${escapeHtml(s.model)}</span></div>
+        ${durStr ? `<div class="usage-tooltip-row"><span class="usage-tooltip-label">Audio</span><span class="usage-tooltip-value">${durStr}</span></div>` : ''}
+        ${latencyStr ? `<div class="usage-tooltip-row"><span class="usage-tooltip-label">Inference</span><span class="usage-tooltip-value">${latencyStr}</span></div>` : ''}
+        <div class="usage-tooltip-row"><span class="usage-tooltip-label">Cost</span><span class="usage-tooltip-value">${costStr}</span></div>`;
+    }
+    if (isLocal) {
+      return `
+        <div class="usage-tooltip-row"><span class="usage-tooltip-label">Model</span><span class="usage-tooltip-value">${escapeHtml(s.model)}</span></div>
+        ${latencyStr ? `<div class="usage-tooltip-row"><span class="usage-tooltip-label">Inference</span><span class="usage-tooltip-value">${latencyStr}</span></div>` : ''}
+        <div class="usage-tooltip-row"><span class="usage-tooltip-label">Cost</span><span class="usage-tooltip-value">${costStr}</span></div>`;
+    }
+    const inputStr = typeof s.input_tokens === 'number' ? s.input_tokens.toLocaleString() : '—';
+    const outputStr = typeof s.output_tokens === 'number' ? s.output_tokens.toLocaleString() : '—';
+    const totalStr = typeof s.input_tokens === 'number' && typeof s.output_tokens === 'number'
+      ? (s.input_tokens + s.output_tokens).toLocaleString() : '—';
+    return `
+      <div class="usage-tooltip-row"><span class="usage-tooltip-label">Model</span><span class="usage-tooltip-value">${escapeHtml(s.model)}</span></div>
+      <div class="usage-tooltip-row"><span class="usage-tooltip-label">Input</span><span class="usage-tooltip-value">${inputStr}</span></div>
+      <div class="usage-tooltip-row"><span class="usage-tooltip-label">Output</span><span class="usage-tooltip-value">${outputStr}</span></div>
+      <div class="usage-tooltip-row"><span class="usage-tooltip-label">Total</span><span class="usage-tooltip-value">${totalStr} · ${costStr}</span></div>
+      ${latencyStr ? `<div class="usage-tooltip-row"><span class="usage-tooltip-label">Inference</span><span class="usage-tooltip-value">${latencyStr}</span></div>` : ''}`;
+  });
+
+  const prepStr = fmtLatency(usage.prep_latency_ms);
+  const pasteStr = fmtLatency(usage.paste_latency_ms);
+  const totalLatencyStr = fmtLatency(usage.total_latency_ms);
+  const footer = totalLatencyStr ? `
+    <div class="usage-tooltip-sep"></div>
+    ${prepStr ? `<div class="usage-tooltip-row"><span class="usage-tooltip-label">Prep</span><span class="usage-tooltip-value">${prepStr}</span></div>` : ''}
+    ${pasteStr ? `<div class="usage-tooltip-row"><span class="usage-tooltip-label">Paste</span><span class="usage-tooltip-value">${pasteStr}</span></div>` : ''}
+    <div class="usage-tooltip-row"><span class="usage-tooltip-label">Total</span><span class="usage-tooltip-value">${totalLatencyStr}</span></div>`
+    : '';
+
+  return stepRows.map((r, i) =>
+    i < stepRows.length - 1 ? r + '<div class="usage-tooltip-sep"></div>' : r
+  ).join('') + footer;
 }
 
 function escapeHtml(text) {

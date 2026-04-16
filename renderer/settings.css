@@ -562,6 +562,75 @@ body.platform-darwin .titlebar-lead {
 }
 
 /* ---------------------------------------------------------------------------
+   History usage badge + tooltip overlay
+   --------------------------------------------------------------------------- */
+
+.history-usage {
+  display: flex;
+  align-items: center;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.usage-badge {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: default;
+  font-size: 10px;
+  font-family: var(--font-body);
+  color: var(--text-secondary);
+  line-height: 1.4;
+  text-align: left;
+}
+
+.usage-badge:hover {
+  color: var(--primary);
+}
+
+/* Fixed-position overlay — appended to <body> to escape scroll clipping */
+#usage-tooltip-overlay {
+  display: none;
+  position: fixed;
+  z-index: 9999;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 10px 14px;
+  min-width: 200px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+  pointer-events: auto;
+}
+
+.usage-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 2px 0;
+}
+
+.usage-tooltip-label {
+  font-size: 11px;
+  font-family: var(--font-body);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.usage-tooltip-value {
+  font-size: 11px;
+  font-family: var(--font-body);
+  color: var(--text);
+  text-align: right;
+}
+
+.usage-tooltip-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 0;
+}
+
+/* ---------------------------------------------------------------------------
    Section Titles & Cards
    --------------------------------------------------------------------------- */
 

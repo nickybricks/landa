@@ -33,6 +33,72 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 CONFIG_DIR = Path.home() / ".landa"
 CONFIG_PATH = CONFIG_DIR / "config.json"
 HISTORY_PATH = CONFIG_DIR / "history.json"
+PRICING_PATH = CONFIG_DIR / "model_pricing.json"
+
+# ---------------------------------------------------------------------------
+# Pricing
+# ---------------------------------------------------------------------------
+
+PRICING_URL = "https://raw.githubusercontent.com/nickybricks/landa/main/pricing.json"
+
+PRICING_DEFAULTS: dict = {
+    "whisper-1":                    {"per_minute": 0.006},
+    "whisper-large-v3":             {"per_minute": 0.006},
+    "whisper-large-v3-turbo":       {"per_minute": 0.006},
+    "gpt-4o-mini":                  {"input_per_1m": 0.15,  "output_per_1m": 0.60},
+    "gpt-4o":                       {"input_per_1m": 2.50,  "output_per_1m": 10.00},
+    "gpt-4.1":                      {"input_per_1m": 2.00,  "output_per_1m": 8.00},
+    "gpt-4.1-mini":                 {"input_per_1m": 0.40,  "output_per_1m": 1.60},
+    "claude-haiku-4-5-20251001":    {"input_per_1m": 0.80,  "output_per_1m": 4.00},
+    "claude-sonnet-4-6":            {"input_per_1m": 3.00,  "output_per_1m": 15.00},
+    "claude-opus-4-6":              {"input_per_1m": 15.00, "output_per_1m": 75.00},
+}
+
+_pricing_cache: dict | None = None
+
+
+def _load_pricing() -> dict:
+    """Load pricing from cache file, refreshing from URL if older than 24 h."""
+    global _pricing_cache
+    if _pricing_cache is not None:
+        return _pricing_cache
+    if PRICING_PATH.exists():
+        age = time.time() - PRICING_PATH.stat().st_mtime
+        if age < 86400:
+            try:
+                with open(PRICING_PATH) as f:
+                    _pricing_cache = json.load(f)
+                    return _pricing_cache
+            except Exception:
+                pass
+    # Try to refresh from hosted URL
+    try:
+        import urllib.request
+        with urllib.request.urlopen(PRICING_URL, timeout=3) as r:
+            data = json.loads(r.read())
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        with open(PRICING_PATH, "w") as f:
+            json.dump(data, f, indent=2)
+        _pricing_cache = data
+        return _pricing_cache
+    except Exception:
+        pass
+    # Fall back to bundled defaults; persist so they survive the TTL check next run
+    if not PRICING_PATH.exists():
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        with open(PRICING_PATH, "w") as f:
+            json.dump(PRICING_DEFAULTS, f, indent=2)
+    _pricing_cache = PRICING_DEFAULTS
+    return _pricing_cache
+
+
+def _calc_cost(model: str, input_tokens: int = 0, output_tokens: int = 0, duration_seconds: float = 0.0) -> float:
+    pricing = _load_pricing().get(model, {})
+    if "per_minute" in pricing:
+        return round(pricing["per_minute"] * duration_seconds / 60, 6)
+    ipm = pricing.get("input_per_1m", 0)
+    opm = pricing.get("output_per_1m", 0)
+    return round((input_tokens * ipm + output_tokens * opm) / 1_000_000, 6)
 
 DEFAULT_CONFIG: dict = {
     "api_key": "",
@@ -228,12 +294,14 @@ def _save_history(entries: list) -> None:
         json.dump(entries, f, indent=2)
 
 
-def add_history_entry(text: str) -> None:
+def add_history_entry(text: str, usage: dict | None = None) -> None:
     entry = {
         "id": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "text": text,
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }
+    if usage:
+        entry["usage"] = usage
     with _history_lock:
         entries = _load_history()
         entries.insert(0, entry)
@@ -273,10 +341,15 @@ MODE_SYSTEM_PROMPTS: dict[str, dict[str, str]] = {
             "Do not include a subject line. Return only the email body."
         ),
         "casual": (
-            "Reformat the following dictated text into a casual but professional email body. "
+            "Reformat the following dictated text into a casual email body. "
             "Use capitalization but lighter punctuation. Keep sentences flowing naturally. "
             "Fix grammar and filler words. "
+            "Do not translate or change the language. "
+            "Do not replace greetings, names, or terms of address with alternatives. "
             "Do not add content that wasn't spoken. Do not include a subject line. "
+            "IMPORTANT: Do not invent, hallucinate, or fill in any names, sign-offs, or greetings "
+            "that were not explicitly spoken. If the user did not say a closing name or greeting name, do not add one. "
+            "If a greeting or sign-off is needed, use [NAME] as a placeholder — never invent a name."
             "Return only the email body."
         ),
         "excited": (
@@ -404,7 +477,7 @@ def get_mode_prompt() -> str | None:
         if toggles.get("include_sign_off", True):
             prompt += " Include an appropriate sign-off or closing."
         else:
-            prompt += " Do not include a sign-off or closing."
+            prompt += " Do not include a sign-off or closing. Still use proper email paragraph structure with line breaks between sections."
     elif category == "personal-message":
         if toggles.get("use_emoji", False):
             prompt += " Use relevant emoji to add expressiveness."
@@ -431,7 +504,7 @@ def _build_lang_instruction() -> str:
     )
 
 
-def reformat_text(text: str, mode: str | None = None) -> str:
+def reformat_text(text: str, mode: str | None = None) -> tuple[str, dict | None]:
     """Post-process transcription via configured LLM. Falls back to original text on any error."""
     llm_provider = config.get("llm_provider", "openai")
 
@@ -440,7 +513,7 @@ def reformat_text(text: str, mode: str | None = None) -> str:
     else:
         prompt = get_mode_prompt()
         if prompt is None:
-            return text
+            return text, None
 
     # Prepend language instruction so every provider (local, OpenAI, Anthropic)
     # preserves the spoken language instead of defaulting to English.
@@ -453,14 +526,18 @@ def reformat_text(text: str, mode: str | None = None) -> str:
     # Local model path — no API key needed
     if llm_provider == "local":
         model_id = config.get("llm_model", "gemma-3-4b")
-        return reformat_text_local(text, prompt, model_id)
+        t0 = time.time()
+        result = reformat_text_local(text, prompt, model_id)
+        latency_ms = round((time.time() - t0) * 1000)
+        usage = {"step": "reformat", "model": model_id, "input_tokens": 0, "output_tokens": 0, "latency_ms": latency_ms, "cost": 0.0, "local": True}
+        return result, usage
 
     # Use dedicated LLM key; fall back to transcription key when both providers are openai
     api_key = config.get("llm_api_key", "") or (
         config.get("api_key", "") if llm_provider == "openai" else ""
     )
     if not api_key:
-        return text
+        return text, None
 
     llm_model = config.get("llm_model", "") or (
         "gpt-4o-mini" if llm_provider == "openai" else "claude-haiku-4-5-20251001"
@@ -472,19 +549,32 @@ def reformat_text(text: str, mode: str | None = None) -> str:
                 import anthropic
             except ImportError:
                 print("[FindMyVoice] Anthropic SDK not installed. Run: pip install anthropic")
-                return text
+                return text, None
             client = anthropic.Anthropic(api_key=api_key)
+            t0 = time.time()
             response = client.messages.create(
                 model=llm_model,
                 max_tokens=1024,
                 system=prompt,
                 messages=[{"role": "user", "content": text}],
             )
+            latency_ms = round((time.time() - t0) * 1000)
             result = response.content[0].text.strip()
             print(f"[Landa] reformat_text: output={result[:200]!r}")
-            return result
+            u = response.usage
+            cost = _calc_cost(llm_model, u.input_tokens, u.output_tokens)
+            usage = {
+                "step": "reformat",
+                "model": llm_model,
+                "input_tokens": u.input_tokens,
+                "output_tokens": u.output_tokens,
+                "latency_ms": latency_ms,
+                "cost": cost,
+            }
+            return result, usage
         else:
             client = OpenAI(api_key=api_key, timeout=httpx.Timeout(3.0))
+            t0 = time.time()
             response = client.chat.completions.create(
                 model=llm_model,
                 messages=[
@@ -492,12 +582,23 @@ def reformat_text(text: str, mode: str | None = None) -> str:
                     {"role": "user", "content": text},
                 ],
             )
+            latency_ms = round((time.time() - t0) * 1000)
             result = response.choices[0].message.content.strip()
             print(f"[Landa] reformat_text: output={result[:200]!r}")
-            return result
+            u = response.usage
+            cost = _calc_cost(llm_model, u.prompt_tokens, u.completion_tokens)
+            usage = {
+                "step": "reformat",
+                "model": llm_model,
+                "input_tokens": u.prompt_tokens,
+                "output_tokens": u.completion_tokens,
+                "latency_ms": latency_ms,
+                "cost": cost,
+            }
+            return result, usage
     except Exception as e:
         print(f"[FindMyVoice] Reformat error (falling back to raw text): {e}")
-        return text
+        return text, None
 
 
 # ---------------------------------------------------------------------------
@@ -812,6 +913,8 @@ def _transcribe_and_paste() -> None:
     if not audio_frames:
         return
 
+    pipeline_start = time.time()  # start timing from hotkey-stop → paste
+
     # Write wav to a temp file
     audio = np.concatenate(audio_frames, axis=0)
 
@@ -825,16 +928,28 @@ def _transcribe_and_paste() -> None:
     tmp.close()
 
     try:
-        text = transcribe(tmp.name)
+        prep_latency_ms = round((time.time() - pipeline_start) * 1000)
+        text, transcribe_usage = transcribe(tmp.name)
         if not text:
             return
         text = post_process(text)
+        reformat_usage = None
         if text:
-            text = reformat_text(text)
+            text, reformat_usage = reformat_text(text)
         if text:
-            add_history_entry(text)
-        if text and config.get("auto_paste", True):
-            paste_text(text)
+            paste_latency_ms = None
+            if config.get("auto_paste", True):
+                t_paste = time.time()
+                paste_text(text)
+                paste_latency_ms = round((time.time() - t_paste) * 1000)
+            total_latency_ms = round((time.time() - pipeline_start) * 1000)
+            steps = [u for u in [transcribe_usage, reformat_usage] if u is not None]
+            combined_usage = None
+            if steps:
+                total_tokens = sum(s.get("input_tokens", 0) + s.get("output_tokens", 0) for s in steps)
+                total_cost = round(sum(s.get("cost", 0.0) for s in steps), 6)
+                combined_usage = {"steps": steps, "total_tokens": total_tokens, "total_cost": total_cost, "prep_latency_ms": prep_latency_ms, "paste_latency_ms": paste_latency_ms, "total_latency_ms": total_latency_ms}
+            add_history_entry(text, usage=combined_usage)
     finally:
         os.unlink(tmp.name)
 
@@ -962,23 +1077,32 @@ def start_whisper_download(model_name: str) -> None:
 
 def transcribe_whisper_local(wav_path: str, model_name: str) -> str:
     global _detected_language
+    _local_usage = {"step": "transcription", "model": model_name, "input_tokens": 0, "output_tokens": 0, "duration_seconds": 0.0, "latency_ms": 0, "cost": 0.0, "local": True}
     try:
         from pywhispercpp.model import Model as WhisperModel
     except ImportError:
-        return "[Error] pywhispercpp not installed. Please install from the Settings page."
+        return "[Error] pywhispercpp not installed. Please install from the Settings page.", _local_usage
 
     if model_name not in _whisper_cpp_model_cache:
         info = WHISPER_GGML_MODELS.get(model_name)
         if not info:
-            return f"[Error] Unknown local model: {model_name}"
+            return f"[Error] Unknown local model: {model_name}", _local_usage
         model_path = WHISPER_MODELS_DIR / info["filename"]
         if not model_path.exists():
-            return f"[Error] Model file not found: {model_path}. Please download from Settings."
+            return f"[Error] Model file not found: {model_path}. Please download from Settings.", _local_usage
         _whisper_cpp_model_cache[model_name] = WhisperModel(str(model_path))
+
+    import contextlib, wave as wave_mod
+    try:
+        with contextlib.closing(wave_mod.open(wav_path, "r")) as wf:
+            duration_seconds = wf.getnframes() / wf.getframerate()
+    except Exception:
+        duration_seconds = 0.0
 
     model = _whisper_cpp_model_cache[model_name]
     language = config.get("openai_language", "auto")
 
+    t0 = time.time()  # start timing before language detection
     if language and language != "auto":
         _detected_language = language
     else:
@@ -999,9 +1123,11 @@ def transcribe_whisper_local(wav_path: str, model_name: str) -> str:
 
     print(f"[Landa] transcribe_whisper_local: model={model_name}, language={_detected_language}, kwargs={kwargs}")
     segments = model.transcribe(wav_path, **kwargs)
+    latency_ms = round((time.time() - t0) * 1000)
     text = " ".join(seg.text for seg in segments).strip()
     print(f"[Landa] transcribe_whisper_local: output={text[:200]!r}")
-    return text
+    usage = {"step": "transcription", "model": model_name, "input_tokens": 0, "output_tokens": 0, "duration_seconds": round(duration_seconds, 2), "latency_ms": latency_ms, "cost": 0.0, "local": True}
+    return text, usage
 
 
 def _warmup_whisper_pipeline(model_name: str) -> None:
@@ -1283,43 +1409,75 @@ threading.Thread(target=_startup_whisper_check, daemon=True).start()
 threading.Thread(target=_startup_nemo_check, daemon=True).start()
 
 
-def transcribe_nemo(audio_path: str, language: str) -> str:
+def transcribe_nemo(audio_path: str, language: str) -> tuple[str, dict]:
+    import contextlib, wave as wave_mod
     global _nemo_model
     try:
         import nemo.collections.asr as nemo_asr
     except ImportError:
-        return "[Error] NeMo is not installed. Run: pip install nemo_toolkit['asr']"
+        return "[Error] NeMo is not installed. Run: pip install nemo_toolkit['asr']", {"step": "transcription", "model": "nvidia/parakeet-tdt-0.6b-v3", "input_tokens": 0, "output_tokens": 0, "duration_seconds": 0.0, "latency_ms": 0, "cost": 0.0, "local": True}
+
+    try:
+        with contextlib.closing(wave_mod.open(audio_path, "r")) as wf:
+            duration_seconds = wf.getnframes() / wf.getframerate()
+    except Exception:
+        duration_seconds = 0.0
 
     if _nemo_model is None:
         _nemo_model = nemo_asr.models.ASRModel.from_pretrained("nvidia/parakeet-tdt-0.6b-v3")
 
+    t0 = time.time()
     output = _nemo_model.transcribe([audio_path])
-    return output[0].text
+    latency_ms = round((time.time() - t0) * 1000)
+    usage = {"step": "transcription", "model": "nvidia/parakeet-tdt-0.6b-v3", "input_tokens": 0, "output_tokens": 0, "duration_seconds": round(duration_seconds, 2), "latency_ms": latency_ms, "cost": 0.0, "local": True}
+    return output[0].text, usage
 
 
-def transcribe_openai(wav_path: str) -> str:
+def transcribe_openai(wav_path: str) -> tuple[str, dict | None]:
+    import contextlib
+    import wave as wave_mod
+
     api_key = config.get("api_key", "")
     if not api_key:
         print("[FindMyVoice] No API key configured.")
-        return ""
+        return "", None
 
     client = OpenAI(api_key=api_key)
 
     language = config.get("openai_language", "auto")
 
     try:
+        with contextlib.closing(wave_mod.open(wav_path, "r")) as wf:
+            duration_seconds = wf.getnframes() / wf.getframerate()
+    except Exception:
+        duration_seconds = 0.0
+
+    try:
         with open(wav_path, "rb") as f:
-            kwargs: dict = {"model": config.get("openai_model", "whisper-1"), "file": f}
+            model_name = config.get("openai_model", "whisper-1")
+            kwargs: dict = {"model": model_name, "file": f}
             if language and language != "auto":
                 kwargs["language"] = language
+            t0 = time.time()
             transcript = client.audio.transcriptions.create(**kwargs)
-        return transcript.text.strip()
+            latency_ms = round((time.time() - t0) * 1000)
+        cost = _calc_cost(model_name, duration_seconds=duration_seconds)
+        usage = {
+            "step": "transcription",
+            "model": model_name,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "duration_seconds": round(duration_seconds, 2),
+            "latency_ms": latency_ms,
+            "cost": cost,
+        }
+        return transcript.text.strip(), usage
     except Exception as e:
         print(f"[FindMyVoice] Transcription error: {e}")
-        return ""
+        return "", None
 
 
-def transcribe(wav_path: str) -> str:
+def transcribe(wav_path: str) -> tuple[str, dict | None]:
     provider = config.get("api_provider", "openai")
     if provider == "nemo":
         language = config.get("nemo_language", "auto")
@@ -1435,7 +1593,7 @@ def api_reformat():
     data = request.get_json(force=True)
     text = data.get("text", "")
     mode = data.get("mode", config.get("reformat_mode", "default"))
-    result = reformat_text(text, mode)
+    result, _ = reformat_text(text, mode)
     return jsonify({"text": result})
 
 
