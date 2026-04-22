@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; media-src 'self';">
   <title>Landa Settings</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -72,6 +72,15 @@
           </span>
           <span data-i18n="nav.history">History</span>
         </div>
+        <div class="sidebar-item" data-tab="vocabulary">
+          <span class="sidebar-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+          </span>
+          <span data-i18n="nav.vocabulary">Vocabulary</span>
+        </div>
       </nav>
 
       <!-- Content -->
@@ -79,6 +88,9 @@
         <!-- Home Tab -->
         <div class="tab-panel active" id="tab-home">
           <div class="home-bg">
+            <video class="home-bg-video" autoplay loop muted playsinline>
+              <source src="../assets/abstracted-flow.mp4" type="video/mp4">
+            </video>
             <!-- Stats Card -->
             <div class="home-stats-card hidden" id="home-stats-card">
               <div class="home-stats-grid" id="home-stats-grid"></div>
@@ -275,6 +287,15 @@
                   <div class="shortcut-badges" id="badge-cancel_recording"></div>
                   <button class="shortcut-reset hidden" data-action="cancel_recording" title="Reset to default">↺</button>
                 </div>
+                <div class="divider"></div>
+                <div class="shortcut-row" data-action="hold_recording">
+                  <div class="shortcut-info">
+                    <div class="shortcut-title" data-i18n="settings.shortcuts.hold">Hold Recording</div>
+                    <div class="shortcut-subtitle" data-i18n="settings.shortcuts.hold.sub">Temporarily pauses active recording</div>
+                  </div>
+                  <div class="shortcut-badges" id="badge-hold_recording"></div>
+                  <button class="shortcut-reset hidden" data-action="hold_recording" title="Reset to default">↺</button>
+                </div>
               </div>
             </section>
 
@@ -343,6 +364,22 @@
                     <button class="play-btn" data-sound="cancel" title="Preview">▶</button>
                   </div>
                 </div>
+                <div class="divider"></div>
+                <div class="sound-row" id="sound-hold-row">
+                  <span data-i18n="settings.sounds.hold">Hold sound</span>
+                  <div class="sound-controls">
+                    <select id="sel-soundHold"></select>
+                    <button class="play-btn" data-sound="hold" title="Preview">▶</button>
+                  </div>
+                </div>
+                <div class="divider"></div>
+                <div class="sound-row" id="sound-resume-row">
+                  <span data-i18n="settings.sounds.resume">Resume sound</span>
+                  <div class="sound-controls">
+                    <select id="sel-soundResume"></select>
+                    <button class="play-btn" data-sound="resume" title="Preview">▶</button>
+                  </div>
+                </div>
               </div>
             </section>
           </div>
@@ -362,6 +399,25 @@
             </div>
           </div>
         </div>
+
+        <!-- Vocabulary Tab -->
+        <div class="tab-panel" id="tab-vocabulary">
+          <div class="vocab-header">
+            <div>
+              <h2 data-i18n="vocabulary.title">Vocabulary</h2>
+              <p class="muted" data-i18n="vocabulary.subtitle">Words that will be auto-corrected in transcriptions</p>
+            </div>
+            <button class="btn-pill-primary" id="btn-add-vocab" data-i18n="vocabulary.add">+ Add Replacement</button>
+          </div>
+          <div class="vocab-list" id="vocab-list">
+            <div class="placeholder-view" id="vocab-empty">
+              <div class="placeholder-icon">📖</div>
+              <h2 data-i18n="vocabulary.empty.title">No replacements yet</h2>
+              <p class="muted" data-i18n="vocabulary.empty.sub">Add words that Whisper consistently mishears.</p>
+            </div>
+          </div>
+        </div>
+
       </main>
 
     </div><!-- /.layout-body -->

@@ -12,6 +12,7 @@ let _setupDone = false; // true once UI is populated & first applyConfig has run
 const DEFAULTS = {
   toggle_recording: { key: 'f5', key_code: 96, modifiers: ['command', 'shift'] },
   cancel_recording: { key: 'escape', key_code: 53, modifiers: [] },
+  hold_recording: { key: 'f6', key_code: 97, modifiers: [] },
   change_mode: { key: 'k', key_code: 40, modifiers: ['option', 'shift'] },
   push_to_talk: { key: '', key_code: -1, modifiers: [] },
   mouse_shortcut: { key: '', key_code: -1, modifiers: [] },
@@ -30,6 +31,8 @@ const OPENAI_LANGUAGES = [
 ];
 
 const WHISPER_MODELS = [
+  { value: 'gpt-4o-transcribe', label: 'GPT-4o Transcribe (Realtime)', logo: 'openai' },
+  { value: 'gpt-4o-mini-transcribe', label: 'GPT-4o Mini Transcribe (Realtime)', logo: 'openai' },
   { value: 'whisper-large-v3-turbo', label: 'Whisper Large V3 Turbo', logo: 'openai' },
   { value: 'whisper-large-v3', label: 'Whisper Large V3', logo: 'openai' },
   { value: 'whisper-medium', label: 'Whisper Medium', logo: 'openai' },
@@ -50,6 +53,15 @@ const TRANSLATIONS = {
     'nav.profiles': 'Profiles',
     'nav.settings': 'Settings',
     'nav.history': 'History',
+    'nav.vocabulary': 'Vocabulary',
+    // Vocabulary tab
+    'vocabulary.title': 'Vocabulary',
+    'vocabulary.subtitle': 'Words that will be auto-corrected in transcriptions',
+    'vocabulary.add': '+ Add Replacement',
+    'vocabulary.from.placeholder': 'Heard as…',
+    'vocabulary.to.placeholder': 'Replace with…',
+    'vocabulary.empty.title': 'No replacements yet',
+    'vocabulary.empty.sub': 'Add words that Whisper consistently mishears.',
     // Home
     'home.desc': 'Lightweight voice-to-text for macOS & Windows.<br>Press your hotkey to record, release to transcribe and paste.',
     // Settings tab — language section
@@ -66,6 +78,8 @@ const TRANSLATIONS = {
     'settings.shortcuts.toggle.sub': 'Starts and stops recordings',
     'settings.shortcuts.cancel': 'Cancel Recording',
     'settings.shortcuts.cancel.sub': 'Discards active recording',
+    'settings.shortcuts.hold': 'Hold Recording',
+    'settings.shortcuts.hold.sub': 'Temporarily pauses active recording',
     'settings.shortcuts.record': 'Record shortcut',
     'settings.shortcuts.recording': 'Press shortcut…',
     // Settings tab — application
@@ -79,6 +93,8 @@ const TRANSLATIONS = {
     'settings.sounds.start': 'Start sound',
     'settings.sounds.stop': 'Stop sound',
     'settings.sounds.cancel': 'Cancel sound',
+    'settings.sounds.hold': 'Hold sound',
+    'settings.sounds.resume': 'Resume sound',
     // Modes tab
     'modes.llm.btn': 'LLM Settings',
     'modes.llm.title': 'LLM Settings',
@@ -168,7 +184,7 @@ const TRANSLATIONS = {
     'modes.preview.personal-message.casual': 'Hey are you free for lunch tomorrow?\nLet\'s do 12 if that works for you',
     'modes.preview.personal-message.excited': 'Hey, are you free for lunch tomorrow?\nLet\'s do 12 if that works for you!',
     'modes.preview.email.formal': 'Hi Oscar,\n\nI wanted to follow up regarding our conversation earlier today. It was a pleasure discussing the project details with you.\n\nPlease don\'t hesitate to reach out if you have any further questions.\n\nBest regards,\nLotti',
-    'modes.preview.email.casual': 'Hi Oscar, great talking with you today. Looking forward to catching up again soon\n\nBest,\nLotti',
+    'modes.preview.email.casual': 'Hi Oscar,\n\ngreat talking with you today. Looking forward to catching up again soon\n\nBest,\nLotti',
     'modes.preview.email.excited': 'Hi Oscar,\n\nIt was great talking with you today! Really looking forward to our next chat!\n\nBest,\nLotti',
   },
   de: {
@@ -177,6 +193,15 @@ const TRANSLATIONS = {
     'nav.profiles': 'Profile',
     'nav.settings': 'Einstellungen',
     'nav.history': 'Verlauf',
+    'nav.vocabulary': 'Vokabular',
+    // Vocabulary tab
+    'vocabulary.title': 'Vokabular',
+    'vocabulary.subtitle': 'Wörter, die in Transkriptionen automatisch korrigiert werden',
+    'vocabulary.add': '+ Ersetzung hinzufügen',
+    'vocabulary.from.placeholder': 'Gehört als…',
+    'vocabulary.to.placeholder': 'Ersetzen durch…',
+    'vocabulary.empty.title': 'Noch keine Ersetzungen',
+    'vocabulary.empty.sub': 'Füge Wörter hinzu, die Whisper häufig falsch erkennt.',
     // Home
     'home.desc': 'Schlanke Sprach-zu-Text-App für macOS & Windows.<br>Drücke deinen Hotkey zum Aufnehmen, loslassen zum Transkribieren und Einfügen.',
     // Settings tab — language section
@@ -193,6 +218,8 @@ const TRANSLATIONS = {
     'settings.shortcuts.toggle.sub': 'Startet und stoppt Aufnahmen',
     'settings.shortcuts.cancel': 'Aufnahme abbrechen',
     'settings.shortcuts.cancel.sub': 'Bricht aktive Aufnahme ab',
+    'settings.shortcuts.hold': 'Aufnahme pausieren',
+    'settings.shortcuts.hold.sub': 'Pausiert die aktive Aufnahme vorübergehend',
     'settings.shortcuts.record': 'Kürzel aufzeichnen',
     'settings.shortcuts.recording': 'Kürzel drücken…',
     // Settings tab — application
@@ -206,6 +233,8 @@ const TRANSLATIONS = {
     'settings.sounds.start': 'Starton',
     'settings.sounds.stop': 'Stopton',
     'settings.sounds.cancel': 'Abbrechen-Ton',
+    'settings.sounds.hold': 'Pausieren-Ton',
+    'settings.sounds.resume': 'Fortsetzen-Ton',
     // Modes tab
     'modes.llm.btn': 'KI-Einstellungen',
     'modes.llm.title': 'KI-Einstellungen',
@@ -294,9 +323,9 @@ const TRANSLATIONS = {
     'modes.preview.personal-message.formal': 'Hey, hast du morgen Zeit zum Mittagessen?\nUm 12 Uhr würde mir passen, wenn es dir passt.',
     'modes.preview.personal-message.casual': 'Hey hast du morgen Zeit zum Mittagessen?\nUm 12 würde passen wenn es dir passt',
     'modes.preview.personal-message.excited': 'Hey, hast du morgen Zeit zum Mittagessen?\nUm 12 Uhr würde mir passen, wenn es dir passt!',
-    'modes.preview.email.formal': 'Hallo Oscar,\n\nich wollte mich bezüglich unseres heutigen Gesprächs nochmals melden. Es war mir eine Freude, die Projektdetails mit dir zu besprechen.\n\nBei weiteren Fragen stehe ich gerne zur Verfügung.\n\nMit freundlichen Grüßen,\nLotti',
-    'modes.preview.email.casual': 'Hi Oscar, tolles Gespräch heute. Freue mich schon auf unser nächstes Treffen\n\nBeste Grüße,\nLotti',
-    'modes.preview.email.excited': 'Hi Oscar,\n\nes war wirklich toll, heute mit dir zu sprechen! Ich freue mich sehr auf unser nächstes Gespräch!\n\nBeste Grüße,\nLotti',
+    'modes.preview.email.formal': 'Hallo Oscar,\n\nich wollte mich bezüglich unseres heutigen Gesprächs nochmals melden. Es war mir eine Freude, die Projektdetails mit dir zu besprechen.\n\nBei weiteren Fragen stehe ich gerne zur Verfügung.\n\nMit freundlichen Grüßen\nLotti',
+    'modes.preview.email.casual': 'Hi Oscar,\n\ntolles Gespräch heute. Freue mich schon auf unser nächstes Treffen.\n\nBeste Grüße\nLotti',
+    'modes.preview.email.excited': 'Hi Oscar,\n\nes war wirklich toll, heute mit dir zu sprechen! Ich freue mich sehr auf unser nächstes Gespräch!\n\nBeste Grüße\nLotti',
   },
 };
 
@@ -443,6 +472,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupLlmSettings();
   setupModesTab();
   setupHistoryTab();
+  setupVocabularyTab();
   setupHomeTab();
 
   if (config) applyConfig(config);
@@ -526,6 +556,8 @@ function applyConfig(cfg, { fromPoll = false } = {}) {
   document.getElementById('sel-soundStart').value = cfg.sound_start || 'Tink';
   document.getElementById('sel-soundStop').value = cfg.sound_stop || 'Pop';
   document.getElementById('sel-soundCancel').value = cfg.sound_cancel || 'Funk';
+  document.getElementById('sel-soundHold').value = cfg.sound_hold || 'Tink';
+  document.getElementById('sel-soundResume').value = cfg.sound_resume || 'Pop';
   updateSoundRowsDisabled(cfg.sound_muted || false);
 
   // Transcription model
@@ -544,6 +576,9 @@ function applyConfig(cfg, { fromPoll = false } = {}) {
 
   // Modes
   applyModesConfig();
+
+  // Vocabulary
+  if (typeof renderVocabList === 'function') renderVocabList();
 }
 
 // ---------------------------------------------------------------------------
@@ -758,6 +793,8 @@ function updateSoundRowsDisabled(muted) {
   document.getElementById('sound-start-row').classList.toggle('disabled', muted);
   document.getElementById('sound-stop-row').classList.toggle('disabled', muted);
   document.getElementById('sound-cancel-row').classList.toggle('disabled', muted);
+  document.getElementById('sound-hold-row').classList.toggle('disabled', muted);
+  document.getElementById('sound-resume-row').classList.toggle('disabled', muted);
 }
 
 // ---------------------------------------------------------------------------
@@ -768,14 +805,20 @@ function populateSoundSelects() {
   const startSel = document.getElementById('sel-soundStart');
   const stopSel = document.getElementById('sel-soundStop');
   const cancelSel = document.getElementById('sel-soundCancel');
+  const holdSel = document.getElementById('sel-soundHold');
+  const resumeSel = document.getElementById('sel-soundResume');
   const startVal = (config && config.sound_start) || 'Tink';
   const stopVal = (config && config.sound_stop) || 'Pop';
   const cancelVal = (config && config.sound_cancel) || 'Funk';
+  const holdVal = (config && config.sound_hold) || 'Tink';
+  const resumeVal = (config && config.sound_resume) || 'Pop';
 
   for (const sound of systemSounds) {
     startSel.add(new Option(sound, sound, false, sound === startVal));
     stopSel.add(new Option(sound, sound, false, sound === stopVal));
     cancelSel.add(new Option(sound, sound, false, sound === cancelVal));
+    holdSel.add(new Option(sound, sound, false, sound === holdVal));
+    resumeSel.add(new Option(sound, sound, false, sound === resumeVal));
   }
 }
 
@@ -801,11 +844,27 @@ function setupSoundControls() {
     saveConfig();
   });
 
+  document.getElementById('sel-soundHold').addEventListener('change', (e) => {
+    if (!config) return;
+    config.sound_hold = e.target.value;
+    window.api.playSound(e.target.value);
+    saveConfig();
+  });
+
+  document.getElementById('sel-soundResume').addEventListener('change', (e) => {
+    if (!config) return;
+    config.sound_resume = e.target.value;
+    window.api.playSound(e.target.value);
+    saveConfig();
+  });
+
   document.querySelectorAll('.play-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const which = btn.dataset.sound;
-      const selId = which === 'start' ? 'sel-soundStart'
-                  : which === 'stop'  ? 'sel-soundStop'
+      const selId = which === 'start'  ? 'sel-soundStart'
+                  : which === 'stop'   ? 'sel-soundStop'
+                  : which === 'hold'   ? 'sel-soundHold'
+                  : which === 'resume' ? 'sel-soundResume'
                   : 'sel-soundCancel';
       window.api.playSound(document.getElementById(selId).value);
     });
@@ -2402,6 +2461,83 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// ---------------------------------------------------------------------------
+// Vocabulary Tab
+// ---------------------------------------------------------------------------
+
+function setupVocabularyTab() {
+  renderVocabList();
+
+  document.getElementById('btn-add-vocab').addEventListener('click', () => {
+    if (!config.vocabulary) config.vocabulary = [];
+    config.vocabulary.push({ from: '', to: '' });
+    renderVocabList();
+    const inputs = document.querySelectorAll('.vocab-entry .vocab-from');
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  });
+}
+
+function renderVocabList() {
+  const list = document.getElementById('vocab-list');
+  if (!list) return;
+  const empty = document.getElementById('vocab-empty');
+  const vocab = (config && config.vocabulary) || [];
+
+  list.querySelectorAll('.vocab-entry').forEach((el) => el.remove());
+
+  if (vocab.length === 0) {
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  vocab.forEach((entry, idx) => {
+    const row = document.createElement('div');
+    row.className = 'vocab-entry';
+    row.innerHTML = `
+      <input class="vocab-from" type="text" placeholder="${t('vocabulary.from.placeholder')}" value="${escapeHtml(entry.from || '')}">
+      <span class="vocab-arrow">→</span>
+      <input class="vocab-to" type="text" placeholder="${t('vocabulary.to.placeholder')}" value="${escapeHtml(entry.to || '')}">
+      <button class="btn-delete-vocab" title="Delete">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>`;
+
+    const fromInput = row.querySelector('.vocab-from');
+    const toInput = row.querySelector('.vocab-to');
+
+    const saveEntry = () => {
+      if (!config.vocabulary) return;
+      const f = fromInput.value.trim();
+      const to = toInput.value.trim();
+      config.vocabulary[idx] = { from: f, to };
+      if (!f && !to) {
+        config.vocabulary.splice(idx, 1);
+        renderVocabList();
+      }
+      saveConfigNow();
+    };
+
+    fromInput.addEventListener('blur', (e) => {
+      if (row.contains(e.relatedTarget)) return;
+      saveEntry();
+    });
+    toInput.addEventListener('blur', (e) => {
+      if (row.contains(e.relatedTarget)) return;
+      saveEntry();
+    });
+
+    row.querySelector('.btn-delete-vocab').addEventListener('click', () => {
+      config.vocabulary.splice(idx, 1);
+      renderVocabList();
+      saveConfigNow();
+    });
+
+    list.appendChild(row);
+  });
 }
 
 function formatTimestamp(iso) {

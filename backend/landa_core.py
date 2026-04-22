@@ -6,10 +6,13 @@ local HTTP API on localhost:7890 for the SwiftUI frontend.  Hotkey listening is
 handled by the Swift app.
 """
 
+import base64
 import datetime
 import json
 import logging
 import os
+import queue
+import re
 import subprocess
 import sys
 import tempfile
@@ -22,6 +25,7 @@ import numpy as np
 import sounddevice as sd
 from flask import Flask, Response, jsonify, request
 from scipy.io import wavfile
+from scipy.signal import resample_poly
 from openai import OpenAI
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -49,6 +53,8 @@ PRICING_DEFAULTS: dict = {
     "gpt-4o":                       {"input_per_1m": 2.50,  "output_per_1m": 10.00},
     "gpt-4.1":                      {"input_per_1m": 2.00,  "output_per_1m": 8.00},
     "gpt-4.1-mini":                 {"input_per_1m": 0.40,  "output_per_1m": 1.60},
+    "gpt-4o-transcribe":            {"per_minute": 0.06},
+    "gpt-4o-mini-transcribe":       {"per_minute": 0.01},
     "claude-haiku-4-5-20251001":    {"input_per_1m": 0.80,  "output_per_1m": 4.00},
     "claude-sonnet-4-6":            {"input_per_1m": 3.00,  "output_per_1m": 15.00},
     "claude-opus-4-6":              {"input_per_1m": 15.00, "output_per_1m": 75.00},
@@ -113,6 +119,9 @@ DEFAULT_CONFIG: dict = {
     "auto_punctuate": True,
     "toggle_recording": {"key": "f5", "key_code": 96, "modifiers": ["command", "shift"]},
     "cancel_recording": {"key": "escape", "key_code": 53, "modifiers": []},
+    "hold_recording": {"key": "f6", "key_code": 97, "modifiers": []},
+    "sound_hold": "Tink",
+    "sound_resume": "Pop",
     "change_mode": {"key": "k", "key_code": 40, "modifiers": ["option", "shift"]},
     "push_to_talk": {"key": "", "key_code": -1, "modifiers": []},
     "mouse_shortcut": {"key": "", "key_code": -1, "modifiers": []},
@@ -121,6 +130,7 @@ DEFAULT_CONFIG: dict = {
     "llm_provider": "openai",
     "llm_api_key": "",
     "llm_model": "",
+    "vocabulary": [],
     "modes": {
         "selections": {
             "personal-message": "formal",
@@ -164,7 +174,7 @@ def _migrate(cfg: dict) -> tuple[dict, bool]:
     if "model" in cfg:
         old_model = cfg.pop("model")
         if "openai_model" not in cfg:
-            allowed = {"whisper-1", "whisper-base", "whisper-small", "whisper-medium", "whisper-large-v3", "whisper-large-v3-turbo"}
+            allowed = {"whisper-1", "whisper-base", "whisper-small", "whisper-medium", "whisper-large-v3", "whisper-large-v3-turbo", "gpt-4o-transcribe", "gpt-4o-mini-transcribe"}
             cfg["openai_model"] = old_model if old_model in allowed else "whisper-1"
         changed = True
 
@@ -242,6 +252,11 @@ def _migrate(cfg: dict) -> tuple[dict, bool]:
         cfg["llm_model"] = ""
         changed = True
 
+    # ensure vocabulary list exists
+    if "vocabulary" not in cfg:
+        cfg["vocabulary"] = []
+        changed = True
+
     return cfg, changed
 
 
@@ -312,25 +327,38 @@ def add_history_entry(text: str, usage: dict | None = None) -> None:
 # Reformat prompts (2 categories × 3 styles)
 # ---------------------------------------------------------------------------
 
+_ANTI_HALLUCINATION = (
+    "Do not translate or change the language. "
+    "Do not replace greetings, names, or terms of address with alternatives. "
+    "Do not invent, hallucinate, or fill in any names, sign-offs, or greetings "
+    "that were not explicitly spoken. Only include what was actually said."
+)
+
 MODE_SYSTEM_PROMPTS: dict[str, dict[str, str]] = {
     "personal-message": {
         "formal": (
             "Reformat the following dictated text into a personal message. "
             "Use proper capitalization and full punctuation. Keep it direct and concise — "
             "no greeting or sign-off needed. Fix grammar and remove filler words. "
-            "Do not add content that wasn't spoken. Return only the message text."
+            "Do not add content that wasn't spoken. "
+            + _ANTI_HALLUCINATION +
+            " Return only the message text."
         ),
         "casual": (
             "Reformat the following dictated text into a casual personal message. "
             "Use capitalization but relaxed punctuation — skip periods at the end of sentences where it feels natural. "
             "Keep it short and conversational. No greeting or sign-off. Fix filler words. "
-            "Do not add content that wasn't spoken. Return only the message text."
+            "Do not add content that wasn't spoken. "
+            + _ANTI_HALLUCINATION +
+            " Return only the message text."
         ),
         "excited": (
             "Reformat the following dictated text into an enthusiastic personal message. "
             "Use exclamation marks to convey energy and excitement. Keep it short, warm, and upbeat. "
             "No greeting or sign-off needed. Fix grammar and filler words. "
-            "Do not add content that wasn't spoken. Return only the message text."
+            "Do not add content that wasn't spoken. "
+            + _ANTI_HALLUCINATION +
+            " Return only the message text."
         ),
     },
     "email": {
@@ -338,26 +366,26 @@ MODE_SYSTEM_PROMPTS: dict[str, dict[str, str]] = {
             "Reformat the following dictated text into a professional email body. "
             "Use proper capitalization, full punctuation, and formal tone. Structure into clear paragraphs. "
             "Fix grammar and remove filler words. Do not add content that wasn't spoken. "
-            "Do not include a subject line. Return only the email body."
+            "Do not include a subject line. "
+            + _ANTI_HALLUCINATION +
+            " Return only the email body."
         ),
         "casual": (
             "Reformat the following dictated text into a casual email body. "
             "Use capitalization but lighter punctuation. Keep sentences flowing naturally. "
             "Fix grammar and filler words. "
-            "Do not translate or change the language. "
-            "Do not replace greetings, names, or terms of address with alternatives. "
             "Do not add content that wasn't spoken. Do not include a subject line. "
-            "IMPORTANT: Do not invent, hallucinate, or fill in any names, sign-offs, or greetings "
-            "that were not explicitly spoken. If the user did not say a closing name or greeting name, do not add one. "
-            "If a greeting or sign-off is needed, use [NAME] as a placeholder — never invent a name."
-            "Return only the email body."
+            + _ANTI_HALLUCINATION +
+            " Return only the email body."
         ),
         "excited": (
             "Reformat the following dictated text into an enthusiastic email body. "
             "Use exclamation marks to convey energy and positivity. "
             "Keep the tone warm, upbeat, and professional. "
             "Fix grammar and filler words. Do not add content that wasn't spoken. "
-            "Do not include a subject line. Return only the email body."
+            "Do not include a subject line. "
+            + _ANTI_HALLUCINATION +
+            " Return only the email body."
         ),
     },
 }
@@ -492,7 +520,12 @@ def _build_lang_instruction() -> str:
     lang_code = config.get("openai_language", "auto")
     if not lang_code or lang_code == "auto":
         lang_code = _detected_language
-    lang_name = _LANG_CODE_TO_NAME.get(lang_code) if lang_code else None
+    lang_name = None
+    if lang_code:
+        key = lang_code.lower()
+        lang_name = _LANG_CODE_TO_NAME.get(key)
+        if not lang_name and key in _LANG_NAME_TO_CODE:
+            lang_name = key.capitalize()
     if lang_name:
         return (
             f"IMPORTANT: You MUST respond in {lang_name}. Do not translate the text. "
@@ -606,11 +639,27 @@ def reformat_text(text: str, mode: str | None = None) -> tuple[str, dict | None]
 # ---------------------------------------------------------------------------
 
 SAMPLE_RATE = 16000
+REALTIME_SAMPLE_RATE = 24000
+REALTIME_MODELS = {"gpt-4o-transcribe", "gpt-4o-mini-transcribe"}
+# Realtime API requires a realtime model in the WebSocket URL;
+# the transcribe model name goes in input_audio_transcription config.
+REALTIME_WS_MODEL = {
+    "gpt-4o-transcribe":      "gpt-4o-realtime-preview",
+    "gpt-4o-mini-transcribe": "gpt-4o-mini-realtime-preview",
+}
+
 recording = False
+_is_on_hold = False
 audio_frames: list[np.ndarray] = []
 stream: sd.InputStream | None = None
 _teardown_thread: threading.Thread | None = None  # tracks in-flight stream teardown
 lock = threading.Lock()
+
+# Realtime WebSocket streaming state
+_rt_queue: queue.Queue | None = None
+_rt_thread: threading.Thread | None = None
+_rt_transcript: str | None = None
+_rt_error: bool = False
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -709,12 +758,8 @@ def paste_text(text: str) -> None:
             logging.error("Auto-paste failed on Windows: %s", e)
 
 
-# Known Whisper hallucination phrases produced on silence / background noise
-# Silence detection should only catch obviously empty taps/clicks. For real
-# recordings, even quiet speech should still reach transcription.
 _SILENCE_RMS_THRESHOLD = 0.0015
 _SILENCE_PEAK_THRESHOLD = 0.008
-_MIN_SKIP_DURATION_S = 0.2
 
 
 def _analyze_audio(audio: np.ndarray) -> tuple[float, float, float]:
@@ -742,11 +787,7 @@ def _should_skip_transcription(audio: np.ndarray) -> bool:
     )
     if duration_s == 0:
         return True
-    return (
-        duration_s < _MIN_SKIP_DURATION_S
-        and rms < _SILENCE_RMS_THRESHOLD
-        and peak < _SILENCE_PEAK_THRESHOLD
-    )
+    return rms < _SILENCE_RMS_THRESHOLD and peak < _SILENCE_PEAK_THRESHOLD
 
 
 def post_process(text: str) -> str:
@@ -761,17 +802,180 @@ def post_process(text: str) -> str:
     return text
 
 
+def _build_vocabulary_prompt() -> str:
+    """Return comma-separated correct spellings for Whisper prompt hint."""
+    vocab = config.get("vocabulary", [])
+    terms = [e["to"] for e in vocab if e.get("to", "").strip()]
+    return ", ".join(terms) if terms else ""
+
+
+def apply_vocabulary_replacements(text: str) -> str:
+    """Case-insensitive whole-word replacements from config vocabulary list."""
+    vocab = config.get("vocabulary", [])
+    for entry in vocab:
+        from_word = entry.get("from", "").strip()
+        to_word = entry.get("to", "").strip()
+        if not from_word or not to_word:
+            continue
+        pattern = r'\b' + re.escape(from_word) + r'\b'
+        text = re.sub(pattern, to_word, text, flags=re.IGNORECASE)
+    return text
+
+
+# ---------------------------------------------------------------------------
+# Realtime WebSocket streaming
+# ---------------------------------------------------------------------------
+
+
+def _is_realtime_model() -> bool:
+    return config.get("openai_model", "") in REALTIME_MODELS
+
+
+def _realtime_sender_thread() -> None:
+    """Stream audio to OpenAI Realtime API over WebSocket.
+
+    Runs in its own thread.  Reads float32 16kHz chunks from _rt_queue,
+    resamples to 24kHz PCM16, base64-encodes, and sends via WebSocket.
+    On receiving None sentinel (recording stopped), commits the buffer
+    and waits for the final transcript.
+    """
+    global _rt_transcript, _rt_error, _detected_language
+
+    try:
+        import websocket
+    except ImportError:
+        logging.error("[realtime] websocket-client not installed — run: pip install websocket-client")
+        _rt_error = True
+        return
+
+    model = config.get("openai_model")
+    ws_model = REALTIME_WS_MODEL.get(model, "gpt-4o-realtime-preview")
+    api_key = config.get("api_key", "")
+    language = config.get("openai_language", "auto")
+
+    # Reset stale value; set from config if explicit. The realtime API does
+    # not return the detected language, so on auto we leave this None and
+    # rely on the LLM's own language detection from the transcript text.
+    _detected_language = None
+    if language and language != "auto":
+        _detected_language = language
+
+    ws = None
+    try:
+        ws = websocket.create_connection(
+            f"wss://api.openai.com/v1/realtime?model={ws_model}",
+            header=[
+                f"Authorization: Bearer {api_key}",
+                "OpenAI-Beta: realtime=v1",
+            ],
+            timeout=10,
+        )
+
+        # Configure session: transcription only, no VAD (we commit manually)
+        transcription_cfg: dict = {"model": model}
+        if language and language != "auto":
+            transcription_cfg["language"] = language
+        session_config = {
+            "type": "session.update",
+            "session": {
+                "modalities": ["text"],
+                "turn_detection": None,
+                "input_audio_transcription": transcription_cfg,
+                "input_audio_format": "pcm16",
+            },
+        }
+        ws.send(json.dumps(session_config))
+
+        # Wait for session.updated confirmation
+        ws.settimeout(5)
+        try:
+            while True:
+                msg = json.loads(ws.recv())
+                evt = msg.get("type", "")
+                if evt == "session.updated":
+                    break
+                if evt == "error":
+                    logging.error("[realtime] Session config error: %s", msg)
+                    _rt_error = True
+                    return
+        except websocket.WebSocketTimeoutException:
+            logging.warning("[realtime] No session.updated received — proceeding anyway")
+
+        # Stream audio chunks until stop sentinel
+        ws.settimeout(0.5)
+        while True:
+            try:
+                chunk = _rt_queue.get(timeout=0.1)
+            except queue.Empty:
+                # Check for any server errors while waiting for audio
+                try:
+                    msg = json.loads(ws.recv())
+                    if msg.get("type") == "error":
+                        logging.error("[realtime] Server error during streaming: %s", msg)
+                        _rt_error = True
+                        return
+                except (websocket.WebSocketTimeoutException, TimeoutError):
+                    pass
+                continue
+
+            if chunk is None:
+                # Recording stopped — commit the audio buffer
+                ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
+                break
+
+            # Resample 16kHz float32 → 24kHz PCM16
+            resampled = resample_poly(chunk.flatten(), up=3, down=2)
+            pcm16 = np.clip(resampled * 32767, -32768, 32767).astype(np.int16)
+            encoded = base64.b64encode(pcm16.tobytes()).decode("ascii")
+
+            ws.send(json.dumps({
+                "type": "input_audio_buffer.append",
+                "audio": encoded,
+            }))
+
+        # Wait for transcription result
+        ws.settimeout(30)
+        while True:
+            msg = json.loads(ws.recv())
+            evt = msg.get("type", "")
+            if evt == "conversation.item.input_audio_transcription.completed":
+                _rt_transcript = msg.get("transcript", "").strip()
+                logging.info("[realtime] Transcript received: %s", (_rt_transcript or "")[:200])
+                break
+            elif evt == "error":
+                logging.error("[realtime] Server error waiting for transcript: %s", msg)
+                _rt_error = True
+                break
+
+    except Exception as e:
+        logging.error("[realtime] WebSocket error: %s", e)
+        _rt_error = True
+    finally:
+        if ws is not None:
+            try:
+                ws.close()
+            except Exception:
+                pass
+
+
 # ---------------------------------------------------------------------------
 # Recording
 # ---------------------------------------------------------------------------
 
 
 def _audio_callback(indata: np.ndarray, frames: int, time_info, status) -> None:
+    if _is_on_hold:
+        return
     audio_frames.append(indata.copy())
+    if _rt_queue is not None:
+        try:
+            _rt_queue.put_nowait(indata.copy())
+        except queue.Full:
+            pass
 
 
 def start_recording() -> bool:
-    global recording, stream, audio_frames, _teardown_thread
+    global recording, stream, audio_frames, _teardown_thread, _rt_queue, _rt_thread, _rt_transcript, _rt_error
     t0 = time.time()
     logging.info("[start_recording] called")
     # If a previous stream teardown is still running, wait for it to finish
@@ -780,9 +984,11 @@ def start_recording() -> bool:
         logging.info("[start_recording] waiting for previous stream teardown...")
         _teardown_thread.join(timeout=5.0)
         if _teardown_thread.is_alive():
-            logging.warning("[start_recording] previous teardown still running after 5s — proceeding anyway")
-        else:
-            logging.info("[start_recording] previous teardown finished")
+            # PortAudio can't open a new stream while the previous one is mid-teardown.
+            # Proceeding anyway guarantees an 8s hang — fail fast instead.
+            logging.error("[start_recording] previous teardown still hung after 5s — aborting start (audio device stuck)")
+            return False
+        logging.info("[start_recording] previous teardown finished")
         _teardown_thread = None
     with lock:
         if recording:
@@ -794,9 +1000,35 @@ def start_recording() -> bool:
     # deadlock all recording operations.  Use a thread with timeout so a
     # hung PortAudio doesn't block the HTTP response forever.
     t1 = time.time()
+
+    # Quick pre-flight: enumerate input devices before opening a stream.
+    # This also hangs on macOS when microphone permission is denied, but gives
+    # us a fast, clear error rather than a silent 8s timeout.
+    device_info = None
+    query_error = None
+
+    def _query_devices():
+        nonlocal device_info, query_error
+        try:
+            device_info = sd.query_devices(kind='input')
+        except Exception as e:
+            query_error = e
+
+    q = threading.Thread(target=_query_devices, daemon=True)
+    q.start()
+    q.join(timeout=3.0)
+    if q.is_alive():
+        logging.error("[start_recording] sd.query_devices hung — microphone permission likely denied in System Preferences")
+        return False
+    if query_error is not None:
+        logging.error("[start_recording] no input device: %s", query_error)
+        return False
+    logging.info("[start_recording] input device: %s (%.3fs)", device_info.get('name', '?') if isinstance(device_info, dict) else device_info, time.time() - t1)
+
     logging.info("[start_recording] creating InputStream... (%.3fs since entry)", time.time() - t0)
     new_stream = None
     create_error = None
+    timed_out = threading.Event()
 
     def _create_stream():
         nonlocal new_stream, create_error
@@ -808,6 +1040,15 @@ def start_recording() -> bool:
                 callback=_audio_callback,
             )
             s.start()
+            if timed_out.is_set():
+                # Caller already gave up — release the mic immediately so the
+                # next start attempt isn't blocked by this orphaned stream.
+                try:
+                    s.abort()
+                    s.close()
+                except Exception:
+                    pass
+                return
             new_stream = s
         except Exception as e:
             create_error = e
@@ -816,7 +1057,8 @@ def start_recording() -> bool:
     creator.start()
     creator.join(timeout=8.0)
     if creator.is_alive():
-        logging.error("[start_recording] InputStream creation timed out after 8s")
+        timed_out.set()
+        logging.error("[start_recording] InputStream creation timed out after 8s — check microphone permission or close other apps using the mic")
         return False
     if create_error is not None:
         logging.error("[start_recording] InputStream creation failed after %.3fs: %s", time.time() - t1, create_error)
@@ -828,13 +1070,21 @@ def start_recording() -> bool:
     with lock:
         stream = new_stream
         recording = True
+    # Start realtime WebSocket streaming if a realtime model is selected
+    if _is_realtime_model():
+        _rt_queue = queue.Queue(maxsize=1000)
+        _rt_transcript = None
+        _rt_error = False
+        _rt_thread = threading.Thread(target=_realtime_sender_thread, daemon=True)
+        _rt_thread.start()
+        logging.info("[start_recording] realtime WebSocket sender started")
     play_sound(config.get("sound_start", "Tink"))
     logging.info("[start_recording] done in %.3fs total", time.time() - t0)
     return True
 
 
 def stop_recording() -> bool:
-    global recording, stream, _teardown_thread
+    global recording, _is_on_hold, stream, _teardown_thread
     t0 = time.time()
     logging.info("[stop_recording] called")
     old_stream = None
@@ -845,38 +1095,35 @@ def stop_recording() -> bool:
         old_stream = stream
         stream = None
         recording = False
+        _is_on_hold = False
     logging.info("[stop_recording] state updated in %.3fs", time.time() - t0)
-    # Tear down PortAudio synchronously so the stream is fully released before
-    # the next start_recording call.  abort()+close() can block on macOS
-    # CoreAudio, but doing this in a background thread caused PortAudio
-    # deadlocks when a new InputStream was created before teardown finished.
-    # We use a thread + join(timeout) so a hung teardown doesn't block the
-    # entire /stop response (sound, transcription, and HTTP reply).
+    play_sound(config.get("sound_stop", "Pop"))
     if old_stream is not None:
-        t1 = time.time()
         def _teardown():
+            t1 = time.time()
             try:
                 old_stream.abort()
                 old_stream.close()
+                logging.info("[stop_recording] stream teardown completed in %.3fs", time.time() - t1)
             except Exception as e:
                 logging.error("[stop_recording] stream teardown error: %s", e)
         td = threading.Thread(target=_teardown, daemon=True)
         td.start()
-        td.join(timeout=3.0)
         _teardown_thread = td
-        if td.is_alive():
-            logging.warning("[stop_recording] stream teardown still running after 3s — proceeding anyway (%.3fs)", time.time() - t1)
-        else:
-            logging.info("[stop_recording] stream teardown completed in %.3fs", time.time() - t1)
-    play_sound(config.get("sound_stop", "Pop"))
-    threading.Thread(target=_transcribe_and_paste, daemon=True).start()
+    # Signal realtime sender to commit and finalize
+    if _rt_queue is not None:
+        try:
+            _rt_queue.put(None, timeout=1.0)
+        except queue.Full:
+            logging.warning("[stop_recording] realtime queue full — sender may have crashed")
+    threading.Thread(target=_finalize_transcription, daemon=True).start()
     logging.info("[stop_recording] done in %.3fs total", time.time() - t0)
     return True
 
 
 def cancel_recording() -> bool:
     """Stop recording and discard audio — no transcription or paste."""
-    global recording, stream, audio_frames, _teardown_thread
+    global recording, _is_on_hold, stream, audio_frames, _teardown_thread, _rt_queue, _rt_thread, _rt_transcript, _rt_error
     t0 = time.time()
     logging.info("[cancel_recording] called")
     old_stream = None
@@ -887,29 +1134,114 @@ def cancel_recording() -> bool:
         old_stream = stream
         stream = None
         recording = False
+        _is_on_hold = False
         audio_frames = []
     logging.info("[cancel_recording] state updated in %.3fs", time.time() - t0)
     if old_stream is not None:
-        t1 = time.time()
         def _teardown():
+            t1 = time.time()
             try:
                 old_stream.abort()
                 old_stream.close()
+                logging.info("[cancel_recording] stream teardown completed in %.3fs", time.time() - t1)
             except Exception as e:
                 logging.error("[cancel_recording] stream teardown error: %s", e)
         td = threading.Thread(target=_teardown, daemon=True)
         td.start()
-        td.join(timeout=3.0)
         _teardown_thread = td
-        if td.is_alive():
-            logging.warning("[cancel_recording] stream teardown still running after 3s — proceeding anyway (%.3fs)", time.time() - t1)
-        else:
-            logging.info("[cancel_recording] stream teardown completed in %.3fs", time.time() - t1)
+    # Clean up realtime state
+    if _rt_queue is not None:
+        try:
+            _rt_queue.put_nowait(None)
+        except queue.Full:
+            pass
+    _rt_queue = None
+    _rt_transcript = None
+    _rt_error = False
+    _rt_thread = None
     logging.info("[cancel_recording] done in %.3fs total — audio discarded", time.time() - t0)
     return True
 
 
-def _transcribe_and_paste() -> None:
+def hold_recording() -> bool:
+    """Pause mic capture mid-session — keeps stream open, discards incoming frames."""
+    global _is_on_hold
+    with lock:
+        if not recording:
+            return False
+        _is_on_hold = True
+    logging.info("[hold_recording] recording paused")
+    return True
+
+
+def resume_recording() -> bool:
+    """Resume mic capture after a hold."""
+    global _is_on_hold
+    with lock:
+        if not recording:
+            return False
+        _is_on_hold = False
+    logging.info("[resume_recording] recording resumed")
+    return True
+
+
+def _finalize_transcription() -> None:
+    """Finalize transcription: use realtime result if available, else batch."""
+    global _rt_transcript, _rt_error, _rt_queue, _rt_thread
+
+    if _rt_thread is not None:
+        _rt_thread.join(timeout=35)
+
+        if not _rt_error and _rt_transcript:
+            # Realtime succeeded — run through existing post-processing pipeline
+            pipeline_start = time.time()
+            text = _rt_transcript
+            model = config.get("openai_model", "gpt-4o-mini-transcribe")
+            duration_seconds = sum(f.shape[0] for f in audio_frames) / SAMPLE_RATE if audio_frames else 0.0
+            transcribe_usage = {
+                "step": "transcription", "model": model,
+                "input_tokens": 0, "output_tokens": 0,
+                "duration_seconds": round(duration_seconds, 2),
+                "latency_ms": 0,
+                "cost": _calc_cost(model, duration_seconds=duration_seconds),
+            }
+            text = post_process(text)
+            reformat_usage = None
+            if text:
+                text, reformat_usage = reformat_text(text)
+            if text:
+                paste_latency_ms = None
+                if config.get("auto_paste", True):
+                    t_paste = time.time()
+                    paste_text(text)
+                    paste_latency_ms = round((time.time() - t_paste) * 1000)
+                total_latency_ms = round((time.time() - pipeline_start) * 1000)
+                steps = [u for u in [transcribe_usage, reformat_usage] if u is not None]
+                combined_usage = None
+                if steps:
+                    total_tokens = sum(s.get("input_tokens", 0) + s.get("output_tokens", 0) for s in steps)
+                    total_cost = round(sum(s.get("cost", 0.0) for s in steps), 6)
+                    combined_usage = {"steps": steps, "total_tokens": total_tokens, "total_cost": total_cost, "prep_latency_ms": 0, "paste_latency_ms": paste_latency_ms, "total_latency_ms": total_latency_ms}
+                add_history_entry(text, usage=combined_usage)
+            _rt_transcript = None
+            _rt_queue = None
+            _rt_thread = None
+            return
+
+        # Realtime failed — fall back to whisper-1 batch
+        logging.warning("[realtime] Falling back to whisper-1 batch transcription")
+        _rt_transcript = None
+        _rt_queue = None
+        _rt_thread = None
+        _rt_error = False
+        _transcribe_and_paste(force_model="whisper-1")
+        return
+
+    # Not realtime — use existing batch path
+    _transcribe_and_paste()
+
+
+def _transcribe_and_paste(force_model: str | None = None) -> None:
     if not audio_frames:
         return
 
@@ -929,10 +1261,11 @@ def _transcribe_and_paste() -> None:
 
     try:
         prep_latency_ms = round((time.time() - pipeline_start) * 1000)
-        text, transcribe_usage = transcribe(tmp.name)
+        text, transcribe_usage = transcribe(tmp.name, force_model=force_model)
         if not text:
             return
         text = post_process(text)
+        text = apply_vocabulary_replacements(text)
         reformat_usage = None
         if text:
             text, reformat_usage = reformat_text(text)
@@ -1120,6 +1453,9 @@ def transcribe_whisper_local(wav_path: str, model_name: str) -> str:
     kwargs = {}
     if _detected_language:
         kwargs["language"] = _detected_language
+    vocab_prompt = _build_vocabulary_prompt()
+    if vocab_prompt:
+        kwargs["initial_prompt"] = vocab_prompt
 
     print(f"[Landa] transcribe_whisper_local: model={model_name}, language={_detected_language}, kwargs={kwargs}")
     segments = model.transcribe(wav_path, **kwargs)
@@ -1338,6 +1674,10 @@ _LANG_CODE_TO_NAME: dict[str, str] = {
     "cy": "Welsh",
 }
 
+# Reverse lookup — OpenAI Whisper verbose_json returns the language as a
+# lowercase full name (e.g. "english"), not an ISO code.
+_LANG_NAME_TO_CODE: dict[str, str] = {v.lower(): k for k, v in _LANG_CODE_TO_NAME.items()}
+
 
 def reformat_text_local(text: str, prompt: str, model_id: str) -> str:
     """Run reformatting inference locally. Uses mlx-lm on macOS, llama-cpp on Windows.
@@ -1433,7 +1773,8 @@ def transcribe_nemo(audio_path: str, language: str) -> tuple[str, dict]:
     return output[0].text, usage
 
 
-def transcribe_openai(wav_path: str) -> tuple[str, dict | None]:
+def transcribe_openai(wav_path: str, model_override: str | None = None) -> tuple[str, dict | None]:
+    global _detected_language
     import contextlib
     import wave as wave_mod
 
@@ -1454,13 +1795,24 @@ def transcribe_openai(wav_path: str) -> tuple[str, dict | None]:
 
     try:
         with open(wav_path, "rb") as f:
-            model_name = config.get("openai_model", "whisper-1")
+            model_name = model_override or config.get("openai_model", "whisper-1")
             kwargs: dict = {"model": model_name, "file": f}
             if language and language != "auto":
                 kwargs["language"] = language
+            # whisper-1 supports verbose_json which returns the detected
+            # language. gpt-4o(-mini)-transcribe only support json/text.
+            if model_name == "whisper-1":
+                kwargs["response_format"] = "verbose_json"
+            vocab_prompt = _build_vocabulary_prompt()
+            if vocab_prompt:
+                kwargs["prompt"] = vocab_prompt
             t0 = time.time()
             transcript = client.audio.transcriptions.create(**kwargs)
             latency_ms = round((time.time() - t0) * 1000)
+        detected = getattr(transcript, "language", None)
+        if detected:
+            _detected_language = detected
+            print(f"[Landa] transcribe_openai: detected language={detected!r}")
         cost = _calc_cost(model_name, duration_seconds=duration_seconds)
         usage = {
             "step": "transcription",
@@ -1477,15 +1829,17 @@ def transcribe_openai(wav_path: str) -> tuple[str, dict | None]:
         return "", None
 
 
-def transcribe(wav_path: str) -> tuple[str, dict | None]:
+def transcribe(wav_path: str, force_model: str | None = None) -> tuple[str, dict | None]:
+    global _detected_language
+    _detected_language = None  # reset stale value from previous recording
     provider = config.get("api_provider", "openai")
-    if provider == "nemo":
+    if not force_model and provider == "nemo":
         language = config.get("nemo_language", "auto")
         return transcribe_nemo(wav_path, language)
-    model = config.get("openai_model", "whisper-1")
+    model = force_model or config.get("openai_model", "whisper-1")
     if model in LOCAL_WHISPER_MODELS:
         return transcribe_whisper_local(wav_path, model)
-    return transcribe_openai(wav_path)
+    return transcribe_openai(wav_path, model_override=force_model)
 
 
 # ---------------------------------------------------------------------------
@@ -1532,7 +1886,7 @@ def update_config():
 
 @app.get("/status")
 def get_status():
-    return jsonify({"recording": recording})
+    return jsonify({"recording": recording, "is_on_hold": _is_on_hold})
 
 
 @app.post("/start")
@@ -1560,6 +1914,24 @@ def api_cancel():
     ok = cancel_recording()
     logging.info("[/cancel] responding in %.3fs, cancelled=%s", time.time() - t0, ok)
     return jsonify({"recording": False, "cancelled": ok})
+
+
+@app.post("/hold")
+def api_hold():
+    t0 = time.time()
+    logging.info("[/hold] request received")
+    ok = hold_recording()
+    logging.info("[/hold] responding in %.3fs, held=%s", time.time() - t0, ok)
+    return jsonify({"is_on_hold": True, "held": ok})
+
+
+@app.post("/resume")
+def api_resume():
+    t0 = time.time()
+    logging.info("[/resume] request received")
+    ok = resume_recording()
+    logging.info("[/resume] responding in %.3fs, resumed=%s", time.time() - t0, ok)
+    return jsonify({"is_on_hold": False, "resumed": ok})
 
 
 # ---------------------------------------------------------------------------

@@ -8,3 +8,5 @@ flask>=3.0.0
 huggingface_hub>=0.20.0
 # anthropic is optional — only required when llm_provider == "anthropic"
 anthropic>=0.26.0
+# websocket-client is required for realtime streaming transcription (gpt-4o-transcribe models)
+websocket-client>=1.6.0

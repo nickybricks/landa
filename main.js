@@ -25,12 +25,16 @@ let settingsWindow = null;
 let backendProcess = null;
 let pollTimer = null;
 let isRecording = false;
+let isOnHold = false;
 let reformatEnabled = false;
 let reformatMode = 'default';
 let modesConfig = { selections: { 'personal-message': 'formal', 'email': 'formal' } };
 let currentShortcut = null; // Electron accelerator string
 let currentCancelShortcut = null; // Electron accelerator for cancel_recording
+let currentHoldShortcut = null; // Electron accelerator for hold_recording
 let currentCancelSound = 'Funk'; // system sound name to play on cancel
+let currentHoldSound = 'Tink'; // system sound name to play on hold
+let currentResumeSound = 'Pop'; // system sound name to play on resume
 let lastHotkeyTime = 0;
 let hotkeyInFlight = false; // re-entrancy guard
 let lastSentConfigStr = null; // dedup config-updated pushes to settings window
@@ -87,6 +91,8 @@ const api = {
   startRecording: () => apiRequest('POST', '/start', null, 12000),
   stopRecording: () => apiRequest('POST', '/stop', null, 12000),
   cancelRecording: () => apiRequest('POST', '/cancel', null, 12000),
+  holdRecording: () => apiRequest('POST', '/hold', null, 5000),
+  resumeRecording: () => apiRequest('POST', '/resume', null, 5000),
   selectMode: (mode) => apiRequest('POST', '/modes/select', { mode }),
   fetchNemoStatus: () => apiRequest('GET', '/nemo/status'),
   fetchHistory: () => apiRequest('GET', '/history'),
@@ -172,14 +178,17 @@ function registerHotkey(combo) {
   }
 }
 
-/** Update recording state and sync cancel hotkey registration. */
+/** Update recording state and sync cancel/hold hotkey registration. */
 function setRecordingState(recording) {
   const changed = isRecording !== recording;
   isRecording = recording;
   if (recording) {
     activateCancelHotkey();
+    activateHoldHotkey();
   } else {
     deactivateCancelHotkey();
+    deactivateHoldHotkey();
+    isOnHold = false;
   }
   if (changed) updateTray();
 }
@@ -301,6 +310,76 @@ function deactivateCancelHotkey() {
   }
 }
 
+/** Save the hold combo (but don't register globally yet — only while recording). */
+function registerHoldHotkey(combo) {
+  deactivateHoldHotkey();
+  currentHoldCombo = combo;
+}
+
+/** Activate the hold hotkey globally (call when recording starts). */
+function activateHoldHotkey() {
+  if (currentHoldShortcut) return; // already active
+
+  const accelerator = hotkeyToAccelerator(currentHoldCombo);
+  if (!accelerator) return;
+  if (accelerator === currentShortcut) return;
+  if (accelerator === currentCancelShortcut) return;
+
+  try {
+    const ok = globalShortcut.register(accelerator, handleHoldPress);
+    if (ok) {
+      currentHoldShortcut = accelerator;
+      console.log(`[Landa] Activated hold hotkey: ${accelerator}`);
+    }
+  } catch (err) {
+    console.error(`[Landa] Hold hotkey activation error: ${err.message}`);
+  }
+}
+
+/** Deactivate the hold hotkey (call when recording stops). */
+function deactivateHoldHotkey() {
+  if (currentHoldShortcut) {
+    try { globalShortcut.unregister(currentHoldShortcut); } catch {}
+    currentHoldShortcut = null;
+  }
+}
+
+/** Toggle hold/resume for an active recording. Debounced at 500ms. */
+async function handleHoldPress() {
+  const now = Date.now();
+  if (now - lastHotkeyTime < 500) return;
+  lastHotkeyTime = now;
+
+  if (!isRecording) return;
+
+  const t0 = Date.now();
+  if (isOnHold) {
+    console.log(`[Landa] Hold hotkey pressed — resuming recording`);
+    playSound(currentResumeSound);
+    try {
+      await api.resumeRecording();
+      console.log(`[Landa] /resume responded in ${Date.now() - t0}ms`);
+    } catch (err) {
+      console.error(`[Landa] Resume failed: ${err.message}`);
+    }
+  } else {
+    console.log(`[Landa] Hold hotkey pressed — pausing recording`);
+    playSound(currentHoldSound);
+    try {
+      await api.holdRecording();
+      console.log(`[Landa] /hold responded in ${Date.now() - t0}ms`);
+    } catch (err) {
+      console.error(`[Landa] Hold failed: ${err.message}`);
+    }
+  }
+
+  try {
+    const status = await api.fetchStatus();
+    isOnHold = status.is_on_hold || false;
+    updateTray();
+  } catch { /* ignore */ }
+}
+
 // ---------------------------------------------------------------------------
 // Tray
 // ---------------------------------------------------------------------------
@@ -332,9 +411,11 @@ function updateTray() {
   const pmStyle = capitalize(sels['personal-message'] || 'formal');
   const emailStyle = capitalize(sels['email'] || 'formal');
 
-  const statusLabel = isRecording
-    ? 'Recording…'
-    : `Idle · 💬 ${pmStyle}`;
+  const statusLabel = isOnHold
+    ? 'On Hold…'
+    : isRecording
+      ? 'Recording…'
+      : `Idle · 💬 ${pmStyle}`;
 
   const styles = ['formal', 'casual', 'excited'];
 
@@ -404,7 +485,7 @@ function updateTray() {
 
   // Update tray icon based on recording state
   if (process.platform === 'darwin') {
-    tray.setTitle(isRecording ? '●' : '');
+    tray.setTitle(isOnHold ? '⏸' : isRecording ? '●' : '');
   }
 }
 
@@ -572,6 +653,7 @@ function stopBackend() {
 
 let currentHotkeyCombo = null;
 let currentCancelCombo = null;
+let currentHoldCombo = null;
 
 function startStatusPolling() {
   pollTimer = setInterval(async () => {
@@ -579,6 +661,11 @@ function startStatusPolling() {
     if (!hotkeyInFlight) {
       try {
         const status = await api.fetchStatus();
+        const newIsOnHold = status.is_on_hold || false;
+        if (newIsOnHold !== isOnHold) {
+          isOnHold = newIsOnHold;
+          updateTray();
+        }
         setRecordingState(status.recording);
       } catch {
         // Backend not ready yet — ignore
@@ -604,8 +691,18 @@ function startStatusPolling() {
         registerCancelHotkey(cancelCombo);
       }
 
-      // Update cancel sound
+      // Update cancel/hold/resume sounds
       currentCancelSound = config.sound_cancel || 'Funk';
+      currentHoldSound = config.sound_hold || 'Tink';
+      currentResumeSound = config.sound_resume || 'Pop';
+
+      // Update hold hotkey combo if changed
+      const holdCombo = config.hold_recording;
+      const newHoldAccelerator = hotkeyToAccelerator(holdCombo);
+      const savedHoldAccelerator = hotkeyToAccelerator(currentHoldCombo);
+      if (newHoldAccelerator !== savedHoldAccelerator) {
+        registerHoldHotkey(holdCombo);
+      }
 
       // Update reformat state
       const reformatChanged = reformatEnabled !== config.reformat_enabled ||
@@ -644,9 +741,10 @@ function requestPermissions() {
     // when the app first tries to access the mic.
     // We trigger it by checking systemPreferences.
     const micStatus = systemPreferences.getMediaAccessStatus('microphone');
+    console.log(`[Landa] Microphone permission status: ${micStatus}`);
     if (micStatus !== 'granted') {
       systemPreferences.askForMediaAccess('microphone').then((granted) => {
-        console.log(`[Landa] Microphone permission: ${granted ? 'granted' : 'denied'}`);
+        console.log(`[Landa] Microphone permission after request: ${granted ? 'granted' : 'denied'}`);
       });
     }
 
@@ -805,8 +903,10 @@ function playSound(name) {
     if (fs.existsSync(soundPath)) {
       spawn('afplay', [soundPath], { stdio: 'ignore' });
     }
+  } else if (process.platform === 'win32') {
+    spawn('powershell', ['-c', '[System.Media.SystemSounds]::Beep.Play()'],
+      { stdio: 'ignore', windowsHide: true });
   }
-  // Windows: could use powershell to play system sounds
 }
 
 function setupIpcHandlers() {
@@ -1073,6 +1173,8 @@ app.whenReady().then(() => {
       currentHotkeyCombo = config.toggle_recording;
       registerCancelHotkey(config.cancel_recording || { key: 'escape', key_code: 53, modifiers: [] });
       currentCancelCombo = config.cancel_recording;
+      registerHoldHotkey(config.hold_recording || { key: 'f6', key_code: 97, modifiers: [] });
+      currentHoldCombo = config.hold_recording;
       reformatEnabled = config.reformat_enabled || false;
       reformatMode = config.reformat_mode || 'default';
       modesConfig = config.modes || modesConfig;
@@ -1081,6 +1183,7 @@ app.whenReady().then(() => {
       // Use default hotkeys
       registerHotkey({ key: 'f5', key_code: 96, modifiers: ['command', 'shift'] });
       registerCancelHotkey({ key: 'escape', key_code: 53, modifiers: [] });
+      registerHoldHotkey({ key: 'f6', key_code: 97, modifiers: [] });
     }
   }, 2000);
 
