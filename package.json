@@ -1,6 +1,6 @@
 {
   "name": "landa",
-  "version": "0.11.2",
+  "version": "0.11.3",
   "description": "Lightweight voice-to-text — global hotkey recording that pastes into any active app",
   "main": "main.js",
   "scripts": {
@@ -20,6 +20,7 @@
       "icon": "assets/icon.png",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
+      "signIgnore": ["\\.pak$"],
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
