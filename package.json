@@ -1,6 +1,6 @@
 {
   "name": "landa",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "Lightweight voice-to-text — global hotkey recording that pastes into any active app",
   "main": "main.js",
   "scripts": {
@@ -17,6 +17,9 @@
       "category": "public.app-category.utilities",
       "target": "dmg",
       "icon": "assets/icon.png",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "afterSign": "scripts/notarize.js",
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
@@ -45,6 +48,7 @@
     ]
   },
   "devDependencies": {
+    "@electron/notarize": "^2.5.0",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0"
   }
