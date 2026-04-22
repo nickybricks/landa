@@ -1,6 +1,6 @@
 {
   "name": "landa",
-  "version": "0.11.4",
+  "version": "0.11.5",
   "description": "Lightweight voice-to-text — global hotkey recording that pastes into any active app",
   "main": "main.js",
   "scripts": {
@@ -17,7 +17,7 @@
     "mac": {
       "category": "public.app-category.utilities",
       "target": "dmg",
-      "icon": "assets/icon.png",
+      "icon": "assets/icon.icns",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "signIgnore": ["\\.pak$"],
@@ -30,7 +30,7 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.ico"
     },
     "files": [
       "main.js",
