@@ -1,6 +1,6 @@
 {
   "name": "landa",
-  "version": "0.11.3",
+  "version": "0.11.4",
   "description": "Lightweight voice-to-text — global hotkey recording that pastes into any active app",
   "main": "main.js",
   "scripts": {
@@ -21,8 +21,8 @@
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "signIgnore": ["\\.pak$"],
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist",
+      "entitlements": "entitlements/entitlements.mac.plist",
+      "entitlementsInherit": "entitlements/entitlements.mac.inherit.plist",
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Landa needs microphone access to record your voice for speech-to-text transcription.",
         "NSAccessibilityUsageDescription": "Landa needs accessibility access to paste transcribed text into the active application."
