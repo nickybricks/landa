@@ -40,7 +40,7 @@
     ],
     "extraResources": [
   {
-    "from": "../backend",
+    "from": "backend",
     "to": "backend",
     "filter": [
       "**/*.py",
