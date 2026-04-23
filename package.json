@@ -1,6 +1,6 @@
 {
   "name": "landa",
-  "version": "0.11.6",
+  "version": "0.11.8",
   "description": "Lightweight voice-to-text — global hotkey recording that pastes into any active app",
   "main": "main.js",
   "scripts": {
@@ -39,26 +39,15 @@
       "assets/**/*"
     ],
     "extraResources": [
-  {
-    "from": "backend",
-    "to": "backend",
-    "filter": [
-      "**/*.py",
-      "**/*.json",
-      "**/*.txt",
-      "**/*.yaml",
-      "**/*.yml",
-      "!venv/**",
-      "!.venv/**",
-      "!__pycache__/**",
-      "!**/*.pyc",
-      "!.git/**",
-      "!*.egg-info/**",
-      "!models/**"
-      ]
-    }
-  ]
-
+      {
+        "from": "backend/landa_core.py",
+        "to": "backend/landa_core.py"
+      },
+      {
+        "from": "backend/requirements.txt",
+        "to": "backend/requirements.txt"
+      }
+    ]
   },
   "devDependencies": {
     "@electron/notarize": "^2.5.0",
