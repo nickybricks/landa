@@ -39,14 +39,26 @@
       "assets/**/*"
     ],
     "extraResources": [
-      {
-        "from": "backend",
-        "to": "backend",
-        "filter": [
-          "**/*"
-        ]
-      }
-    ]
+  {
+    "from": "../backend",
+    "to": "backend",
+    "filter": [
+      "**/*.py",
+      "**/*.json",
+      "**/*.txt",
+      "**/*.yaml",
+      "**/*.yml",
+      "!venv/**",
+      "!.venv/**",
+      "!__pycache__/**",
+      "!**/*.pyc",
+      "!.git/**",
+      "!*.egg-info/**",
+      "!models/**"
+      ]
+    }
+  ]
+
   },
   "devDependencies": {
     "@electron/notarize": "^2.5.0",
