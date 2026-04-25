@@ -23,8 +23,10 @@ jobs:
         run: npm ci
 
       - name: Build macOS DMG
+        timeout-minutes: 60
         run: npx electron-builder --mac --publish never
         env:
+          LANDA_REQUIRE_NOTARIZATION: '1'
           CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
           CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}

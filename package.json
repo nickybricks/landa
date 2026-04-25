@@ -1,6 +1,6 @@
 {
   "name": "landa",
-  "version": "0.11.8",
+  "version": "0.12.0",
   "description": "Lightweight voice-to-text — global hotkey recording that pastes into any active app",
   "main": "main.js",
   "scripts": {
@@ -8,6 +8,8 @@
     "dev": "ELECTRON_RUN_AS_NODE= electron . --dev",
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",
+    "build:mac:notarized": "LANDA_REQUIRE_NOTARIZATION=1 electron-builder --mac",
+    "notary:status": "node scripts/notary-status.js",
     "build:win": "electron-builder --win"
   },
   "build": {

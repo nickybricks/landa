@@ -48,6 +48,10 @@ contextBridge.exposeInMainWorld('api', {
   getHistory: () => ipcRenderer.invoke('get-history'),
   clearHistory: () => ipcRenderer.invoke('clear-history'),
   deleteHistoryEntry: (id) => ipcRenderer.invoke('delete-history-entry', id),
+  onHistoryUpdated: (callback) => {
+    ipcRenderer.removeAllListeners('history-updated');
+    ipcRenderer.on('history-updated', () => callback());
+  },
 
   // Installed apps (for popup grid)
   getInstalledApps: () => ipcRenderer.invoke('get-installed-apps'),
@@ -63,4 +67,11 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.removeAllListeners('navigate-tab');
     ipcRenderer.on('navigate-tab', (_event, tab) => callback(tab));
   },
+
+  // Listen for add-to-vocabulary from global hotkey
+  onAddToVocabulary: (callback) => {
+    ipcRenderer.removeAllListeners('add-to-vocabulary');
+    ipcRenderer.on('add-to-vocabulary', (_event, word) => callback(word));
+  },
+  setCapturingHotkey: (active) => ipcRenderer.send('set-capturing-hotkey', active),
 });

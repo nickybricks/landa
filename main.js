@@ -32,12 +32,13 @@ let modesConfig = { selections: { 'personal-message': 'formal', 'email': 'formal
 let currentShortcut = null; // Electron accelerator string
 let currentCancelShortcut = null; // Electron accelerator for cancel_recording
 let currentHoldShortcut = null; // Electron accelerator for hold_recording
+let currentVocabShortcut = null; // Electron accelerator for add_to_vocabulary
 let currentCancelSound = 'Funk'; // system sound name to play on cancel
 let currentHoldSound = 'Tink'; // system sound name to play on hold
 let currentResumeSound = 'Pop'; // system sound name to play on resume
 let lastHotkeyTime = 0;
 let hotkeyInFlight = false; // re-entrancy guard
-let lastSentConfigStr = null; // dedup config-updated pushes to settings window
+let isCapturingHotkey = false;
 
 // ---------------------------------------------------------------------------
 // API Client
@@ -181,6 +182,7 @@ function registerHotkey(combo) {
 /** Update recording state and sync cancel/hold hotkey registration. */
 function setRecordingState(recording) {
   const changed = isRecording !== recording;
+  const wasRecording = isRecording;
   isRecording = recording;
   if (recording) {
     activateCancelHotkey();
@@ -189,6 +191,10 @@ function setRecordingState(recording) {
     deactivateCancelHotkey();
     deactivateHoldHotkey();
     isOnHold = false;
+    // Recording just ended — history likely has a new entry (ignore cancels, which go through handleCancelPress).
+    if (wasRecording && settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.webContents.send('history-updated');
+    }
   }
   if (changed) updateTray();
 }
@@ -381,6 +387,75 @@ async function handleHoldPress() {
 }
 
 // ---------------------------------------------------------------------------
+// Add-to-Vocabulary Hotkey
+// ---------------------------------------------------------------------------
+
+function registerVocabHotkey(combo) {
+  if (currentVocabShortcut) {
+    try { globalShortcut.unregister(currentVocabShortcut); } catch {}
+    currentVocabShortcut = null;
+  }
+  if (!combo || !combo.key) return;
+  const accelerator = hotkeyToAccelerator(combo);
+  if (!accelerator) return;
+  try {
+    const ok = globalShortcut.register(accelerator, handleVocabHotkey);
+    if (ok) {
+      currentVocabShortcut = accelerator;
+      console.log(`[Landa] Registered vocab hotkey: ${accelerator}`);
+    } else {
+      console.error(`[Landa] Failed to register vocab hotkey: ${accelerator}`);
+    }
+  } catch (err) {
+    console.error(`[Landa] Vocab hotkey error: ${err.message}`);
+  }
+}
+
+async function handleVocabHotkey() {
+  const prevClipboard = clipboard.readText();
+
+  // Clear clipboard so we can tell whether Cmd+C actually captured a selection.
+  // Without this, a no-op Cmd+C (nothing selected) leaves the previous clipboard
+  // intact and we'd mistakenly treat it as the "selected word".
+  clipboard.writeText('');
+
+  try {
+    if (process.platform === 'darwin') {
+      await execAsync('osascript -e \'tell application "System Events" to keystroke "c" using {command down}\'');
+    } else {
+      await execAsync('powershell -command "(New-Object -COM WScript.Shell).SendKeys(\'^c\')"');
+    }
+  } catch (err) {
+    console.error(`[Landa] Vocab hotkey copy failed: ${err.message}`);
+    clipboard.writeText(prevClipboard);
+    return;
+  }
+
+  // Wait for clipboard to update
+  await new Promise((r) => setTimeout(r, 150));
+
+  const word = clipboard.readText().trim();
+  clipboard.writeText(prevClipboard); // restore
+
+  // If nothing was selected, open vocab with empty field rather than stale text
+  openSettingsToAddVocab(word);
+}
+
+function openSettingsToAddVocab(word) {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.focus();
+    settingsWindow.webContents.send('navigate-tab', 'vocabulary');
+    settingsWindow.webContents.send('add-to-vocabulary', word);
+  } else {
+    openSettings();
+    settingsWindow.webContents.once('did-finish-load', () => {
+      settingsWindow.webContents.send('navigate-tab', 'vocabulary');
+      settingsWindow.webContents.send('add-to-vocabulary', word);
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Tray
 // ---------------------------------------------------------------------------
 
@@ -426,7 +501,9 @@ function updateTray() {
         type: 'checkbox',
         checked: isEnabled,
         click: () => {
-          api.patchConfig({ modes: { enabled: { [categoryId]: !isEnabled } } }).catch(() => {});
+          api.patchConfig({ modes: { enabled: { [categoryId]: !isEnabled } } })
+            .then(cfg => { if (cfg) applyConfig(cfg); })
+            .catch(() => {});
         },
       },
       { type: 'separator' },
@@ -437,7 +514,9 @@ function updateTray() {
         enabled: isEnabled,
         click: () => {
           const newSels = { ...sels, [categoryId]: style };
-          api.patchConfig({ modes: { selections: newSels } }).catch(() => {});
+          api.patchConfig({ modes: { selections: newSels } })
+            .then(cfg => { if (cfg) applyConfig(cfg); })
+            .catch(() => {});
         },
       })),
     ];
@@ -485,7 +564,16 @@ function updateTray() {
 
   // Update tray icon based on recording state
   if (process.platform === 'darwin') {
-    tray.setTitle(isOnHold ? '⏸' : isRecording ? '●' : '');
+    if (isRecording) {
+      const recordingIcon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayRecording.png'));
+      tray.setImage(recordingIcon);
+      tray.setTitle('');
+    } else {
+      const idleIcon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'));
+      idleIcon.setTemplateImage(true);
+      tray.setImage(idleIcon);
+      tray.setTitle(isOnHold ? '⏸' : '');
+    }
   }
 }
 
@@ -534,19 +622,15 @@ function openSettings() {
 
   // Prevent Cmd+R / Ctrl+R / F5 from reloading the settings window.
   // Reloading races with debounced config saves and causes settings to revert.
+  // F5 is allowed through when the renderer is actively capturing a hotkey.
   settingsWindow.webContents.on('before-input-event', (_event, input) => {
     if (
       (input.key === 'r' && (input.meta || input.control)) ||
-      input.key === 'F5'
+      (input.key === 'F5' && !isCapturingHotkey)
     ) {
       _event.preventDefault();
     }
   });
-
-  // Reset so the next poll sends config to the new window.  The renderer
-  // registers its config-updated listener before DOMContentLoaded awaits IPC
-  // calls, so the first poll event will always be received.
-  lastSentConfigStr = null;
 
   settingsWindow.on('closed', () => {
     settingsWindow = null;
@@ -648,12 +732,67 @@ function stopBackend() {
 }
 
 // ---------------------------------------------------------------------------
-// Status Polling (mirrors Swift's 1-second timer)
+// Config Application
 // ---------------------------------------------------------------------------
 
 let currentHotkeyCombo = null;
 let currentCancelCombo = null;
 let currentHoldCombo = null;
+let currentVocabCombo = null;
+
+function applyConfig(config) {
+  const combo = config.toggle_recording;
+  const newAccelerator = hotkeyToAccelerator(combo);
+  if (newAccelerator !== currentShortcut) {
+    registerHotkey(combo);
+    currentHotkeyCombo = combo;
+  }
+
+  const cancelCombo = config.cancel_recording;
+  const newCancelAccelerator = hotkeyToAccelerator(cancelCombo);
+  const savedCancelAccelerator = hotkeyToAccelerator(currentCancelCombo);
+  if (newCancelAccelerator !== savedCancelAccelerator) {
+    registerCancelHotkey(cancelCombo);
+  }
+
+  currentCancelSound = config.sound_cancel || 'Funk';
+  currentHoldSound = config.sound_hold || 'Tink';
+  currentResumeSound = config.sound_resume || 'Pop';
+
+  const holdCombo = config.hold_recording;
+  const newHoldAccelerator = hotkeyToAccelerator(holdCombo);
+  const savedHoldAccelerator = hotkeyToAccelerator(currentHoldCombo);
+  if (newHoldAccelerator !== savedHoldAccelerator) {
+    registerHoldHotkey(holdCombo);
+  }
+
+  const vocabCombo = config.add_to_vocabulary;
+  const newVocabAccelerator = hotkeyToAccelerator(vocabCombo);
+  const savedVocabAccelerator = hotkeyToAccelerator(currentVocabCombo);
+  if (newVocabAccelerator !== savedVocabAccelerator) {
+    registerVocabHotkey(vocabCombo);
+    currentVocabCombo = vocabCombo;
+  }
+
+  const reformatChanged = reformatEnabled !== config.reformat_enabled ||
+                           reformatMode !== config.reformat_mode;
+  reformatEnabled = config.reformat_enabled || false;
+  reformatMode = config.reformat_mode || 'default';
+
+  const newModes = config.modes || modesConfig;
+  const modesChanged = JSON.stringify(newModes) !== JSON.stringify(modesConfig);
+  modesConfig = newModes;
+
+  if (reformatChanged || modesChanged) updateTray();
+
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.webContents.send('config-updated', config);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Status Polling (mirrors Swift's 1-second timer)
+// ---------------------------------------------------------------------------
 
 function startStatusPolling() {
   pollTimer = setInterval(async () => {
@@ -670,63 +809,6 @@ function startStatusPolling() {
       } catch {
         // Backend not ready yet — ignore
       }
-    }
-
-    try {
-      const config = await api.fetchConfig();
-      const combo = config.toggle_recording;
-      const newAccelerator = hotkeyToAccelerator(combo);
-
-      // Re-register hotkey if changed
-      if (newAccelerator !== currentShortcut) {
-        registerHotkey(combo);
-        currentHotkeyCombo = combo;
-      }
-
-      // Update cancel hotkey combo if changed
-      const cancelCombo = config.cancel_recording;
-      const newCancelAccelerator = hotkeyToAccelerator(cancelCombo);
-      const savedCancelAccelerator = hotkeyToAccelerator(currentCancelCombo);
-      if (newCancelAccelerator !== savedCancelAccelerator) {
-        registerCancelHotkey(cancelCombo);
-      }
-
-      // Update cancel/hold/resume sounds
-      currentCancelSound = config.sound_cancel || 'Funk';
-      currentHoldSound = config.sound_hold || 'Tink';
-      currentResumeSound = config.sound_resume || 'Pop';
-
-      // Update hold hotkey combo if changed
-      const holdCombo = config.hold_recording;
-      const newHoldAccelerator = hotkeyToAccelerator(holdCombo);
-      const savedHoldAccelerator = hotkeyToAccelerator(currentHoldCombo);
-      if (newHoldAccelerator !== savedHoldAccelerator) {
-        registerHoldHotkey(holdCombo);
-      }
-
-      // Update reformat state
-      const reformatChanged = reformatEnabled !== config.reformat_enabled ||
-                               reformatMode !== config.reformat_mode;
-      reformatEnabled = config.reformat_enabled || false;
-      reformatMode = config.reformat_mode || 'default';
-
-      // Update modes config
-      const newModes = config.modes || modesConfig;
-      const modesChanged = JSON.stringify(newModes) !== JSON.stringify(modesConfig);
-      modesConfig = newModes;
-
-      if (reformatChanged || modesChanged) updateTray();
-
-      // Forward config updates to settings window only when something changed
-      if (settingsWindow && !settingsWindow.isDestroyed()) {
-        const configStr = JSON.stringify(config);
-        if (configStr !== lastSentConfigStr) {
-          lastSentConfigStr = configStr;
-          settingsWindow.webContents.send('config-updated', config);
-        }
-      }
-    } catch {
-      // Backend not ready yet — ignore
     }
   }, POLL_INTERVAL);
 }
@@ -915,8 +997,11 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle('save-config', async (_event, config) => {
-    try { return await api.saveConfig(config); }
-    catch { return null; }
+    try {
+      const result = await api.saveConfig(config);
+      applyConfig(config);
+      return result;
+    } catch { return null; }
   });
 
   // Synchronous variant for beforeunload — writes config to disk AND updates
@@ -943,9 +1028,17 @@ function setupIpcHandlers() {
     console.log('[RENDERER]', msg);
   });
 
+  ipcMain.on('set-capturing-hotkey', (_event, active) => {
+    isCapturingHotkey = active;
+  });
+
   ipcMain.handle('patch-config', async (_event, patch) => {
-    try { return await api.patchConfig(patch); }
-    catch { return null; }
+    try {
+      const result = await api.patchConfig(patch);
+      const fullConfig = result || await api.fetchConfig();
+      if (fullConfig) applyConfig(fullConfig);
+      return result;
+    } catch { return null; }
   });
 
   ipcMain.handle('get-nemo-status', async () => {
@@ -1164,6 +1257,7 @@ app.whenReady().then(() => {
   requestPermissions();
   startBackend();
   createTray();
+  nativeTheme.on('updated', updateTray);
 
   // Wait a moment for backend to start, then load config and register hotkey
   setTimeout(async () => {

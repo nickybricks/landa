@@ -802,6 +802,35 @@ def post_process(text: str) -> str:
     return text
 
 
+_HALLUCINATION_EXACT: set[str] = {
+    "you there?",
+    "thanks for watching.",
+    "thanks for watching!",
+    "thank you for watching.",
+    "thank you.",
+    "bye.",
+    "bye!",
+    "...",
+    ".",
+    "",
+}
+
+_HALLUCINATION_URL_RE = re.compile(
+    r"^(https?://|www\.)\S+\.?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _is_hallucination(text: str) -> bool:
+    """Return True if the text looks like a Whisper hallucination on silence."""
+    stripped = text.strip()
+    if stripped.lower() in _HALLUCINATION_EXACT:
+        return True
+    if _HALLUCINATION_URL_RE.match(stripped):
+        return True
+    return False
+
+
 def _build_vocabulary_prompt() -> str:
     """Return comma-separated correct spellings for Whisper prompt hint."""
     vocab = config.get("vocabulary", [])
@@ -1190,12 +1219,28 @@ def _finalize_transcription() -> None:
     global _rt_transcript, _rt_error, _rt_queue, _rt_thread
 
     if _rt_thread is not None:
+        # Silence check before we bother processing the realtime result
+        if audio_frames:
+            audio_check = np.concatenate(audio_frames, axis=0)
+            if _should_skip_transcription(audio_check):
+                logging.info("[realtime] Skipping — audio buffer is effectively empty")
+                _rt_transcript = None
+                _rt_queue = None
+                _rt_thread = None
+                return
+
         _rt_thread.join(timeout=35)
 
         if not _rt_error and _rt_transcript:
             # Realtime succeeded — run through existing post-processing pipeline
             pipeline_start = time.time()
             text = _rt_transcript
+            if _is_hallucination(text):
+                logging.info("[realtime] Discarding hallucination: %r", text)
+                _rt_transcript = None
+                _rt_queue = None
+                _rt_thread = None
+                return
             model = config.get("openai_model", "gpt-4o-mini-transcribe")
             duration_seconds = sum(f.shape[0] for f in audio_frames) / SAMPLE_RATE if audio_frames else 0.0
             transcribe_usage = {
@@ -1262,7 +1307,9 @@ def _transcribe_and_paste(force_model: str | None = None) -> None:
     try:
         prep_latency_ms = round((time.time() - pipeline_start) * 1000)
         text, transcribe_usage = transcribe(tmp.name, force_model=force_model)
-        if not text:
+        if not text or _is_hallucination(text):
+            if text:
+                logging.info("[transcribe] Discarding hallucination: %r", text)
             return
         text = post_process(text)
         text = apply_vocabulary_replacements(text)
@@ -1453,10 +1500,6 @@ def transcribe_whisper_local(wav_path: str, model_name: str) -> str:
     kwargs = {}
     if _detected_language:
         kwargs["language"] = _detected_language
-    vocab_prompt = _build_vocabulary_prompt()
-    if vocab_prompt:
-        kwargs["initial_prompt"] = vocab_prompt
-
     print(f"[Landa] transcribe_whisper_local: model={model_name}, language={_detected_language}, kwargs={kwargs}")
     segments = model.transcribe(wav_path, **kwargs)
     latency_ms = round((time.time() - t0) * 1000)
@@ -1803,9 +1846,6 @@ def transcribe_openai(wav_path: str, model_override: str | None = None) -> tuple
             # language. gpt-4o(-mini)-transcribe only support json/text.
             if model_name == "whisper-1":
                 kwargs["response_format"] = "verbose_json"
-            vocab_prompt = _build_vocabulary_prompt()
-            if vocab_prompt:
-                kwargs["prompt"] = vocab_prompt
             t0 = time.time()
             transcript = client.audio.transcriptions.create(**kwargs)
             latency_ms = round((time.time() - t0) * 1000)

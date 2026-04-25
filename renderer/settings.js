@@ -16,6 +16,7 @@ const DEFAULTS = {
   change_mode: { key: 'k', key_code: 40, modifiers: ['option', 'shift'] },
   push_to_talk: { key: '', key_code: -1, modifiers: [] },
   mouse_shortcut: { key: '', key_code: -1, modifiers: [] },
+  add_to_vocabulary: { key: 'f7', key_code: 98, modifiers: [] },
 };
 
 // OpenAI languages (matches Swift ModelsLibraryView)
@@ -82,6 +83,8 @@ const TRANSLATIONS = {
     'settings.shortcuts.hold.sub': 'Temporarily pauses active recording',
     'settings.shortcuts.record': 'Record shortcut',
     'settings.shortcuts.recording': 'Press shortcut…',
+    'settings.shortcuts.vocab': 'Add to Vocabulary',
+    'settings.shortcuts.vocab.sub': 'Adds the selected word to vocabulary replacements',
     // Settings tab — application
     'settings.app.section': 'Application',
     'settings.app.autopaste': 'Auto-paste into active app',
@@ -222,6 +225,8 @@ const TRANSLATIONS = {
     'settings.shortcuts.hold.sub': 'Pausiert die aktive Aufnahme vorübergehend',
     'settings.shortcuts.record': 'Kürzel aufzeichnen',
     'settings.shortcuts.recording': 'Kürzel drücken…',
+    'settings.shortcuts.vocab': 'Zum Vokabular hinzufügen',
+    'settings.shortcuts.vocab.sub': 'Fügt das markierte Wort zu den Vokabularersetzungen hinzu',
     // Settings tab — application
     'settings.app.section': 'Anwendung',
     'settings.app.autopaste': 'Automatisch in aktive App einfügen',
@@ -494,6 +499,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (item) item.click();
   });
 
+  // Listen for add-to-vocabulary from global hotkey
+  window.api.onAddToVocabulary((word) => {
+    addWordToVocabulary(word);
+  });
+
+  // Invalidate history cache when a new transcription lands so the next
+  // history/home tab visit re-fetches fresh data.
+  window.api.onHistoryUpdated(() => {
+    historyCache = null;
+    historyRenderedCache = null;
+    if (document.getElementById('tab-history').classList.contains('active')) {
+      loadHistory();
+    } else if (document.getElementById('tab-home').classList.contains('active')) {
+      loadHomeStats();
+    }
+  });
+
 });
 
 // ---------------------------------------------------------------------------
@@ -666,12 +688,14 @@ function setupShortcutCapture() {
 function startRecording(action) {
   stopRecording();
   recordingAction = action;
+  window.api.setCapturingHotkey(true);
   renderShortcutBadges(action, {});
 }
 
 function stopRecording() {
   const prev = recordingAction;
   recordingAction = null;
+  window.api.setCapturingHotkey(false);
   if (prev && config) {
     renderShortcutBadges(prev, config[prev] || DEFAULTS[prev]);
   }
@@ -2293,6 +2317,9 @@ function saveConfigNow() {
 // History Tab
 // ---------------------------------------------------------------------------
 
+let historyCache = null;
+let historyRenderedCache = null;
+
 function setupHistoryTab() {
   // Load history when the tab becomes active
   document.querySelectorAll('.sidebar-item').forEach((item) => {
@@ -2306,19 +2333,27 @@ function setupHistoryTab() {
   // Clear all button
   document.getElementById('btn-clear-history').addEventListener('click', async () => {
     await window.api.clearHistory();
+    historyCache = [];
     renderHistory([]);
   });
 }
 
 async function loadHistory() {
-  const entries = await window.api.getHistory();
-  renderHistory(entries || []);
+  if (historyCache !== null) {
+    if (historyRenderedCache !== historyCache) renderHistory(historyCache);
+    return;
+  }
+  const entries = await window.api.getHistory() || [];
+  historyCache = entries;
+  renderHistory(entries);
 }
 
 function renderHistory(entries) {
   const list = document.getElementById('history-list');
   const empty = document.getElementById('history-empty');
   const clearBtn = document.getElementById('btn-clear-history');
+
+  historyRenderedCache = entries;
 
   // Remove all entries but keep the empty placeholder
   list.querySelectorAll('.history-entry').forEach((el) => el.remove());
@@ -2356,6 +2391,8 @@ function renderHistory(entries) {
 
     el.querySelector('.delete').addEventListener('click', async () => {
       await window.api.deleteHistoryEntry(entry.id);
+      if (historyCache) historyCache = historyCache.filter((e) => e.id !== entry.id);
+      historyRenderedCache = historyCache;
       el.remove();
       // Check if list is now empty
       if (!list.querySelector('.history-entry')) {
@@ -2479,6 +2516,20 @@ function setupVocabularyTab() {
   });
 }
 
+function addWordToVocabulary(word) {
+  // Navigate to vocabulary tab
+  const vocabTab = document.querySelector('.sidebar-item[data-tab="vocabulary"]');
+  if (vocabTab) vocabTab.click();
+
+  if (!config.vocabulary) config.vocabulary = [];
+  config.vocabulary.push({ from: word || '', to: '' });
+  renderVocabList();
+
+  // Focus the "to" (replacement) field of the new entry
+  const toInputs = document.querySelectorAll('.vocab-entry .vocab-to');
+  if (toInputs.length) toInputs[toInputs.length - 1].focus();
+}
+
 function renderVocabList() {
   const list = document.getElementById('vocab-list');
   if (!list) return;
@@ -2577,8 +2628,13 @@ function setupHomeTab() {
 }
 
 async function loadHomeStats() {
-  const entries = await window.api.getHistory();
-  renderHomeStats(entries || []);
+  if (historyCache !== null) {
+    renderHomeStats(historyCache);
+    return;
+  }
+  const entries = await window.api.getHistory() || [];
+  historyCache = entries;
+  renderHomeStats(entries);
 }
 
 function computeStats(entries) {
