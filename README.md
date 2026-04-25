@@ -4,14 +4,13 @@ Cross-platform Electron frontend for Landa. Replaces the native SwiftUI app whil
 
 ## Prerequisites
 
-- **Node.js** 18+ and npm
-- **Python 3.9+** with the backend's virtual environment set up (see `../backend/`)
-- The Python backend dependencies installed (`pip install -r ../backend/requirements.txt` or equivalent)
+**End users:** No prerequisites — download the `.dmg` or `.exe` from the releases page and install normally.
+
+**Developers:** Node.js 18+ and npm. Python 3.9+ is required to run the backend from source (`npm start`) — the build process compiles a self-contained binary so end users need neither Python nor any pip packages.
 
 ## Setup
 
 ```bash
-cd electron-app
 npm install
 ```
 
@@ -54,7 +53,7 @@ npm run build:mac
 npm run build:win
 ```
 
-Requires [electron-builder](https://www.electron.build/) (installed as a dev dependency).
+Both commands first compile the Python backend into a self-contained binary using PyInstaller (requires Python 3.9+ and pip on the build machine), then package the app with electron-builder.
 
 ## Architecture
 

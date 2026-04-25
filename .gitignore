@@ -2,6 +2,10 @@ node_modules/
 build/
 dist/
 backend/venv/
+backend/build_venv/
+backend/build/
+backend/dist/
+backend/*.spec
 backend/__pycache__/
 **/__pycache__/
 *.pyc

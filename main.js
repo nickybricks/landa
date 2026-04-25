@@ -696,11 +696,25 @@ function startBackend() {
     return;
   }
 
-  const scriptPath = path.join(backendRoot, 'backend', 'landa_core.py');
-  const pythonPath = findPython(backendRoot);
-  console.log(`[Landa] Starting backend: ${pythonPath} ${scriptPath}`);
+  // Prefer the PyInstaller-compiled binary (packaged app) over the raw Python script.
+  // The binary bundles all Python deps so no system Python or venv is required.
+  const binaryName = process.platform === 'win32' ? 'landa_backend.exe' : 'landa_backend';
+  const binaryPath = path.join(backendRoot, 'backend', 'landa_backend', binaryName);
 
-  backendProcess = spawn(pythonPath, [scriptPath], {
+  let cmd, args;
+  if (fs.existsSync(binaryPath)) {
+    console.log(`[Landa] Starting compiled backend: ${binaryPath}`);
+    cmd = binaryPath;
+    args = [];
+  } else {
+    const scriptPath = path.join(backendRoot, 'backend', 'landa_core.py');
+    const pythonPath = findPython(backendRoot);
+    console.log(`[Landa] Starting Python backend: ${pythonPath} ${scriptPath}`);
+    cmd = pythonPath;
+    args = [scriptPath];
+  }
+
+  backendProcess = spawn(cmd, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
@@ -1300,40 +1314,36 @@ app.whenReady().then(() => {
   ensureMacAppInstalled().then((ok) => {
     if (!ok) return;
 
-  setupIpcHandlers();
-  // Hide dock icon on macOS (menu bar app)
-  if (process.platform === 'darwin') {
-    app.dock.hide();
-  }
+    setupIpcHandlers();
+    // Hide dock icon on macOS (menu bar app)
+    if (process.platform === 'darwin') {
+      app.dock.hide();
+    }
 
-  requestPermissions();
-  startBackend();
-  createTray();
-  nativeTheme.on('updated', updateTray);
+    requestPermissions();
+    startBackend();
+    createTray();
+    nativeTheme.on('updated', updateTray);
 
-  // Wait a moment for backend to start, then load config and register hotkey
-  setTimeout(async () => {
-    try {
-      const config = await api.fetchConfig();
-      registerHotkey(config.toggle_recording);
-      currentHotkeyCombo = config.toggle_recording;
-      registerCancelHotkey(config.cancel_recording || { key: 'escape', key_code: 53, modifiers: [] });
-      currentCancelCombo = config.cancel_recording;
-      registerHoldHotkey(config.hold_recording || { key: 'f6', key_code: 97, modifiers: [] });
-      currentHoldCombo = config.hold_recording;
-      reformatEnabled = config.reformat_enabled || false;
-      reformatMode = config.reformat_mode || 'default';
-      modesConfig = config.modes || modesConfig;
-      updateTray();
-    } catch {
-      // Use default hotkeys
+    // Load the best available config after backend startup begins.
+    // Falling back to disk avoids silently reverting packaged apps to default
+    // hotkeys when the Python backend needs longer than expected to boot.
+    setTimeout(async () => {
+      try {
+        const config = await getBestAvailableConfig();
+        if (config) {
+          applyConfig(config);
+          return;
+        }
+      } catch {}
+
+      // Final fallback if neither backend nor disk config is available.
       registerHotkey({ key: 'f5', key_code: 96, modifiers: ['command', 'shift'] });
       registerCancelHotkey({ key: 'escape', key_code: 53, modifiers: [] });
       registerHoldHotkey({ key: 'f6', key_code: 97, modifiers: [] });
-    }
-  }, 2000);
+    }, 2000);
 
-  startStatusPolling();
+    startStatusPolling();
   });
 });
 

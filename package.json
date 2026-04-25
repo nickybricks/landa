@@ -1,20 +1,21 @@
 {
   "name": "landa",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "Lightweight voice-to-text — global hotkey recording that pastes into any active app",
   "main": "main.js",
   "scripts": {
     "start": "ELECTRON_RUN_AS_NODE= electron .",
     "dev": "ELECTRON_RUN_AS_NODE= electron . --dev",
     "build": "electron-builder",
-    "build:mac": "electron-builder --mac",
-    "build:mac:notarized": "LANDA_REQUIRE_NOTARIZATION=1 electron-builder --mac",
+    "build:mac": "bash scripts/build_backend.sh && electron-builder --mac",
+    "build:mac:notarized": "bash scripts/build_backend.sh && LANDA_REQUIRE_NOTARIZATION=1 electron-builder --mac",
     "notary:status": "node scripts/notary-status.js",
-    "build:win": "electron-builder --win"
+    "build:win": "powershell -ExecutionPolicy Bypass -File scripts\\build_backend.ps1 && electron-builder --win"
   },
   "build": {
     "appId": "com.landa.app",
     "productName": "Landa",
+    "beforeBuild": "scripts/before_build.js",
     "afterSign": "scripts/notarize.js",
     "mac": {
       "category": "public.app-category.utilities",
@@ -41,6 +42,10 @@
       "assets/**/*"
     ],
     "extraResources": [
+      {
+        "from": "backend/dist/landa_backend",
+        "to": "backend/landa_backend"
+      },
       {
         "from": "backend/landa_core.py",
         "to": "backend/landa_core.py"
