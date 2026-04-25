@@ -1,3 +1,37 @@
+# DMG Build / Notarization Investigation
+
+- [x] Inspect the mac build and notarization path
+- [x] Update notarization handling so release builds opt in explicitly and transient network failures are easier to diagnose
+- [x] Verify the updated script and workflow configuration
+- [x] Add review notes with root cause and remaining risk
+
+# Packaged App Hotkey Investigation
+
+- [x] Inspect config loading and packaged-app hotkey behavior
+- [ ] Add a macOS packaged-app guard that blocks translocated or non-Applications launches
+- [ ] Verify the guard behavior and document the user-facing fix
+
+## Verification
+
+- Confirm packaged mac app quits with an explanatory dialog when launched from a translocated DMG path
+- Confirm packaged mac app continues startup when launched from `/Applications`
+
+## Review
+
+- In progress
+
+## Verification
+
+- `node --check scripts/notarize.js`
+- Inspect `.github/workflows/release.yml` to confirm mac release builds set the notarization opt-in flag
+
+## Review
+
+- Root cause: the mac release job always attempted notarization whenever Apple credentials were present, so a temporary Apple/network outage caused `afterSign` to fail the entire build even though signing had already completed.
+- Fix: notarization is now explicitly opt-in via `LANDA_REQUIRE_NOTARIZATION=1`, which the release workflow sets for tagged mac releases. Non-release/local builds no longer attempt notarization just because credentials exist.
+- Resilience: retry logic now handles transient network-style notarization failures before surfacing a clearer final error.
+- Remaining risk: a prolonged Apple outage will still fail the notarized release build, which is intentional so we do not publish an unsigned or unnotarized mac release by accident.
+
 # Replace HuggingFace Whisper with whisper.cpp — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

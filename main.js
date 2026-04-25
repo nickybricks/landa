@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, globalShortcut, nativeImage, clipboard, dialog, ipcMain, systemPreferences, nativeTheme } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, nativeImage, clipboard, dialog, ipcMain, systemPreferences, nativeTheme, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn, exec } = require('child_process');
@@ -991,6 +991,55 @@ function playSound(name) {
   }
 }
 
+function isInstalledMacAppPath(executablePath) {
+  if (process.platform !== 'darwin') return true;
+  const normalized = path.resolve(executablePath);
+  const appBundlePath = path.dirname(path.dirname(path.dirname(normalized)));
+  const userApplications = path.join(os.homedir(), 'Applications');
+
+  return (
+    appBundlePath.startsWith('/Applications/') ||
+    appBundlePath.startsWith(`${userApplications}/`)
+  );
+}
+
+function isTranslocatedMacApp(executablePath) {
+  return process.platform === 'darwin' && executablePath.includes('/AppTranslocation/');
+}
+
+async function ensureMacAppInstalled() {
+  if (process.platform !== 'darwin' || !app.isPackaged) return true;
+
+  const executablePath = process.execPath;
+  const installed = isInstalledMacAppPath(executablePath);
+  const translocated = isTranslocatedMacApp(executablePath);
+  if (installed && !translocated) return true;
+
+  const appName = app.getName();
+  const message =
+    `${appName} needs to be moved to the Applications folder before it can use global hotkeys and macOS permissions correctly.\n\n` +
+    'Please drag the app from the DMG into Applications, quit this copy, and then open Landa again from Applications.';
+
+  const result = await dialog.showMessageBox({
+    type: 'warning',
+    buttons: ['Open Applications Folder', 'Reveal This App', 'Quit'],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true,
+    title: `${appName} Must Be Installed`,
+    message,
+  });
+
+  if (result.response === 0) {
+    await shell.openPath('/Applications');
+  } else if (result.response === 1) {
+    shell.showItemInFolder(executablePath);
+  }
+
+  app.quit();
+  return false;
+}
+
 function setupIpcHandlers() {
   ipcMain.handle('get-config', async () => {
     return await getBestAvailableConfig();
@@ -1248,6 +1297,9 @@ app.on('second-instance', () => {
 });
 
 app.whenReady().then(() => {
+  ensureMacAppInstalled().then((ok) => {
+    if (!ok) return;
+
   setupIpcHandlers();
   // Hide dock icon on macOS (menu bar app)
   if (process.platform === 'darwin') {
@@ -1282,6 +1334,7 @@ app.whenReady().then(() => {
   }, 2000);
 
   startStatusPolling();
+  });
 });
 
 app.on('will-quit', () => {
