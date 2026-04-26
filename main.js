@@ -99,6 +99,7 @@ const api = {
   fetchHistory: () => apiRequest('GET', '/history'),
   clearHistory: () => apiRequest('DELETE', '/history'),
   deleteHistoryEntry: (id) => apiRequest('DELETE', `/history/${encodeURIComponent(id)}`),
+  acknowledgePaste: () => apiRequest('POST', '/acknowledge-paste'),
 };
 
 function readConfigFromDisk() {
@@ -820,6 +821,14 @@ function startStatusPolling() {
           updateTray();
         }
         setRecordingState(status.recording);
+        if (status.pending_paste && process.platform === 'darwin') {
+          try {
+            await api.acknowledgePaste();
+            await execAsync('osascript -e \'tell application "System Events" to keystroke "v" using command down\'');
+          } catch (err) {
+            console.error('[Landa] Auto-paste failed:', err.message);
+          }
+        }
       } catch {
         // Backend not ready yet — ignore
       }

@@ -650,6 +650,7 @@ REALTIME_WS_MODEL = {
 
 recording = False
 _is_on_hold = False
+_pending_paste = False  # set True when clipboard is ready; Electron main process sends Cmd+V
 audio_frames: list[np.ndarray] = []
 stream: sd.InputStream | None = None
 _teardown_thread: threading.Thread | None = None  # tracks in-flight stream teardown
@@ -681,25 +682,12 @@ def play_sound(name: str) -> None:
 
 
 def paste_text(text: str) -> None:
-    """Copy *text* to the clipboard and simulate the OS paste shortcut."""
+    """Copy *text* to the clipboard. On macOS, signals the Electron main process to send Cmd+V."""
+    global _pending_paste
     if sys.platform == "darwin":
         process = subprocess.Popen(["pbcopy"], stdin=subprocess.PIPE)
         process.communicate(text.encode("utf-8"))
-
-        time.sleep(0.05)  # brief pause to ensure clipboard is ready
-
-        result = subprocess.run(
-            [
-                "osascript",
-                "-e",
-                'tell application "System Events" to keystroke "v" using command down',
-            ],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            logging.error("Auto-paste failed (osascript exit %d): %s", result.returncode, result.stderr.strip())
-            logging.error("Ensure FindMyVoice has Accessibility permission in System Settings → Privacy & Security → Accessibility")
+        _pending_paste = True  # Electron main process polls this and sends Cmd+V
     elif sys.platform == "win32":
         try:
             import ctypes
@@ -1926,7 +1914,14 @@ def update_config():
 
 @app.get("/status")
 def get_status():
-    return jsonify({"recording": recording, "is_on_hold": _is_on_hold})
+    return jsonify({"recording": recording, "is_on_hold": _is_on_hold, "pending_paste": _pending_paste})
+
+
+@app.post("/acknowledge-paste")
+def api_acknowledge_paste():
+    global _pending_paste
+    _pending_paste = False
+    return jsonify({"ok": True})
 
 
 @app.post("/start")
