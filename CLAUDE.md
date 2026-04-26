@@ -142,23 +142,20 @@ git push {remote} main --tags
 - Default remote is `github`
 - Always push tags with `--tags`
 
-### 5. Build & Publish to GitHub Release
+### 5. CI Builds & Publishes Automatically
 
-The app uses `electron-updater` for in-app updates. Releases must include both the `.dmg` installer and the `latest-mac.yml` (and `latest.yml` for Windows) metadata files so installed copies can detect updates. `electron-builder` uploads all of this in one step when invoked with `--publish always`.
+Pushing a `v*` tag triggers `.github/workflows/release.yml`, which builds notarized macOS and Windows artifacts on GitHub-hosted runners and uploads them to a GitHub release. **Do not build or publish locally** — let CI handle it. Local builds are only for testing.
 
-```bash
-# macOS (notarized) — builds, notarizes, creates the GitHub release, and uploads dmg + latest-mac.yml
-GH_TOKEN=<token> npm run build:mac:notarized -- --publish always
+The workflow uploads:
+- `Landa-{VERSION}-arm64.dmg` + `.dmg.blockmap` + `latest-mac.yml` (macOS auto-updater metadata)
+- `Landa.Setup.{VERSION}.exe` + `.exe.blockmap` + `latest.yml` (Windows auto-updater metadata)
 
-# Windows
-GH_TOKEN=<token> npm run build:win -- --publish always
-```
+The `.yml` and `.blockmap` files are required for `electron-updater` — without them, installed copies can't detect or download updates.
 
-- `GH_TOKEN` needs `repo` scope
-- Do NOT run `gh release create` separately — electron-builder creates the GitHub release automatically when publishing
-- After the build completes, edit the release on GitHub to add a `## Changes` section with bullet points summarizing what changed
+After CI finishes (5–15 min):
+- Verify the release at https://github.com/nickybricks/landa/releases includes all six files
+- Edit the release to add a `## Changes` section with bullet points summarizing what changed
 - The release title should match the commit message format: `v{VERSION}: {Brief description}`
-- Both macOS and Windows builds publishing to the same tag will append their artifacts to the same release
 
 
 ## Dev Commands

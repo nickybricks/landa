@@ -37,10 +37,13 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      - name: Upload DMG to release
+      - name: Upload macOS artifacts to release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.dmg
+          files: |
+            dist/*.dmg
+            dist/*.dmg.blockmap
+            dist/latest-mac.yml
 
   build-win:
     runs-on: windows-latest
@@ -62,7 +65,10 @@ jobs:
       - name: Build Windows installer
         run: npx electron-builder --win --publish never
 
-      - name: Upload EXE to release
+      - name: Upload Windows artifacts to release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.exe
+          files: |
+            dist/*.exe
+            dist/*.exe.blockmap
+            dist/latest.yml
