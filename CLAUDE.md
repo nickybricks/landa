@@ -142,16 +142,23 @@ git push {remote} main --tags
 - Default remote is `github`
 - Always push tags with `--tags`
 
-### 5. Create GitHub Release
+### 5. Build & Publish to GitHub Release
+
+The app uses `electron-updater` for in-app updates. Releases must include both the `.dmg` installer and the `latest-mac.yml` (and `latest.yml` for Windows) metadata files so installed copies can detect updates. `electron-builder` uploads all of this in one step when invoked with `--publish always`.
 
 ```bash
-# Create a release on GitHub with release notes
-gh release create v{VERSION} --title "v{VERSION}: {Brief description}" --notes "{Release notes in markdown}"
+# macOS (notarized) — builds, notarizes, creates the GitHub release, and uploads dmg + latest-mac.yml
+GH_TOKEN=<token> npm run build:mac:notarized -- --publish always
+
+# Windows
+GH_TOKEN=<token> npm run build:win -- --publish always
 ```
 
-- Always create a GitHub release after pushing a new tag
-- Include a `## Changes` section with bullet points summarizing what changed
+- `GH_TOKEN` needs `repo` scope
+- Do NOT run `gh release create` separately — electron-builder creates the GitHub release automatically when publishing
+- After the build completes, edit the release on GitHub to add a `## Changes` section with bullet points summarizing what changed
 - The release title should match the commit message format: `v{VERSION}: {Brief description}`
+- Both macOS and Windows builds publishing to the same tag will append their artifacts to the same release
 
 
 ## Dev Commands

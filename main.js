@@ -1,4 +1,5 @@
 const { app, BrowserWindow, Tray, Menu, globalShortcut, nativeImage, clipboard, dialog, ipcMain, systemPreferences, nativeTheme, shell } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
 const { spawn, exec } = require('child_process');
@@ -1353,6 +1354,11 @@ app.whenReady().then(() => {
     }, 2000);
 
     startStatusPolling();
+
+    if (app.isPackaged) {
+      autoUpdater.checkForUpdatesAndNotify();
+      setInterval(() => autoUpdater.checkForUpdatesAndNotify(), 60 * 60 * 1000);
+    }
   });
 });
 
