@@ -1,6 +1,6 @@
 {
   "name": "landa",
-  "version": "0.14.1",
+  "version": "0.14.2",
   "description": "Lightweight voice-to-text — global hotkey recording that pastes into any active app",
   "main": "main.js",
   "scripts": {

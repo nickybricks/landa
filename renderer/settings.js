@@ -64,7 +64,7 @@ const TRANSLATIONS = {
     'vocabulary.empty.title': 'No replacements yet',
     'vocabulary.empty.sub': 'Add words that Whisper consistently mishears.',
     // Home
-    'home.desc': 'Lightweight voice-to-text for macOS & Windows.<br>Press your hotkey to record, release to transcribe and paste.',
+    'home.desc': 'Lightweight voice-to-text for macOS & Windows.<br>Press your hotkey to record, press again to transcribe and paste.',
     // Settings tab — language section
     'settings.language.section': 'Language',
     'settings.language.label': 'App Language',
@@ -206,7 +206,7 @@ const TRANSLATIONS = {
     'vocabulary.empty.title': 'Noch keine Ersetzungen',
     'vocabulary.empty.sub': 'Füge Wörter hinzu, die Whisper häufig falsch erkennt.',
     // Home
-    'home.desc': 'Schlanke Sprach-zu-Text-App für macOS & Windows.<br>Drücke deinen Hotkey zum Aufnehmen, loslassen zum Transkribieren und Einfügen.',
+    'home.desc': 'Schlanke Sprach-zu-Text-App für macOS & Windows.<br>Drücke deinen Hotkey zum Aufnehmen, erneut drücken zum Transkribieren und Einfügen.',
     // Settings tab — language section
     'settings.language.section': 'Sprache',
     'settings.language.label': 'App-Sprache',

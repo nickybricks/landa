@@ -66,9 +66,10 @@ function apiRequest(method, endpoint, body, timeoutMs = 5000) {
     }
 
     const req = http.request(options, (res) => {
-      let chunks = '';
-      res.on('data', (chunk) => { chunks += chunk; });
+      const buffers = [];
+      res.on('data', (chunk) => { buffers.push(chunk); });
       res.on('end', () => {
+        const chunks = Buffer.concat(buffers).toString('utf8');
         try {
           resolve(JSON.parse(chunks));
         } catch {
