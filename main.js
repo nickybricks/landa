@@ -92,7 +92,7 @@ const api = {
   patchConfig: (patch) => apiRequest('POST', '/config', patch),
   fetchStatus: () => apiRequest('GET', '/status'),
   startRecording: () => apiRequest('POST', '/start', null, 12000),
-  stopRecording: () => apiRequest('POST', '/stop', null, 12000),
+  stopRecording: () => apiRequest('POST', '/stop', null, 35000),
   cancelRecording: () => apiRequest('POST', '/cancel', null, 12000),
   holdRecording: () => apiRequest('POST', '/hold', null, 5000),
   resumeRecording: () => apiRequest('POST', '/resume', null, 5000),
@@ -227,11 +227,20 @@ async function handleHotkeyPress() {
   try {
     try {
       if (isRecording) {
-        await api.stopRecording();
+        const stopResponse = await api.stopRecording();
+        console.log(`[Landa] stop API responded in ${Date.now() - t0}ms`);
+        if (stopResponse && stopResponse.text && process.platform === 'darwin') {
+          try {
+            await execAsync('osascript -e \'tell application "System Events" to keystroke "v" using command down\'');
+            console.log(`[Landa] Direct paste triggered from /stop response`);
+          } catch (err) {
+            console.error('[Landa] Direct paste failed:', err.message);
+          }
+        }
       } else {
         await api.startRecording();
+        console.log(`[Landa] start API responded in ${Date.now() - t0}ms`);
       }
-      console.log(`[Landa] ${action} API responded in ${Date.now() - t0}ms`);
     } catch (err) {
       console.error(`[Landa] Hotkey action failed (${action}) after ${Date.now() - t0}ms: ${err.message}`);
     }
@@ -647,30 +656,33 @@ function openSettings() {
 function findBackendRoot() {
   const script = path.join('backend', 'landa_core.py');
 
-  // 1. Bundled in resources (packaged app)
-  const resourcePath = process.resourcesPath;
-  if (fs.existsSync(path.join(resourcePath, script))) {
-    console.log('[Landa] Found backend in app resources');
-    return resourcePath;
+  // Packaged app: prefer the bundled resources copy.
+  if (app.isPackaged) {
+    const resourcePath = process.resourcesPath;
+    if (fs.existsSync(path.join(resourcePath, script))) {
+      console.log('[Landa] Found backend in app resources');
+      return resourcePath;
+    }
+  } else {
+    // Dev: walk up from __dirname to find the project tree first, so source
+    // edits are picked up without having to clear ~/.landa/backend/.
+    let dir = __dirname;
+    for (let i = 0; i < 10; i++) {
+      if (fs.existsSync(path.join(dir, script))) {
+        console.log(`[Landa] Found backend at: ${dir}`);
+        return dir;
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
   }
 
-  // 2. ~/.landa/backend/
+  // Last-resort fallback: a hand-installed copy under ~/.landa/.
   const homeBackend = CONFIG_DIR;
   if (fs.existsSync(path.join(homeBackend, script))) {
     console.log('[Landa] Found backend in ~/.landa/');
     return homeBackend;
-  }
-
-  // 3. Walk up from app directory (dev builds)
-  let dir = __dirname;
-  for (let i = 0; i < 10; i++) {
-    if (fs.existsSync(path.join(dir, script))) {
-      console.log(`[Landa] Found backend at: ${dir}`);
-      return dir;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
   }
 
   return null;
@@ -699,13 +711,14 @@ function startBackend() {
     return;
   }
 
-  // Prefer the PyInstaller-compiled binary (packaged app) over the raw Python script.
-  // The binary bundles all Python deps so no system Python or venv is required.
+  // In packaged builds, prefer the PyInstaller-compiled binary (no Python required).
+  // In dev (unpackaged), always run the Python source so backend edits are picked up
+  // without a rebuild.
   const binaryName = process.platform === 'win32' ? 'landa_backend.exe' : 'landa_backend';
   const binaryPath = path.join(backendRoot, 'backend', 'landa_backend', binaryName);
 
   let cmd, args;
-  if (fs.existsSync(binaryPath)) {
+  if (app.isPackaged && fs.existsSync(binaryPath)) {
     console.log(`[Landa] Starting compiled backend: ${binaryPath}`);
     cmd = binaryPath;
     args = [];

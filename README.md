@@ -36,7 +36,7 @@ This will:
 - **Add to Vocabulary** — Press the "Add to Vocabulary" hotkey (default: `F7`) with a word selected in any app to instantly open Settings and add it to your vocabulary replacements.
 - **Vocabulary** — Define word replacements (e.g. correct spellings Whisper consistently mishears) in the Vocabulary tab in Settings.
 - **Transcription history** — View, copy, and delete past transcriptions from the History tab in Settings.
-- **Local Whisper** — Optionally run transcription locally using whisper.cpp instead of the OpenAI API.
+- **Local Whisper** — Optionally run transcription locally using whisper.cpp instead of the OpenAI API. The "Landa Base" model is bundled with the app — no download or API key required.
 - **GPT-4o Transcribe** — Use OpenAI's Realtime API (`gpt-4o-transcribe` or `gpt-4o-mini-transcribe`) for streaming transcription.
 
 ## Config

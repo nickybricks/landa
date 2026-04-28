@@ -41,6 +41,7 @@ const WHISPER_MODELS = [
   { value: 'whisper-base', label: 'Whisper Base', logo: 'openai' },
   { value: 'whisper-1', label: 'whisper-1 (API)', logo: 'openai' },
   { value: 'nemo', label: 'NeMo Parakeet', logo: 'nvidia' },
+  { value: 'landa-base', label: 'Landa Base (Bundled)', logo: 'openai' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -64,7 +65,7 @@ const TRANSLATIONS = {
     'vocabulary.empty.title': 'No replacements yet',
     'vocabulary.empty.sub': 'Add words that Whisper consistently mishears.',
     // Home
-    'home.desc': 'Lightweight voice-to-text for macOS & Windows.<br>Press your hotkey to record, press again to transcribe and paste.',
+    'home.desc': 'Lightweight voice-to-text for macOS & Windows.<br>Press your hotkey to record, release to transcribe and paste.',
     // Settings tab — language section
     'settings.language.section': 'Language',
     'settings.language.label': 'App Language',
@@ -206,7 +207,7 @@ const TRANSLATIONS = {
     'vocabulary.empty.title': 'Noch keine Ersetzungen',
     'vocabulary.empty.sub': 'Füge Wörter hinzu, die Whisper häufig falsch erkennt.',
     // Home
-    'home.desc': 'Schlanke Sprach-zu-Text-App für macOS & Windows.<br>Drücke deinen Hotkey zum Aufnehmen, erneut drücken zum Transkribieren und Einfügen.',
+    'home.desc': 'Schlanke Sprach-zu-Text-App für macOS & Windows.<br>Drücke deinen Hotkey zum Aufnehmen, loslassen zum Transkribieren und Einfügen.',
     // Settings tab — language section
     'settings.language.section': 'Sprache',
     'settings.language.label': 'App-Sprache',
@@ -263,7 +264,7 @@ const TRANSLATIONS = {
     // Modes styles
     'modes.style.formal': 'Formell.',
     'modes.style.formal.sub': 'Großschreibung + Satzzeichen',
-    'modes.style.casual': 'Locker',
+    'modes.style.casual': 'Casual',
     'modes.style.casual.sub': 'Großschreibung + weniger Satzzeichen',
     'modes.style.excited': 'Begeistert!',
     'modes.style.excited.sub': 'Mehr Ausrufezeichen',
@@ -1003,11 +1004,11 @@ async function updateLocalModelStatus(modelName) {
   const apiKeyDivider = document.getElementById('divider-api-key');
   if (!statusEl || !dividerEl) return;
 
-  const isLocal = LOCAL_WHISPER_MODELS.has(modelName) || modelName === 'nemo';
+  const isLocal = LOCAL_WHISPER_MODELS.has(modelName) || modelName === 'nemo' || modelName === 'landa-base';
   if (apiKeyRow) apiKeyRow.classList.toggle('hidden', isLocal);
   if (apiKeyDivider) apiKeyDivider.classList.toggle('hidden', isLocal);
 
-  if (!isLocal || modelName === 'nemo') {
+  if (!isLocal || modelName === 'nemo' || modelName === 'landa-base') {
     statusEl.classList.add('hidden');
     dividerEl.classList.add('hidden');
     clearInterval(_whisperStatusPollTimer);

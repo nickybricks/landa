@@ -4,6 +4,8 @@ set -e
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND_DIR="$REPO_ROOT/backend"
 
+bash "$REPO_ROOT/scripts/fetch_landa_models.sh"
+
 echo "[Landa] Building Python backend with PyInstaller..."
 cd "$BACKEND_DIR"
 
@@ -21,6 +23,7 @@ pyinstaller \
   --distpath dist \
   --workpath build \
   --specpath . \
+  --add-data "models/landa-base.bin:models" \
   landa_core.py
 
 deactivate

@@ -28,6 +28,8 @@ from scipy.io import wavfile
 from scipy.signal import resample_poly
 from openai import OpenAI
 
+from landa_streamer import LandaStreamer
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 # ---------------------------------------------------------------------------
@@ -109,7 +111,7 @@ def _calc_cost(model: str, input_tokens: int = 0, output_tokens: int = 0, durati
 DEFAULT_CONFIG: dict = {
     "api_key": "",
     "api_provider": "openai",
-    "openai_model": "whisper-large-v3",
+    "openai_model": "whisper-small",
     "openai_language": "auto",
     "nemo_language": "auto",
     "sound_start": "Tink",
@@ -129,7 +131,7 @@ DEFAULT_CONFIG: dict = {
     "reformat_mode": "default",
     "llm_provider": "openai",
     "llm_api_key": "",
-    "llm_model": "",
+    "llm_model": "gpt-4o-mini",
     "vocabulary": [],
     "modes": {
         "selections": {
@@ -450,6 +452,44 @@ def detect_active_app() -> tuple[str, str]:
     return (app_name, url)
 
 
+# Active-app detection on macOS spawns two osascript subprocesses (~700ms total).
+# To keep that off the /stop critical path, we kick it off on /start and read the
+# cached result later. If the value isn't ready yet, callers fall back to a sync detect.
+_active_app_cache: tuple[str, str] | None = None
+_active_app_lock = threading.Lock()
+_active_app_ready = threading.Event()
+
+
+def _populate_active_app_cache() -> None:
+    global _active_app_cache
+    try:
+        result = detect_active_app()
+    except Exception:
+        result = ("", "")
+    with _active_app_lock:
+        _active_app_cache = result
+    _active_app_ready.set()
+
+
+def kickoff_active_app_detection() -> None:
+    """Begin detecting the frontmost app in a background thread. Called from /start."""
+    global _active_app_cache
+    with _active_app_lock:
+        _active_app_cache = None
+    _active_app_ready.clear()
+    threading.Thread(target=_populate_active_app_cache, daemon=True).start()
+
+
+def _consume_active_app(wait_timeout: float = 1.0) -> tuple[str, str]:
+    """Return the cached (app_name, url). Waits briefly if detection is in flight,
+    falls back to a synchronous detect if no detection was kicked off."""
+    if _active_app_ready.wait(timeout=wait_timeout):
+        with _active_app_lock:
+            if _active_app_cache is not None:
+                return _active_app_cache
+    return detect_active_app()
+
+
 def is_category_enabled(cat_id: str) -> bool:
     """Return False only if the category has been explicitly disabled."""
     return config.get("modes", {}).get("enabled", {}).get(cat_id, True)
@@ -458,7 +498,7 @@ def is_category_enabled(cat_id: str) -> bool:
 def get_active_category() -> str | None:
     """Determine mode category from the frontmost app using configurable linked apps/URLs.
     Returns None if no enabled category matches."""
-    app_name, url = detect_active_app()
+    app_name, url = _consume_active_app()
     app_name_lower = app_name.lower()
     url_lower = url.lower()
 
@@ -651,7 +691,12 @@ REALTIME_WS_MODEL = {
 recording = False
 _is_on_hold = False
 _pending_paste = False  # set True when clipboard is ready; Electron main process sends Cmd+V
+_transcription_ready = threading.Event()  # set by paste_text when transcription result is in clipboard
+_transcription_text: str | None = None    # the transcribed text, readable by api_stop
 audio_frames: list[np.ndarray] = []
+_audio_sum_sq: float = 0.0      # incremental sum-of-squares for fast silence check
+_audio_peak: float = 0.0        # incremental peak abs value
+_audio_total_samples: int = 0   # total samples captured
 stream: sd.InputStream | None = None
 _teardown_thread: threading.Thread | None = None  # tracks in-flight stream teardown
 lock = threading.Lock()
@@ -683,11 +728,13 @@ def play_sound(name: str) -> None:
 
 def paste_text(text: str) -> None:
     """Copy *text* to the clipboard. On macOS, signals the Electron main process to send Cmd+V."""
-    global _pending_paste
+    global _pending_paste, _transcription_text
     if sys.platform == "darwin":
         process = subprocess.Popen(["pbcopy"], stdin=subprocess.PIPE)
         process.communicate(text.encode("utf-8"))
-        _pending_paste = True  # Electron main process polls this and sends Cmd+V
+        _transcription_text = text
+        _transcription_ready.set()  # unblocks api_stop if it's waiting
+        _pending_paste = True  # fallback: poll-based paste if api_stop already returned
     elif sys.platform == "win32":
         try:
             import ctypes
@@ -744,27 +791,25 @@ def paste_text(text: str) -> None:
             ctypes.windll.user32.SendInput(4, inputs, ctypes.sizeof(INPUT))
         except Exception as e:
             logging.error("Auto-paste failed on Windows: %s", e)
+        finally:
+            _transcription_text = text
+            _transcription_ready.set()
 
 
 _SILENCE_RMS_THRESHOLD = 0.0015
 _SILENCE_PEAK_THRESHOLD = 0.008
 
 
-def _analyze_audio(audio: np.ndarray) -> tuple[float, float, float]:
-    """Return (duration_s, rms, peak) for the captured audio."""
-    flat = np.asarray(audio, dtype=np.float32).reshape(-1)
-    if flat.size == 0:
-        return (0.0, 0.0, 0.0)
+def _should_skip_transcription() -> bool:
+    """Skip only truly empty or ultra-short near-zero audio clips.
 
-    duration_s = flat.size / SAMPLE_RATE
-    rms = float(np.sqrt(np.mean(flat ** 2)))
-    peak = float(np.max(np.abs(flat)))
-    return (duration_s, rms, peak)
-
-
-def _should_skip_transcription(audio: np.ndarray) -> bool:
-    """Skip only truly empty or ultra-short near-zero audio clips."""
-    duration_s, rms, peak = _analyze_audio(audio)
+    Uses the incremental accumulators updated in _audio_callback — O(1).
+    """
+    if _audio_total_samples == 0:
+        return True
+    duration_s = _audio_total_samples / SAMPLE_RATE
+    rms = float(np.sqrt(_audio_sum_sq / _audio_total_samples))
+    peak = _audio_peak
     logging.info(
         "[silence_check] duration=%.3fs rms=%.6f (threshold=%.6f) peak=%.6f (threshold=%.6f)",
         duration_s,
@@ -773,8 +818,6 @@ def _should_skip_transcription(audio: np.ndarray) -> bool:
         peak,
         _SILENCE_PEAK_THRESHOLD,
     )
-    if duration_s == 0:
-        return True
     return rms < _SILENCE_RMS_THRESHOLD and peak < _SILENCE_PEAK_THRESHOLD
 
 
@@ -981,9 +1024,16 @@ def _realtime_sender_thread() -> None:
 
 
 def _audio_callback(indata: np.ndarray, frames: int, time_info, status) -> None:
+    global _audio_sum_sq, _audio_peak, _audio_total_samples
     if _is_on_hold:
         return
     audio_frames.append(indata.copy())
+    flat = indata.reshape(-1)
+    _audio_sum_sq += float(np.dot(flat, flat))
+    chunk_peak = float(np.max(np.abs(flat)))
+    if chunk_peak > _audio_peak:
+        _audio_peak = chunk_peak
+    _audio_total_samples += flat.size
     if _rt_queue is not None:
         try:
             _rt_queue.put_nowait(indata.copy())
@@ -993,8 +1043,12 @@ def _audio_callback(indata: np.ndarray, frames: int, time_info, status) -> None:
 
 def start_recording() -> bool:
     global recording, stream, audio_frames, _teardown_thread, _rt_queue, _rt_thread, _rt_transcript, _rt_error
+    global _audio_sum_sq, _audio_peak, _audio_total_samples
     t0 = time.time()
     logging.info("[start_recording] called")
+    # Kick off active-app detection in parallel — its osascript calls are slow on macOS,
+    # and we want the result cached by the time /stop runs the post-process pipeline.
+    kickoff_active_app_detection()
     # If a previous stream teardown is still running, wait for it to finish
     # before creating a new InputStream to avoid PortAudio deadlocks.
     if _teardown_thread is not None and _teardown_thread.is_alive():
@@ -1012,6 +1066,9 @@ def start_recording() -> bool:
             logging.info("[start_recording] already recording, returning False")
             return False
         audio_frames = []
+        _audio_sum_sq = 0.0
+        _audio_peak = 0.0
+        _audio_total_samples = 0
     # Create and start the InputStream OUTSIDE the lock — sd.InputStream()
     # can hang if PortAudio is in a bad state, and holding the lock would
     # deadlock all recording operations.  Use a thread with timeout so a
@@ -1115,8 +1172,20 @@ def stop_recording() -> bool:
         _is_on_hold = False
     logging.info("[stop_recording] state updated in %.3fs", time.time() - t0)
     play_sound(config.get("sound_stop", "Pop"))
-    if old_stream is not None:
-        def _teardown():
+    # Signal realtime sender to commit and finalize
+    if _rt_queue is not None:
+        try:
+            _rt_queue.put(None, timeout=1.0)
+        except queue.Full:
+            logging.warning("[stop_recording] realtime queue full — sender may have crashed")
+
+    def _finalize_then_teardown():
+        try:
+            _finalize_transcription()
+        finally:
+            _transcription_ready.set()  # unblock api_stop before teardown starts
+        # Teardown happens after paste — off the user-perceived critical path
+        if old_stream is not None:
             t1 = time.time()
             try:
                 old_stream.abort()
@@ -1124,16 +1193,10 @@ def stop_recording() -> bool:
                 logging.info("[stop_recording] stream teardown completed in %.3fs", time.time() - t1)
             except Exception as e:
                 logging.error("[stop_recording] stream teardown error: %s", e)
-        td = threading.Thread(target=_teardown, daemon=True)
-        td.start()
-        _teardown_thread = td
-    # Signal realtime sender to commit and finalize
-    if _rt_queue is not None:
-        try:
-            _rt_queue.put(None, timeout=1.0)
-        except queue.Full:
-            logging.warning("[stop_recording] realtime queue full — sender may have crashed")
-    threading.Thread(target=_finalize_transcription, daemon=True).start()
+
+    td = threading.Thread(target=_finalize_then_teardown, daemon=True)
+    td.start()
+    _teardown_thread = td
     logging.info("[stop_recording] done in %.3fs total", time.time() - t0)
     return True
 
@@ -1208,14 +1271,12 @@ def _finalize_transcription() -> None:
 
     if _rt_thread is not None:
         # Silence check before we bother processing the realtime result
-        if audio_frames:
-            audio_check = np.concatenate(audio_frames, axis=0)
-            if _should_skip_transcription(audio_check):
-                logging.info("[realtime] Skipping — audio buffer is effectively empty")
-                _rt_transcript = None
-                _rt_queue = None
-                _rt_thread = None
-                return
+        if _should_skip_transcription():
+            logging.info("[realtime] Skipping — audio buffer is effectively empty")
+            _rt_transcript = None
+            _rt_queue = None
+            _rt_thread = None
+            return
 
         _rt_thread.join(timeout=35)
 
@@ -1280,37 +1341,62 @@ def _transcribe_and_paste(force_model: str | None = None) -> None:
 
     pipeline_start = time.time()  # start timing from hotkey-stop → paste
 
-    # Write wav to a temp file
-    audio = np.concatenate(audio_frames, axis=0)
-
-    if _should_skip_transcription(audio):
+    if _should_skip_transcription():
         logging.info("[transcribe] Skipping — audio buffer is effectively empty")
         return
 
-    audio_int16 = np.int16(audio * 32767)
-    tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-    wavfile.write(tmp.name, SAMPLE_RATE, audio_int16)
-    tmp.close()
+    t_concat = time.time()
+    audio = np.concatenate(audio_frames, axis=0).flatten().astype(np.float32)
+    logging.info("[pipeline] concat audio: %.3fs", time.time() - t_concat)
+
+    # Route: macOS local whisper.cpp accepts numpy directly — skip the WAV detour.
+    # OpenAI / NeMo / Windows-faster-whisper paths still need a WAV file.
+    selected_model = force_model or config.get("openai_model", "whisper-1")
+    provider = config.get("api_provider", "openai")
+    use_numpy_path = (
+        sys.platform == "darwin"
+        and provider != "nemo"
+        and selected_model in LOCAL_WHISPER_MODELS
+    )
+
+    tmp_path: str | None = None
+    if not use_numpy_path:
+        t_wav = time.time()
+        audio_int16 = np.int16(audio * 32767)
+        tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        wavfile.write(tmp.name, SAMPLE_RATE, audio_int16)
+        tmp.close()
+        tmp_path = tmp.name
+        logging.info("[pipeline] wav write: %.3fs", time.time() - t_wav)
 
     try:
         prep_latency_ms = round((time.time() - pipeline_start) * 1000)
-        text, transcribe_usage = transcribe(tmp.name, force_model=force_model)
+        t_tx = time.time()
+        if use_numpy_path:
+            text, transcribe_usage = transcribe_whisper_local(audio, selected_model)
+        else:
+            text, transcribe_usage = transcribe(tmp_path, force_model=force_model)
+        logging.info("[pipeline] transcribe total: %.3fs", time.time() - t_tx)
         if not text or _is_hallucination(text):
             if text:
                 logging.info("[transcribe] Discarding hallucination: %r", text)
             return
+        t_post = time.time()
         text = post_process(text)
         text = apply_vocabulary_replacements(text)
         reformat_usage = None
         if text:
             text, reformat_usage = reformat_text(text)
+        logging.info("[pipeline] post+reformat: %.3fs", time.time() - t_post)
         if text:
             paste_latency_ms = None
             if config.get("auto_paste", True):
                 t_paste = time.time()
                 paste_text(text)
                 paste_latency_ms = round((time.time() - t_paste) * 1000)
+                logging.info("[pipeline] paste: %.3fs", time.time() - t_paste)
             total_latency_ms = round((time.time() - pipeline_start) * 1000)
+            logging.info("[pipeline] total stop→paste: %.3fs", time.time() - pipeline_start)
             steps = [u for u in [transcribe_usage, reformat_usage] if u is not None]
             combined_usage = None
             if steps:
@@ -1319,7 +1405,8 @@ def _transcribe_and_paste(force_model: str | None = None) -> None:
                 combined_usage = {"steps": steps, "total_tokens": total_tokens, "total_cost": total_cost, "prep_latency_ms": prep_latency_ms, "paste_latency_ms": paste_latency_ms, "total_latency_ms": total_latency_ms}
             add_history_entry(text, usage=combined_usage)
     finally:
-        os.unlink(tmp.name)
+        if tmp_path:
+            os.unlink(tmp_path)
 
 
 # ---------------------------------------------------------------------------
@@ -1327,7 +1414,7 @@ def _transcribe_and_paste(force_model: str | None = None) -> None:
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Local Whisper (whisper.cpp via pywhispercpp)
+# Local Whisper — pywhispercpp + Metal on macOS, faster-whisper on Windows
 # ---------------------------------------------------------------------------
 
 LOCAL_WHISPER_MODELS = {
@@ -1335,34 +1422,41 @@ LOCAL_WHISPER_MODELS = {
     "whisper-large-v3", "whisper-large-v3-turbo",
 }
 
-WHISPER_GGML_MODELS: dict[str, dict] = {
+# Each entry carries both the GGML filename (macOS/pywhispercpp) and the
+# HuggingFace CTranslate2 repo (Windows/faster-whisper).
+WHISPER_MODELS: dict[str, dict] = {
     "whisper-base": {
         "name": "Whisper Base",
         "filename": "ggml-base.bin",
-        "size_label": "~148 MB",
-        "size_bytes": 148_000_000,
+        "hf_repo": "Systran/faster-whisper-base",
+        "size_label": "~150 MB",
+        "size_bytes": 150_000_000,
     },
     "whisper-small": {
         "name": "Whisper Small",
         "filename": "ggml-small.bin",
-        "size_label": "~488 MB",
-        "size_bytes": 488_000_000,
+        "hf_repo": "Systran/faster-whisper-small",
+        "size_label": "~490 MB",
+        "size_bytes": 490_000_000,
     },
     "whisper-medium": {
         "name": "Whisper Medium",
         "filename": "ggml-medium.bin",
+        "hf_repo": "Systran/faster-whisper-medium",
         "size_label": "~1.5 GB",
         "size_bytes": 1_530_000_000,
     },
     "whisper-large-v3": {
         "name": "Whisper Large V3",
         "filename": "ggml-large-v3.bin",
+        "hf_repo": "Systran/faster-whisper-large-v3",
         "size_label": "~3.1 GB",
         "size_bytes": 3_100_000_000,
     },
     "whisper-large-v3-turbo": {
         "name": "Whisper Large V3 Turbo",
         "filename": "ggml-large-v3-turbo.bin",
+        "hf_repo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
         "size_label": "~1.6 GB",
         "size_bytes": 1_620_000_000,
     },
@@ -1371,29 +1465,40 @@ WHISPER_GGML_MODELS: dict[str, dict] = {
 WHISPER_GGML_BASE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main"
 WHISPER_MODELS_DIR = CONFIG_DIR / "models" / "whisper"
 
-_whisper_cpp_model_cache: dict = {}       # model_name -> pywhispercpp Model
+_whisper_model_cache: dict = {}           # model_name -> loaded model object
 _detected_language: str | None = None     # last auto-detected language code (e.g. "de")
 _whisper_download_state: dict = {}        # model_name -> {downloading, cached, error, progress_bytes, total_bytes}
 _whisper_download_lock = threading.Lock()
 
 
-def is_pywhispercpp_installed() -> bool:
-    try:
-        from pywhispercpp.model import Model as _WhisperModel  # noqa: F401
-        return True
-    except ImportError:
-        return False
+def is_whisper_deps_installed() -> bool:
+    if sys.platform == "darwin":
+        try:
+            from pywhispercpp.model import Model as _  # noqa: F401
+            return True
+        except ImportError:
+            return False
+    else:
+        try:
+            from faster_whisper import WhisperModel as _  # noqa: F401
+            return True
+        except ImportError:
+            return False
 
 
 def is_whisper_model_cached(model_name: str) -> bool:
-    info = WHISPER_GGML_MODELS.get(model_name)
+    info = WHISPER_MODELS.get(model_name)
     if not info:
         return False
-    return (WHISPER_MODELS_DIR / info["filename"]).exists()
+    if sys.platform == "darwin":
+        return (WHISPER_MODELS_DIR / info["filename"]).exists()
+    else:
+        return (WHISPER_MODELS_DIR / model_name / "model.bin").exists()
 
 
 def _do_whisper_download(model_name: str) -> None:
-    info = WHISPER_GGML_MODELS[model_name]
+    import shutil
+    info = WHISPER_MODELS[model_name]
     with _whisper_download_lock:
         _whisper_download_state[model_name] = {
             "downloading": True, "cached": False, "error": None,
@@ -1401,21 +1506,44 @@ def _do_whisper_download(model_name: str) -> None:
         }
     try:
         WHISPER_MODELS_DIR.mkdir(parents=True, exist_ok=True)
-        dest = WHISPER_MODELS_DIR / info["filename"]
-        url = f"{WHISPER_GGML_BASE_URL}/{info['filename']}"
-        print(f"[FindMyVoice] Downloading whisper.cpp model: {url}")
-        with httpx.stream("GET", url, follow_redirects=True, timeout=None) as resp:
-            resp.raise_for_status()
-            total = int(resp.headers.get("content-length", info.get("size_bytes", 0)))
-            with _whisper_download_lock:
-                _whisper_download_state[model_name]["total_bytes"] = total
-            downloaded = 0
-            with open(dest, "wb") as f:
-                for chunk in resp.iter_bytes(chunk_size=1024 * 1024):
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    with _whisper_download_lock:
-                        _whisper_download_state[model_name]["progress_bytes"] = downloaded
+        if sys.platform == "darwin":
+            dest = WHISPER_MODELS_DIR / info["filename"]
+            tmp = dest.with_suffix(".bin.tmp")
+            url = f"{WHISPER_GGML_BASE_URL}/{info['filename']}"
+            print(f"[FindMyVoice] Downloading whisper.cpp model: {url}")
+            with httpx.stream("GET", url, follow_redirects=True, timeout=None) as resp:
+                resp.raise_for_status()
+                total = int(resp.headers.get("content-length", info.get("size_bytes", 0)))
+                with _whisper_download_lock:
+                    _whisper_download_state[model_name]["total_bytes"] = total
+                downloaded = 0
+                with open(tmp, "wb") as f:
+                    for chunk in resp.iter_bytes(chunk_size=1024 * 1024):
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        with _whisper_download_lock:
+                            _whisper_download_state[model_name]["progress_bytes"] = downloaded
+            tmp.rename(dest)  # atomic: only appears at final path when complete
+        else:
+            from huggingface_hub import snapshot_download
+            dest_dir = WHISPER_MODELS_DIR / model_name
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            stop_polling = threading.Event()
+
+            def _poll_progress():
+                while not stop_polling.is_set():
+                    try:
+                        size = sum(f.stat().st_size for f in dest_dir.rglob("*") if f.is_file())
+                        with _whisper_download_lock:
+                            _whisper_download_state[model_name]["progress_bytes"] = size
+                    except Exception:
+                        pass
+                    stop_polling.wait(0.5)
+
+            threading.Thread(target=_poll_progress, daemon=True).start()
+            print(f"[FindMyVoice] Downloading faster-whisper model: {info['hf_repo']}")
+            snapshot_download(repo_id=info["hf_repo"], local_dir=str(dest_dir))
+            stop_polling.set()
 
         with _whisper_download_lock:
             _whisper_download_state[model_name] = {
@@ -1424,9 +1552,16 @@ def _do_whisper_download(model_name: str) -> None:
             }
         print(f"[FindMyVoice] Model download complete: {model_name}")
     except Exception as e:
-        dest = WHISPER_MODELS_DIR / info["filename"]
-        if dest.exists():
-            dest.unlink()
+        if sys.platform == "darwin":
+            dest = WHISPER_MODELS_DIR / info["filename"]
+            tmp = dest.with_suffix(".bin.tmp")
+            for p in (dest, tmp):
+                if p.exists():
+                    p.unlink()
+        else:
+            dest_dir = WHISPER_MODELS_DIR / model_name
+            if dest_dir.exists():
+                shutil.rmtree(dest_dir, ignore_errors=True)
         with _whisper_download_lock:
             _whisper_download_state[model_name] = {
                 "downloading": False, "cached": False, "error": str(e),
@@ -1443,75 +1578,121 @@ def start_whisper_download(model_name: str) -> None:
     threading.Thread(target=_do_whisper_download, args=(model_name,), daemon=True).start()
 
 
-def transcribe_whisper_local(wav_path: str, model_name: str) -> str:
+def transcribe_whisper_local(audio, model_name: str) -> tuple:
+    """Transcribe with the local whisper model.
+
+    `audio` is either a str path to a WAV file or a numpy float32 mono array at
+    SAMPLE_RATE (16 kHz). The numpy path is used by the macOS hot path to avoid
+    a WAV write+reload round-trip.
+    """
     global _detected_language
     _local_usage = {"step": "transcription", "model": model_name, "input_tokens": 0, "output_tokens": 0, "duration_seconds": 0.0, "latency_ms": 0, "cost": 0.0, "local": True}
-    try:
-        from pywhispercpp.model import Model as WhisperModel
-    except ImportError:
-        return "[Error] pywhispercpp not installed. Please install from the Settings page.", _local_usage
 
-    if model_name not in _whisper_cpp_model_cache:
-        info = WHISPER_GGML_MODELS.get(model_name)
-        if not info:
-            return f"[Error] Unknown local model: {model_name}", _local_usage
-        model_path = WHISPER_MODELS_DIR / info["filename"]
-        if not model_path.exists():
-            return f"[Error] Model file not found: {model_path}. Please download from Settings.", _local_usage
-        _whisper_cpp_model_cache[model_name] = WhisperModel(str(model_path))
-
-    import contextlib, wave as wave_mod
-    try:
-        with contextlib.closing(wave_mod.open(wav_path, "r")) as wf:
-            duration_seconds = wf.getnframes() / wf.getframerate()
-    except Exception:
-        duration_seconds = 0.0
-
-    model = _whisper_cpp_model_cache[model_name]
-    language = config.get("openai_language", "auto")
-
-    t0 = time.time()  # start timing before language detection
-    if language and language != "auto":
-        _detected_language = language
+    if isinstance(audio, np.ndarray):
+        duration_seconds = len(audio) / SAMPLE_RATE
     else:
-        # Explicitly detect the language before transcribing. Without this,
-        # Whisper often defaults to English on short clips or produces
-        # hallucinations like "(speaking in foreign language)".
+        import contextlib, wave as wave_mod
         try:
-            (detected_code, prob), _ = model.auto_detect_language(wav_path)
-            _detected_language = detected_code
-            print(f"[Landa] auto_detect_language: {detected_code} (prob={prob:.2f})")
-        except Exception as e:
-            print(f"[Landa] auto_detect_language failed, proceeding without: {e}")
-            _detected_language = None
+            with contextlib.closing(wave_mod.open(audio, "r")) as wf:
+                duration_seconds = wf.getnframes() / wf.getframerate()
+        except Exception:
+            duration_seconds = 0.0
 
-    kwargs = {}
-    if _detected_language:
-        kwargs["language"] = _detected_language
-    print(f"[Landa] transcribe_whisper_local: model={model_name}, language={_detected_language}, kwargs={kwargs}")
-    segments = model.transcribe(wav_path, **kwargs)
+    with _whisper_download_lock:
+        if _whisper_download_state.get(model_name, {}).get("downloading"):
+            return "[Error] Model is still downloading. Please wait.", _local_usage
+
+    if sys.platform == "darwin":
+        try:
+            from pywhispercpp.model import Model as WhisperModel
+        except ImportError:
+            return "[Error] pywhispercpp not installed. Please install from the Settings page.", _local_usage
+
+        if model_name not in _whisper_model_cache:
+            info = WHISPER_MODELS.get(model_name)
+            if not info:
+                return f"[Error] Unknown local model: {model_name}", _local_usage
+            model_path = WHISPER_MODELS_DIR / info["filename"]
+            if not model_path.exists():
+                return f"[Error] Model not found: {model_path}. Please download from Settings.", _local_usage
+            _whisper_model_cache[model_name] = WhisperModel(str(model_path))
+
+        model = _whisper_model_cache[model_name]
+        language = config.get("openai_language", "auto")
+        t0 = time.time()
+        if language and language != "auto":
+            _detected_language = language
+        else:
+            try:
+                (detected_code, prob), _ = model.auto_detect_language(audio)
+                _detected_language = detected_code
+                print(f"[Landa] auto_detect_language: {detected_code} (prob={prob:.2f})")
+            except Exception as e:
+                print(f"[Landa] auto_detect_language failed: {e}")
+                _detected_language = None
+        kwargs = {
+            "single_segment": True,
+            "no_context": True,
+            "print_progress": False,
+            "print_realtime": False,
+        }
+        if _detected_language:
+            kwargs["language"] = _detected_language
+        segments = model.transcribe(audio, **kwargs)
+        text = " ".join(seg.text for seg in segments).strip()
+    else:
+        try:
+            from faster_whisper import WhisperModel
+        except ImportError:
+            return "[Error] faster-whisper not installed. Please install from the Settings page.", _local_usage
+
+        if model_name not in _whisper_model_cache:
+            info = WHISPER_MODELS.get(model_name)
+            if not info:
+                return f"[Error] Unknown local model: {model_name}", _local_usage
+            model_dir = WHISPER_MODELS_DIR / model_name
+            if not (model_dir / "model.bin").exists():
+                return f"[Error] Model not found: {model_dir}. Please download from Settings.", _local_usage
+            _whisper_model_cache[model_name] = WhisperModel(str(model_dir), device="cpu", compute_type="int8")
+
+        model = _whisper_model_cache[model_name]
+        language = config.get("openai_language", "auto")
+        language_arg = None if (not language or language == "auto") else language
+        t0 = time.time()
+        segments_gen, fw_info = model.transcribe(audio, language=language_arg, beam_size=5)
+        text = " ".join(seg.text for seg in segments_gen).strip()
+        _detected_language = fw_info.language
+        print(f"[Landa] faster-whisper: language={_detected_language} (prob={fw_info.language_probability:.2f})")
+
     latency_ms = round((time.time() - t0) * 1000)
-    text = " ".join(seg.text for seg in segments).strip()
-    print(f"[Landa] transcribe_whisper_local: output={text[:200]!r}")
+    print(f"[Landa] transcribe_whisper_local: model={model_name}, latency={latency_ms}ms, output={text[:200]!r}")
     usage = {"step": "transcription", "model": model_name, "input_tokens": 0, "output_tokens": 0, "duration_seconds": round(duration_seconds, 2), "latency_ms": latency_ms, "cost": 0.0, "local": True}
     return text, usage
 
 
 def _warmup_whisper_pipeline(model_name: str) -> None:
-    """Load the whisper.cpp model into memory so first transcription is instant."""
-    if model_name in _whisper_cpp_model_cache:
+    """Load the local Whisper model into memory so first transcription is instant."""
+    if model_name in _whisper_model_cache:
         return
     try:
-        from pywhispercpp.model import Model as WhisperModel
-        info = WHISPER_GGML_MODELS.get(model_name)
+        info = WHISPER_MODELS.get(model_name)
         if not info:
             return
-        model_path = WHISPER_MODELS_DIR / info["filename"]
-        if not model_path.exists():
-            return
-        print(f"[FindMyVoice] Loading whisper.cpp model: {model_name}...")
-        _whisper_cpp_model_cache[model_name] = WhisperModel(str(model_path))
-        print(f"[FindMyVoice] whisper.cpp model ready: {model_name}")
+        if sys.platform == "darwin":
+            from pywhispercpp.model import Model as WhisperModel
+            model_path = WHISPER_MODELS_DIR / info["filename"]
+            if not model_path.exists():
+                return
+            print(f"[FindMyVoice] Loading whisper.cpp model: {model_name}...")
+            _whisper_model_cache[model_name] = WhisperModel(str(model_path))
+        else:
+            from faster_whisper import WhisperModel
+            model_dir = WHISPER_MODELS_DIR / model_name
+            if not (model_dir / "model.bin").exists():
+                return
+            print(f"[FindMyVoice] Loading faster-whisper model: {model_name}...")
+            _whisper_model_cache[model_name] = WhisperModel(str(model_dir), device="cpu", compute_type="int8")
+        print(f"[FindMyVoice] Whisper model ready: {model_name}")
     except Exception as e:
         print(f"[FindMyVoice] Model warmup failed: {e}")
 
@@ -1521,12 +1702,14 @@ def _startup_whisper_check() -> None:
     model = config.get("openai_model", "whisper-1")
     if model not in LOCAL_WHISPER_MODELS:
         return
-    if not is_pywhispercpp_installed():
-        print(f"[FindMyVoice] Local model '{model}' selected but pywhispercpp not installed.")
+    if not is_whisper_deps_installed():
+        print(f"[FindMyVoice] Local model '{model}' selected but whisper deps not installed.")
         return
     if not is_whisper_model_cached(model):
         print(f"[FindMyVoice] Auto-downloading model '{model}' in background...")
-        _do_whisper_download(model)  # block until downloaded, then warm up below
+        _do_whisper_download(model)  # blocks; sets state itself based on success/failure
+    if not is_whisper_model_cached(model):
+        return  # download failed; leave error state intact
     with _whisper_download_lock:
         _whisper_download_state[model] = {
             "downloading": False, "cached": True, "error": None,
@@ -1857,6 +2040,19 @@ def transcribe_openai(wav_path: str, model_override: str | None = None) -> tuple
         return "", None
 
 
+_landa_streamer_instance = None
+
+
+def transcribe_landa_base(wav_path: str) -> tuple[str, dict]:
+    global _detected_language, _landa_streamer_instance
+    if _landa_streamer_instance is None:
+        _landa_streamer_instance = LandaStreamer()
+    language = config.get("openai_language", "auto")
+    text, detected_language, usage = _landa_streamer_instance.transcribe(wav_path, language=language)
+    _detected_language = detected_language
+    return text, usage
+
+
 def transcribe(wav_path: str, force_model: str | None = None) -> tuple[str, dict | None]:
     global _detected_language
     _detected_language = None  # reset stale value from previous recording
@@ -1865,6 +2061,8 @@ def transcribe(wav_path: str, force_model: str | None = None) -> tuple[str, dict
         language = config.get("nemo_language", "auto")
         return transcribe_nemo(wav_path, language)
     model = force_model or config.get("openai_model", "whisper-1")
+    if model == "landa-base":
+        return transcribe_landa_base(wav_path)
     if model in LOCAL_WHISPER_MODELS:
         return transcribe_whisper_local(wav_path, model)
     return transcribe_openai(wav_path, model_override=force_model)
@@ -1935,11 +2133,19 @@ def api_start():
 
 @app.post("/stop")
 def api_stop():
+    global _pending_paste, _transcription_text
     t0 = time.time()
     logging.info("[/stop] request received")
+    _transcription_ready.clear()
+    _transcription_text = None
     ok = stop_recording()
-    logging.info("[/stop] responding in %.3fs, stopped=%s", time.time() - t0, ok)
-    return jsonify({"recording": False, "stopped": ok})
+    text = None
+    if ok:
+        if _transcription_ready.wait(timeout=30):
+            text = _transcription_text
+            _pending_paste = False  # Electron will paste directly; suppress poll-based double-paste
+    logging.info("[/stop] responding in %.3fs, stopped=%s, text_len=%s", time.time() - t0, ok, len(text) if text else 0)
+    return jsonify({"recording": False, "stopped": ok, "text": text})
 
 
 @app.post("/cancel")
@@ -2067,7 +2273,7 @@ def whisper_local_status():
     if model_name not in LOCAL_WHISPER_MODELS:
         return jsonify({"model": model_name, "is_local": False})
 
-    deps_installed = is_pywhispercpp_installed()
+    deps_installed = is_whisper_deps_installed()
     with _whisper_download_lock:
         state = dict(_whisper_download_state.get(model_name, {}))
 
@@ -2077,14 +2283,18 @@ def whisper_local_status():
     progress_bytes = state.get("progress_bytes", 0)
     total_bytes = state.get("total_bytes", 0)
 
-    # If no state yet, check disk
-    if not state and not downloading:
-        cached = is_whisper_model_cached(model_name)
-        with _whisper_download_lock:
-            _whisper_download_state[model_name] = {
-                "downloading": False, "cached": cached, "error": None,
-                "progress_bytes": 0, "total_bytes": 0,
-            }
+    # Re-verify against disk when not actively downloading. This self-corrects
+    # stale "cached:true" state if the model directory was deleted or never
+    # actually finished downloading.
+    if not downloading:
+        disk_cached = is_whisper_model_cached(model_name)
+        if disk_cached != cached:
+            cached = disk_cached
+            with _whisper_download_lock:
+                _whisper_download_state[model_name] = {
+                    "downloading": False, "cached": cached, "error": None,
+                    "progress_bytes": 0, "total_bytes": 0,
+                }
 
     return jsonify({
         "model": model_name,
@@ -2115,7 +2325,7 @@ def whisper_local_install_deps():
         try:
             python = sys.executable
             proc = subprocess.Popen(
-                [python, "-m", "pip", "install", "pywhispercpp"],
+                [python, "-m", "pip", "install", "pywhispercpp" if sys.platform == "darwin" else "faster-whisper"],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
             )
             for line in proc.stdout:
@@ -2140,8 +2350,8 @@ def whisper_local_download():
     model_name = data.get("model") or config.get("openai_model", "whisper-1")
     if model_name not in LOCAL_WHISPER_MODELS:
         return jsonify({"error": "not a local model"}), 400
-    if not is_pywhispercpp_installed():
-        return jsonify({"error": "pywhispercpp not installed"}), 400
+    if not is_whisper_deps_installed():
+        return jsonify({"error": "whisper deps not installed"}), 400
     start_whisper_download(model_name)
     return jsonify({"started": True})
 
