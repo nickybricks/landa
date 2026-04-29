@@ -14,3 +14,11 @@ backend/models/*.bin
 .DS_Store
 *.log
 .env
+AGENTS.md
+CLAUDE.md
+DESIGN.md
+ROADMAP.md
+TODO.md
+.agents/skills/review
+.claude/
+.claude_history/

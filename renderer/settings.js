@@ -1367,9 +1367,13 @@ function initLogoSelect(id, options) {
         if (!isOpen) {
           const rect = trigger.getBoundingClientRect();
           menu.style.top = `${rect.bottom + 4}px`;
-          menu.style.left = `${rect.left}px`;
           menu.style.minWidth = `${rect.width}px`;
           menu.style.display = 'block';
+          const menuWidth = menu.offsetWidth;
+          const wouldOverflow = rect.left + menuWidth > window.innerWidth;
+          menu.style.left = wouldOverflow
+            ? `${rect.right - menuWidth}px`
+            : `${rect.left}px`;
           root.classList.add('open');
           getOrCreateOverlay().style.display = 'block';
         }

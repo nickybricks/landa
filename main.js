@@ -485,6 +485,9 @@ function createTray() {
 
   tray = new Tray(icon);
   tray.setToolTip('Landa');
+  if (process.platform === 'win32') {
+    tray.on('click', openSettings);
+  }
   updateTray();
 }
 
@@ -1339,14 +1342,11 @@ app.whenReady().then(() => {
     if (!ok) return;
 
     setupIpcHandlers();
-    // Hide dock icon on macOS (menu bar app)
-    if (process.platform === 'darwin') {
-      app.dock.hide();
-    }
 
     requestPermissions();
     startBackend();
     createTray();
+    app.on('activate', openSettings);
     nativeTheme.on('updated', updateTray);
 
     // Load the best available config after backend startup begins.

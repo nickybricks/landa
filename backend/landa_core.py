@@ -133,6 +133,7 @@ DEFAULT_CONFIG: dict = {
     "llm_api_key": "",
     "llm_model": "gpt-4o-mini",
     "vocabulary": [],
+    "add_to_vocabulary": {"key": "f7", "key_code": 98, "modifiers": []},
     "modes": {
         "selections": {
             "personal-message": "formal",
@@ -257,6 +258,11 @@ def _migrate(cfg: dict) -> tuple[dict, bool]:
     # ensure vocabulary list exists
     if "vocabulary" not in cfg:
         cfg["vocabulary"] = []
+        changed = True
+
+    # ensure add_to_vocabulary shortcut exists
+    if "add_to_vocabulary" not in cfg:
+        cfg["add_to_vocabulary"] = {"key": "f7", "key_code": 98, "modifiers": []}
         changed = True
 
     return cfg, changed
@@ -834,6 +840,7 @@ def post_process(text: str) -> str:
 
 
 _HALLUCINATION_EXACT: set[str] = {
+    "[blank_audio]",
     "you there?",
     "thanks for watching.",
     "thanks for watching!",
