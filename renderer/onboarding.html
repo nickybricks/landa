@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:;">
+  <title>Landa</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="onboarding.css">
+</head>
+<body>
+  <div class="drag-region"></div>
+
+  <div class="ob-progress" id="ob-progress" aria-hidden="true"></div>
+
+  <main class="ob-stage" id="ob-stage">
+
+    <!-- Screen 1 — Welcome -->
+    <section class="ob-panel" data-step="1">
+      <h1 class="ob-title" data-i18n="welcome.title"></h1>
+      <p class="ob-body" data-i18n="welcome.body"></p>
+      <div class="ob-footer">
+        <button class="ob-btn-primary" data-action="next" data-i18n="welcome.cta"></button>
+      </div>
+    </section>
+
+    <!-- Screen 2 — Microphone -->
+    <section class="ob-panel" data-step="2">
+      <div class="ob-icon">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+      </div>
+      <h1 class="ob-title" data-i18n="mic.title"></h1>
+      <p class="ob-body" data-i18n="mic.body"></p>
+      <div class="ob-status" id="mic-status" hidden>
+        <span class="ob-check">✓</span>
+        <span data-i18n="mic.granted"></span>
+      </div>
+      <div class="ob-footer">
+        <button class="ob-btn-secondary" id="mic-grant-btn" data-i18n="mic.cta"></button>
+        <button class="ob-btn-primary" data-action="next" data-i18n="common.continue" disabled></button>
+      </div>
+    </section>
+
+    <!-- Screen 3 — Accessibility (macOS only) -->
+    <section class="ob-panel" data-step="3" data-platform="darwin">
+      <div class="ob-icon">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 11l3 3L22 4"/>
+          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+        </svg>
+      </div>
+      <h1 class="ob-title" data-i18n="acc.title"></h1>
+      <p class="ob-body" data-i18n="acc.body"></p>
+      <div class="ob-status" id="acc-status" hidden>
+        <span class="ob-check">✓</span>
+        <span data-i18n="acc.granted"></span>
+      </div>
+      <div class="ob-footer">
+        <button class="ob-btn-secondary" id="acc-open-btn" data-i18n="acc.cta"></button>
+      </div>
+    </section>
+
+    <!-- Screen 4 — Hotkey Training -->
+    <section class="ob-panel" data-step="4">
+      <h1 class="ob-title" data-i18n="train.title"></h1>
+      <p class="ob-body ob-train-prompt">
+        <span data-i18n="train.lead"></span>
+        <span class="ob-kbd" id="train-kbd"></span>
+        <span data-i18n="train.tail"></span>
+      </p>
+      <textarea class="ob-textarea" id="train-textarea" autofocus rows="3"></textarea>
+      <div class="ob-footer">
+        <button class="ob-btn-secondary ob-hidden" id="train-demo-btn" data-i18n="train.demo"></button>
+        <button class="ob-btn-primary" data-action="next" data-i18n="common.continue" disabled></button>
+      </div>
+    </section>
+
+    <!-- Screen 5 — Language -->
+    <section class="ob-panel" data-step="5">
+      <h1 class="ob-title" data-i18n="lang.title"></h1>
+      <p class="ob-body" data-i18n="lang.body"></p>
+      <div class="ob-lang-row">
+        <button class="ob-pill" data-lang="de" data-i18n="lang.de"></button>
+        <button class="ob-pill" data-lang="en" data-i18n="lang.en"></button>
+        <button class="ob-pill" data-lang="auto" data-i18n="lang.both"></button>
+      </div>
+      <div class="ob-footer">
+        <button class="ob-btn-primary" id="finish-btn" data-i18n="lang.cta" disabled></button>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="onboarding.js"></script>
+</body>
+</html>

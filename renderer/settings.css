@@ -2290,3 +2290,81 @@ select {
   opacity: 0.88;
 }
 
+/* ---------------------------------------------------------------------------
+   Recording Window Style Selector (Configuration tab)
+   --------------------------------------------------------------------------- */
+
+.rec-style-segmented {
+  display: flex;
+  gap: 10px;
+}
+
+.rec-style-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 8px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  color: var(--text-secondary);
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  min-width: 96px;
+}
+
+.rec-style-option:hover {
+  border-color: var(--text-secondary);
+}
+
+.rec-style-option[aria-checked="true"] {
+  border-color: var(--primary);
+  color: var(--text);
+  box-shadow: 0 0 0 2px rgba(0, 136, 255, 0.18);
+}
+
+.rec-style-preview {
+  width: 72px;
+  height: 28px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--primary);
+  border-radius: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--text-secondary);
+}
+
+.rec-style-preview span {
+  display: block;
+  width: 2px;
+  background: var(--primary);
+  border-radius: 2px;
+  opacity: 0.9;
+}
+
+.rec-style-preview-classic span {
+  height: 14px;
+}
+.rec-style-preview-classic span:nth-child(2n)  { height: 8px; }
+.rec-style-preview-classic span:nth-child(3n)  { height: 18px; }
+.rec-style-preview-classic span:nth-child(5n)  { height: 6px; }
+
+.rec-style-preview-mini {
+  width: 48px;
+  height: 22px;
+}
+.rec-style-preview-mini span {
+  height: 10px;
+}
+.rec-style-preview-mini span:nth-child(2) { height: 14px; }
+.rec-style-preview-mini span:nth-child(3) { height: 6px; }
+
+.rec-style-label {
+  font-size: 12px;
+  font-weight: 500;
+}
+

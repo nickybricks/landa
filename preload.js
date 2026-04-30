@@ -74,4 +74,24 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('add-to-vocabulary', (_event, word) => callback(word));
   },
   setCapturingHotkey: (active) => ipcRenderer.send('set-capturing-hotkey', active),
+
+  // Recording window
+  onRecordingStyle: (callback) => {
+    ipcRenderer.removeAllListeners('recording-style');
+    ipcRenderer.on('recording-style', (_event, style) => callback(style));
+  },
+  onRecordingPaused: (callback) => {
+    ipcRenderer.removeAllListeners('recording-paused');
+    ipcRenderer.on('recording-paused', (_event, paused) => callback(paused));
+  },
+  onAudioLevel: (callback) => {
+    ipcRenderer.on('recording-level', (_event, level) => callback(level));
+  },
+
+  // Onboarding
+  getMicAccessStatus: () => ipcRenderer.invoke('get-mic-access-status'),
+  requestMicAccess: () => ipcRenderer.invoke('request-mic-access'),
+  getAccessibilityStatus: () => ipcRenderer.invoke('get-accessibility-status'),
+  openAccessibilitySettings: () => ipcRenderer.invoke('open-accessibility-settings'),
+  finishOnboarding: (payload) => ipcRenderer.invoke('finish-onboarding', payload),
 });

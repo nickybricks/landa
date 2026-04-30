@@ -1,0 +1,331 @@
+/* ---------------------------------------------------------------------------
+   Onboarding — uses Landa design tokens (mirrors settings.css :root)
+   --------------------------------------------------------------------------- */
+
+:root {
+  --primary: #0088ff;
+  --secondary: #5978aa;
+  --tertiary: #df6402;
+  --neutral: #747780;
+
+  --bg: #f5f5f7;
+  --bg-card: #ffffff;
+  --bg-sidebar: #f0f0f2;
+  --border: rgba(0, 0, 0, 0.08);
+  --text: #1d1d1f;
+  --text-secondary: #86868b;
+
+  --radius-pill: 100px;
+  --radius-card: 16px;
+
+  --font-headline: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e1e1e;
+    --bg-card: #2d2d2d;
+    --bg-sidebar: #252525;
+    --border: rgba(255, 255, 255, 0.1);
+    --text: #f5f5f7;
+    --text-secondary: #98989d;
+  }
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* Top draggable strip so the frameless window can be moved. */
+.drag-region {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
+  -webkit-app-region: drag;
+  z-index: 1;
+}
+
+/* ---------------------------------------------------------------------------
+   Progress dots
+   --------------------------------------------------------------------------- */
+
+.ob-progress {
+  position: fixed;
+  top: 28px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.ob-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--neutral);
+  opacity: 0.25;
+  transition: background 0.25s, opacity 0.25s, transform 0.25s;
+}
+
+.ob-dot[data-state="done"] {
+  background: var(--primary);
+  opacity: 0.55;
+}
+
+.ob-dot[data-state="current"] {
+  background: var(--text);
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+/* ---------------------------------------------------------------------------
+   Stage + Panels
+   --------------------------------------------------------------------------- */
+
+.ob-stage {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 56px 56px;
+}
+
+.ob-panel {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  max-width: 480px;
+  -webkit-app-region: no-drag;
+}
+
+.ob-panel[data-active="true"] {
+  display: flex;
+  animation: ob-fade-in 0.35s ease-out;
+}
+
+@keyframes ob-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------------------------------------------------------------------------
+   Typography
+   --------------------------------------------------------------------------- */
+
+.ob-title {
+  font-family: var(--font-headline);
+  font-weight: 700;
+  font-size: 28px;
+  line-height: 1.2;
+  margin-bottom: 16px;
+  color: var(--text);
+}
+
+.ob-body {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin-bottom: 28px;
+  max-width: 420px;
+}
+
+.ob-train-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ob-kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   Icons
+   --------------------------------------------------------------------------- */
+
+.ob-icon {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: rgba(0, 136, 255, 0.12);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+/* ---------------------------------------------------------------------------
+   Status (granted) row
+   --------------------------------------------------------------------------- */
+
+.ob-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 136, 255, 0.12);
+  color: var(--primary);
+  font-weight: 500;
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+.ob-check {
+  font-weight: 700;
+}
+
+/* ---------------------------------------------------------------------------
+   Buttons
+   --------------------------------------------------------------------------- */
+
+.ob-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  width: 100%;
+}
+
+.ob-btn-primary,
+.ob-btn-secondary {
+  -webkit-app-region: no-drag;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 12px 28px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, opacity 0.15s, transform 0.1s;
+  min-width: 220px;
+}
+
+.ob-btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.ob-btn-primary:hover:not(:disabled) {
+  background: #0077e0;
+}
+
+.ob-btn-primary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.ob-btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ob-btn-secondary {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.ob-btn-secondary:hover {
+  background: var(--bg-sidebar);
+}
+
+.ob-btn-secondary:active {
+  transform: scale(0.98);
+}
+
+.ob-hidden { display: none !important; }
+
+/* ---------------------------------------------------------------------------
+   Textarea (training screen)
+   --------------------------------------------------------------------------- */
+
+.ob-textarea {
+  width: 100%;
+  min-height: 110px;
+  resize: none;
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 16px 18px;
+  margin-bottom: 24px;
+  outline: none;
+  user-select: text;
+  -webkit-app-region: no-drag;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ob-textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(0, 136, 255, 0.18);
+}
+
+/* ---------------------------------------------------------------------------
+   Language pills
+   --------------------------------------------------------------------------- */
+
+.ob-lang-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.ob-pill {
+  -webkit-app-region: no-drag;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  border-radius: var(--radius-pill);
+  padding: 10px 24px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.ob-pill:hover {
+  background: var(--bg-sidebar);
+}
+
+.ob-pill[data-selected="true"] {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}

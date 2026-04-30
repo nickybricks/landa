@@ -112,7 +112,7 @@ DEFAULT_CONFIG: dict = {
     "api_key": "",
     "api_provider": "openai",
     "openai_model": "whisper-small",
-    "openai_language": "auto",
+    "openai_language": "de",
     "nemo_language": "auto",
     "sound_start": "Tink",
     "sound_stop": "Pop",
@@ -132,8 +132,15 @@ DEFAULT_CONFIG: dict = {
     "llm_provider": "openai",
     "llm_api_key": "",
     "llm_model": "gpt-4o-mini",
-    "vocabulary": [],
+    "vocabulary": [
+        {"from": "Lambda", "to": "Landa"},
+        {"from": "Landau", "to": "Landa"},
+        {"from": "Landar", "to": "Landa"},
+        {"from": "Londoner", "to": "Landa"},
+    ],
     "add_to_vocabulary": {"key": "f7", "key_code": 98, "modifiers": []},
+    "recording_window_style": "mini",
+    "onboarding_completed": False,
     "modes": {
         "selections": {
             "personal-message": "formal",
@@ -260,9 +267,16 @@ def _migrate(cfg: dict) -> tuple[dict, bool]:
         cfg["vocabulary"] = []
         changed = True
 
+
     # ensure add_to_vocabulary shortcut exists
     if "add_to_vocabulary" not in cfg:
         cfg["add_to_vocabulary"] = {"key": "f7", "key_code": 98, "modifiers": []}
+        changed = True
+
+    # Existing configs predate the onboarding flow — treat them as already onboarded
+    # so updates don't surprise users with a setup wizard.
+    if "onboarding_completed" not in cfg:
+        cfg["onboarding_completed"] = True
         changed = True
 
     return cfg, changed
@@ -703,6 +717,7 @@ audio_frames: list[np.ndarray] = []
 _audio_sum_sq: float = 0.0      # incremental sum-of-squares for fast silence check
 _audio_peak: float = 0.0        # incremental peak abs value
 _audio_total_samples: int = 0   # total samples captured
+_current_level: float = 0.0     # per-chunk RMS for live audio level display (0.0–1.0 normalized)
 stream: sd.InputStream | None = None
 _teardown_thread: threading.Thread | None = None  # tracks in-flight stream teardown
 lock = threading.Lock()
@@ -736,7 +751,8 @@ def paste_text(text: str) -> None:
     """Copy *text* to the clipboard. On macOS, signals the Electron main process to send Cmd+V."""
     global _pending_paste, _transcription_text
     if sys.platform == "darwin":
-        process = subprocess.Popen(["pbcopy"], stdin=subprocess.PIPE)
+        env = {**os.environ, "LANG": "en_US.UTF-8", "LC_CTYPE": "UTF-8"}
+        process = subprocess.Popen(["pbcopy"], stdin=subprocess.PIPE, env=env)
         process.communicate(text.encode("utf-8"))
         _transcription_text = text
         _transcription_ready.set()  # unblocks api_stop if it's waiting
@@ -1031,7 +1047,7 @@ def _realtime_sender_thread() -> None:
 
 
 def _audio_callback(indata: np.ndarray, frames: int, time_info, status) -> None:
-    global _audio_sum_sq, _audio_peak, _audio_total_samples
+    global _audio_sum_sq, _audio_peak, _audio_total_samples, _current_level
     if _is_on_hold:
         return
     audio_frames.append(indata.copy())
@@ -1041,6 +1057,7 @@ def _audio_callback(indata: np.ndarray, frames: int, time_info, status) -> None:
     if chunk_peak > _audio_peak:
         _audio_peak = chunk_peak
     _audio_total_samples += flat.size
+    _current_level = min(1.0, float(np.sqrt(np.dot(flat, flat) / flat.size)) * 10.0)
     if _rt_queue is not None:
         try:
             _rt_queue.put_nowait(indata.copy())
@@ -1076,6 +1093,7 @@ def start_recording() -> bool:
         _audio_sum_sq = 0.0
         _audio_peak = 0.0
         _audio_total_samples = 0
+        _current_level = 0.0
     # Create and start the InputStream OUTSIDE the lock — sd.InputStream()
     # can hang if PortAudio is in a bad state, and holding the lock would
     # deadlock all recording operations.  Use a thread with timeout so a
@@ -1639,7 +1657,7 @@ def transcribe_whisper_local(audio, model_name: str) -> tuple:
                 _detected_language = None
         kwargs = {
             "single_segment": True,
-            "no_context": True,
+            "no_context": False,
             "print_progress": False,
             "print_realtime": False,
         }
@@ -2120,6 +2138,11 @@ def update_config():
 @app.get("/status")
 def get_status():
     return jsonify({"recording": recording, "is_on_hold": _is_on_hold, "pending_paste": _pending_paste})
+
+
+@app.get("/audio-level")
+def get_audio_level():
+    return jsonify({"level": _current_level})
 
 
 @app.post("/acknowledge-paste")

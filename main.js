@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, globalShortcut, nativeImage, clipboard, dialog, ipcMain, systemPreferences, nativeTheme, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, nativeImage, clipboard, dialog, ipcMain, systemPreferences, nativeTheme, shell, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
@@ -23,6 +23,9 @@ const POLL_INTERVAL = 1000; // 1 second, matches Swift app
 
 let tray = null;
 let settingsWindow = null;
+let onboardingWindow = null;
+let recordingWindow = null;
+let recordingWindowStyle = 'mini'; // 'classic' | 'mini' | 'none'
 let backendProcess = null;
 let pollTimer = null;
 let isRecording = false;
@@ -40,6 +43,48 @@ let currentResumeSound = 'Pop'; // system sound name to play on resume
 let lastHotkeyTime = 0;
 let hotkeyInFlight = false; // re-entrancy guard
 let isCapturingHotkey = false;
+let updateDialogShown = false;
+
+// ---------------------------------------------------------------------------
+// Auto-updater
+// ---------------------------------------------------------------------------
+
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-available', (info) => {
+    if (updateDialogShown) return;
+    updateDialogShown = true;
+    dialog.showMessageBox({
+      type: 'info',
+      buttons: ['OK'],
+      title: 'Update Available',
+      message: `Landa ${info.version} is available`,
+      detail: 'Downloading in the background — you\'ll be prompted to install when it\'s ready.',
+    }).catch(() => {});
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    dialog.showMessageBox({
+      type: 'info',
+      buttons: ['Restart Now', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Update Ready',
+      message: `Landa ${info.version} has been downloaded`,
+      detail: 'Restart Landa now to install the update.',
+    }).then((result) => {
+      if (result.response === 0) {
+        autoUpdater.quitAndInstall();
+      }
+    }).catch(() => {});
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('[updater]', err && err.message ? err.message : err);
+  });
+}
 
 // ---------------------------------------------------------------------------
 // API Client
@@ -190,10 +235,12 @@ function setRecordingState(recording) {
   if (recording) {
     activateCancelHotkey();
     activateHoldHotkey();
+    if (changed) showRecordingWindow();
   } else {
     deactivateCancelHotkey();
     deactivateHoldHotkey();
     isOnHold = false;
+    if (changed) hideRecordingWindow();
     // Recording just ended — history likely has a new entry (ignore cancels, which go through handleCancelPress).
     if (wasRecording && settingsWindow && !settingsWindow.isDestroyed()) {
       settingsWindow.webContents.send('history-updated');
@@ -395,6 +442,9 @@ async function handleHoldPress() {
     const status = await api.fetchStatus();
     isOnHold = status.is_on_hold || false;
     updateTray();
+    if (recordingWindow && !recordingWindow.isDestroyed()) {
+      recordingWindow.webContents.send('recording-paused', isOnHold);
+    }
   } catch { /* ignore */ }
 }
 
@@ -652,6 +702,141 @@ function openSettings() {
   });
 }
 
+function openOnboarding() {
+  if (onboardingWindow && !onboardingWindow.isDestroyed()) {
+    onboardingWindow.focus();
+    return;
+  }
+
+  onboardingWindow = new BrowserWindow({
+    width: 640,
+    height: 720,
+    title: 'Landa',
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    frame: false,
+    titleBarStyle: 'hidden',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1e1e1e' : '#f5f5f7',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  onboardingWindow.loadFile(path.join(__dirname, 'renderer', 'onboarding.html'));
+
+  onboardingWindow.on('closed', () => {
+    onboardingWindow = null;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Recording Window — floating always-on-top indicator while recording
+// ---------------------------------------------------------------------------
+
+// Window dimensions = pill size + ~30px breathing room each side so the
+// drop-shadow / blue glow can render without being clipped by the window edge.
+const RECORDING_SIZES = {
+  classic: { width: 320, height: 110 },
+  mini:    { width: 180, height: 90 },
+};
+
+function createRecordingWindow() {
+  const size = RECORDING_SIZES[recordingWindowStyle] || RECORDING_SIZES.mini;
+  recordingWindow = new BrowserWindow({
+    width: size.width,
+    height: size.height,
+    frame: false,
+    transparent: true,
+    hasShadow: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    // focusable: false would hide the macOS dock icon when this is the only
+    // open window. setIgnoreMouseEvents + showInactive already keep us from
+    // stealing input/focus, so we keep this true on macOS. On Windows we
+    // still need it false so the window doesn't grab keyboard focus.
+    focusable: process.platform !== 'darwin',
+    show: false,
+    alwaysOnTop: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  recordingWindow.setAlwaysOnTop(true, 'screen-saver');
+  recordingWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  // setVisibleOnAllWorkspaces transforms the macOS process type
+  // (ForegroundApplication ↔ UIElementApplication) to apply the all-spaces
+  // collection behavior. The transform back can fail and leave the app in
+  // accessory mode, which removes the dock icon. Force it back explicitly.
+  if (process.platform === 'darwin') {
+    app.setActivationPolicy('regular');
+  }
+  // Ignore mouse — never steal clicks from the app the user is dictating into.
+  recordingWindow.setIgnoreMouseEvents(true);
+
+  recordingWindow.loadFile(path.join(__dirname, 'renderer', 'recording.html'));
+
+  recordingWindow.webContents.on('did-finish-load', () => {
+    if (recordingWindow && !recordingWindow.isDestroyed()) {
+      recordingWindow.webContents.send('recording-style', recordingWindowStyle);
+      recordingWindow.webContents.send('recording-paused', isOnHold);
+    }
+  });
+
+  recordingWindow.on('closed', () => {
+    recordingWindow = null;
+  });
+}
+
+function positionRecordingWindow() {
+  if (!recordingWindow || recordingWindow.isDestroyed()) return;
+  const cursor = screen.getCursorScreenPoint();
+  const display = screen.getDisplayNearestPoint(cursor);
+  const { x, y, width, height } = display.workArea;
+  const [winW, winH] = recordingWindow.getSize();
+  const targetX = Math.round(x + (width - winW) / 2);
+  const targetY = Math.round(y + height - winH - 80);
+  recordingWindow.setPosition(targetX, targetY, false);
+}
+
+function showRecordingWindow() {
+  if (recordingWindowStyle === 'none') return;
+  if (!recordingWindow || recordingWindow.isDestroyed()) {
+    createRecordingWindow();
+  } else {
+    // Make sure size matches current style (in case style changed since creation).
+    const size = RECORDING_SIZES[recordingWindowStyle] || RECORDING_SIZES.mini;
+    recordingWindow.setSize(size.width, size.height, false);
+    recordingWindow.webContents.send('recording-style', recordingWindowStyle);
+    recordingWindow.webContents.send('recording-paused', isOnHold);
+  }
+  positionRecordingWindow();
+  recordingWindow.showInactive();
+}
+
+function hideRecordingWindow() {
+  if (recordingWindow && !recordingWindow.isDestroyed()) {
+    recordingWindow.hide();
+  }
+}
+
+function destroyRecordingWindow() {
+  if (recordingWindow && !recordingWindow.isDestroyed()) {
+    recordingWindow.close();
+  }
+  recordingWindow = null;
+}
+
 // ---------------------------------------------------------------------------
 // Backend Lifecycle
 // ---------------------------------------------------------------------------
@@ -812,6 +997,13 @@ function applyConfig(config) {
   reformatEnabled = config.reformat_enabled || false;
   reformatMode = config.reformat_mode || 'default';
 
+  const newStyle = config.recording_window_style || 'mini';
+  if (newStyle !== recordingWindowStyle) {
+    recordingWindowStyle = newStyle;
+    // Recreate next show — sizes differ, simpler than resize+notify in place.
+    destroyRecordingWindow();
+  }
+
   const newModes = config.modes || modesConfig;
   const modesChanged = JSON.stringify(newModes) !== JSON.stringify(modesConfig);
   modesConfig = newModes;
@@ -837,6 +1029,9 @@ function startStatusPolling() {
         if (newIsOnHold !== isOnHold) {
           isOnHold = newIsOnHold;
           updateTray();
+          if (recordingWindow && !recordingWindow.isDestroyed()) {
+            recordingWindow.webContents.send('recording-paused', isOnHold);
+          }
         }
         setRecordingState(status.recording);
         if (status.pending_paste && process.platform === 'darwin') {
@@ -1321,6 +1516,54 @@ function setupIpcHandlers() {
     }
     return [];
   });
+
+  // ---- Onboarding ----
+
+  ipcMain.handle('get-mic-access-status', () => {
+    if (process.platform === 'darwin') {
+      return systemPreferences.getMediaAccessStatus('microphone');
+    }
+    return 'granted';
+  });
+
+  ipcMain.handle('request-mic-access', async () => {
+    if (process.platform === 'darwin') {
+      const granted = await systemPreferences.askForMediaAccess('microphone');
+      return granted ? 'granted' : 'denied';
+    }
+    return 'granted';
+  });
+
+  ipcMain.handle('get-accessibility-status', () => {
+    if (process.platform === 'darwin') {
+      try { return systemPreferences.isTrustedAccessibilityClient(false); }
+      catch { return false; }
+    }
+    return true;
+  });
+
+  ipcMain.handle('open-accessibility-settings', () => {
+    if (process.platform === 'darwin') {
+      shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
+    }
+  });
+
+  ipcMain.handle('finish-onboarding', async (_event, { language }) => {
+    const patch = { onboarding_completed: true };
+    if (language) patch.openai_language = language;
+    try {
+      const result = await api.patchConfig(patch);
+      const fullConfig = result || await api.fetchConfig();
+      if (fullConfig) applyConfig(fullConfig);
+    } catch (err) {
+      console.error(`[Landa] finish-onboarding patch failed: ${err.message}`);
+    }
+    if (onboardingWindow && !onboardingWindow.isDestroyed()) {
+      onboardingWindow.close();
+    }
+    openSettings();
+    return true;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1346,32 +1589,40 @@ app.whenReady().then(() => {
     requestPermissions();
     startBackend();
     createTray();
-    app.on('activate', openSettings);
+    app.on('activate', () => {
+      if (onboardingWindow && !onboardingWindow.isDestroyed()) onboardingWindow.focus();
+      else openSettings();
+    });
     nativeTheme.on('updated', updateTray);
 
     // Load the best available config after backend startup begins.
     // Falling back to disk avoids silently reverting packaged apps to default
     // hotkeys when the Python backend needs longer than expected to boot.
     setTimeout(async () => {
+      let config = null;
       try {
-        const config = await getBestAvailableConfig();
-        if (config) {
-          applyConfig(config);
-          return;
-        }
+        config = await getBestAvailableConfig();
+        if (config) applyConfig(config);
       } catch {}
 
-      // Final fallback if neither backend nor disk config is available.
-      registerHotkey({ key: 'f5', key_code: 96, modifiers: ['command', 'shift'] });
-      registerCancelHotkey({ key: 'escape', key_code: 53, modifiers: [] });
-      registerHoldHotkey({ key: 'f6', key_code: 97, modifiers: [] });
+      if (!config) {
+        // Final fallback if neither backend nor disk config is available.
+        registerHotkey({ key: 'f5', key_code: 96, modifiers: ['command', 'shift'] });
+        registerCancelHotkey({ key: 'escape', key_code: 53, modifiers: [] });
+        registerHoldHotkey({ key: 'f6', key_code: 97, modifiers: [] });
+      }
+
+      if (config && config.onboarding_completed === false) {
+        openOnboarding();
+      }
     }, 2000);
 
     startStatusPolling();
 
     if (app.isPackaged) {
-      autoUpdater.checkForUpdatesAndNotify();
-      setInterval(() => autoUpdater.checkForUpdatesAndNotify(), 60 * 60 * 1000);
+      setupAutoUpdater();
+      autoUpdater.checkForUpdates().catch(() => {});
+      setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 60 * 60 * 1000);
     }
   });
 });
@@ -1379,6 +1630,7 @@ app.whenReady().then(() => {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   if (pollTimer) clearInterval(pollTimer);
+  destroyRecordingWindow();
   stopBackend();
 });
 

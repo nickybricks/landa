@@ -480,6 +480,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupHistoryTab();
   setupVocabularyTab();
   setupHomeTab();
+  setupRecordingWindowStyle();
 
   if (config) applyConfig(config);
 
@@ -602,6 +603,28 @@ function applyConfig(cfg, { fromPoll = false } = {}) {
 
   // Vocabulary
   if (typeof renderVocabList === 'function') renderVocabList();
+
+  // Recording window style
+  applyRecordingWindowStyle(cfg.recording_window_style || 'mini');
+}
+
+function applyRecordingWindowStyle(style) {
+  document.querySelectorAll('#rec-style-segmented .rec-style-option').forEach((btn) => {
+    const selected = btn.dataset.style === style;
+    btn.setAttribute('aria-checked', selected ? 'true' : 'false');
+  });
+}
+
+function setupRecordingWindowStyle() {
+  document.querySelectorAll('#rec-style-segmented .rec-style-option').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (!config) return;
+      const style = btn.dataset.style;
+      config.recording_window_style = style;
+      applyRecordingWindowStyle(style);
+      saveConfigNow();
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
