@@ -1445,6 +1445,11 @@ select {
   display: none !important;
 }
 
+/* Dev-mode-only UI (model picker, LLM provider/key, etc.) — hidden by default. */
+body:not(.dev-mode) .dev-only {
+  display: none !important;
+}
+
 /* Disabled sound rows when muted */
 .sound-row.disabled {
   opacity: 0.4;

@@ -69,7 +69,8 @@ const TRANSLATIONS = {
     // Settings tab — language section
     'settings.language.section': 'Language',
     'settings.language.label': 'App Language',
-    // Settings tab — model section
+    // Settings tab — transcription (user-visible) + model (dev-only) sections
+    'settings.transcription.section': 'Transcription',
     'settings.model.section': 'Model',
     'settings.model.apikey': 'API Key',
     'settings.model.model': 'Model',
@@ -211,7 +212,8 @@ const TRANSLATIONS = {
     // Settings tab — language section
     'settings.language.section': 'Sprache',
     'settings.language.label': 'App-Sprache',
-    // Settings tab — model section
+    // Settings tab — transcription (user-visible) + model (dev-only) sections
+    'settings.transcription.section': 'Transkription',
     'settings.model.section': 'Modell',
     'settings.model.apikey': 'API-Schlüssel',
     'settings.model.model': 'Modell',
@@ -439,6 +441,7 @@ window.api.onConfigUpdated((updated) => {
 document.addEventListener('DOMContentLoaded', async () => {
   platform = await window.api.getPlatform();
   document.body.classList.add('platform-' + platform);
+  if (await window.api.isDevMode()) document.body.classList.add('dev-mode');
   systemSounds = await window.api.getSystemSounds();
 
   const version = await window.api.getAppVersion();
@@ -1618,10 +1621,11 @@ function updateLlmAutofillNotice(show) {
 }
 
 function hasLlmApiKey() {
-  if (config && config.llm_provider === 'local') {
-    return _llmLocalCached;
-  }
-  return !!(config && config.llm_api_key && config.llm_api_key.trim());
+  if (!config) return false;
+  // The Landa-hosted proxy holds the key server-side — always available to the user.
+  if (config.llm_provider === 'landa_proxy') return true;
+  if (config.llm_provider === 'local') return _llmLocalCached;
+  return !!(config.llm_api_key && config.llm_api_key.trim());
 }
 
 function updateModesLlmGate() {

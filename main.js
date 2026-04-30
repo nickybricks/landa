@@ -17,6 +17,29 @@ const CONFIG_DIR = path.join(os.homedir(), '.landa');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 const POLL_INTERVAL = 1000; // 1 second, matches Swift app
 
+// In dev (unpackaged), load <repo>/.env so LANDA_PROXY_URL / LANDA_APP_SECRET
+// reach the Python subprocess via inherited env. Production builds bake the
+// values into backend/landa_constants.py — this loader is a no-op there.
+if (!app.isPackaged) {
+  try {
+    const envPath = path.join(__dirname, '.env');
+    if (fs.existsSync(envPath)) {
+      for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
+        const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*)\s*$/);
+        if (!m) continue;
+        const key = m[1];
+        let val = m[2];
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        if (process.env[key] === undefined) process.env[key] = val;
+      }
+    }
+  } catch (e) {
+    console.warn('[Landa] .env load failed:', e.message);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
@@ -1517,6 +1540,16 @@ function setupIpcHandlers() {
 
   ipcMain.handle('get-platform', () => process.platform);
   ipcMain.handle('get-app-version', () => app.getVersion());
+
+  ipcMain.handle('is-dev-mode', () => {
+    if (process.env.LANDA_DEV === '1') return true;
+    try {
+      const cfg = readConfigFromDisk();
+      return cfg && cfg.dev_mode === true;
+    } catch {
+      return false;
+    }
+  });
 
   ipcMain.handle('get-history', async () => {
     try { return await api.fetchHistory(); }

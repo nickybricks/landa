@@ -41,6 +41,9 @@ contextBridge.exposeInMainWorld('api', {
   // Platform
   getPlatform: () => ipcRenderer.invoke('get-platform'),
 
+  // Dev-mode flag (controls visibility of advanced LLM/model UI)
+  isDevMode: () => ipcRenderer.invoke('is-dev-mode'),
+
   // App version
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 

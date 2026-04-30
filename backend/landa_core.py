@@ -29,6 +29,7 @@ from scipy.signal import resample_poly
 from openai import OpenAI
 
 from landa_streamer import LandaStreamer
+from landa_constants import LANDA_APP_SECRET, LANDA_PROXY_URL
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
@@ -129,9 +130,9 @@ DEFAULT_CONFIG: dict = {
     "mouse_shortcut": {"key": "", "key_code": -1, "modifiers": []},
     "reformat_enabled": False,
     "reformat_mode": "default",
-    "llm_provider": "openai",
+    "llm_provider": "landa_proxy",
     "llm_api_key": "",
-    "llm_model": "gpt-4o-mini",
+    "llm_model": "",
     "vocabulary": [
         {"from": "Lambda", "to": "Landa"},
         {"from": "Landau", "to": "Landa"},
@@ -253,12 +254,20 @@ def _migrate(cfg: dict) -> tuple[dict, bool]:
 
     # ensure llm fields exist
     if "llm_provider" not in cfg:
-        cfg["llm_provider"] = "openai"
+        cfg["llm_provider"] = "landa_proxy"
         changed = True
     if "llm_api_key" not in cfg:
         cfg["llm_api_key"] = ""
         changed = True
     if "llm_model" not in cfg:
+        cfg["llm_model"] = ""
+        changed = True
+
+    # Migrate users who were on the previous "openai" default but never added
+    # a key — they were silently broken; switch them to the proxy so modes
+    # start working. Users with their own key configured are left alone.
+    if cfg.get("llm_provider") == "openai" and not cfg.get("llm_api_key"):
+        cfg["llm_provider"] = "landa_proxy"
         cfg["llm_model"] = ""
         changed = True
 
@@ -624,6 +633,48 @@ def reformat_text(text: str, mode: str | None = None) -> tuple[str, dict | None]
         latency_ms = round((time.time() - t0) * 1000)
         usage = {"step": "reformat", "model": model_id, "input_tokens": 0, "output_tokens": 0, "latency_ms": latency_ms, "cost": 0.0, "local": True}
         return result, usage
+
+    # Landa-hosted proxy — no user API key. Server picks the model.
+    if llm_provider == "landa_proxy":
+        if not LANDA_PROXY_URL or not LANDA_APP_SECRET:
+            print("[Landa] landa_proxy provider selected but LANDA_PROXY_URL / LANDA_APP_SECRET are unset.")
+            return text, None
+        try:
+            t0 = time.time()
+            response = httpx.post(
+                f"{LANDA_PROXY_URL.rstrip('/')}/api/reformat",
+                headers={
+                    "authorization": f"Bearer {LANDA_APP_SECRET}",
+                    "content-type": "application/json",
+                },
+                json={
+                    "system": prompt,
+                    "messages": [{"role": "user", "content": text}],
+                    "max_tokens": 1024,
+                },
+                timeout=15.0,
+            )
+            latency_ms = round((time.time() - t0) * 1000)
+            if response.status_code == 429:
+                print(f"[Landa] Proxy rate-limited: {response.text}")
+                return text, None
+            response.raise_for_status()
+            data = response.json()
+            result = (data.get("text") or "").strip()
+            print(f"[Landa] reformat_text: output={result[:200]!r}")
+            usage = {
+                "step": "reformat",
+                "model": data.get("model", "gpt-4o"),
+                "input_tokens": data.get("input_tokens", 0),
+                "output_tokens": data.get("output_tokens", 0),
+                "latency_ms": latency_ms,
+                "cost": 0.0,
+                "via_proxy": True,
+            }
+            return result if result else text, usage
+        except Exception as e:
+            print(f"[Landa] Proxy reformat error (falling back to raw text): {e}")
+            return text, None
 
     # Use dedicated LLM key; fall back to transcription key when both providers are openai
     api_key = config.get("llm_api_key", "") or (

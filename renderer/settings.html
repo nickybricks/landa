@@ -111,12 +111,12 @@
         <div class="tab-panel" id="tab-modes">
           <!-- Column 2: Mode Categories -->
           <div class="modes-sidebar">
-            <!-- LLM Settings header icon -->
-            <div class="modes-llm-btn" id="modes-llm-btn" title="LLM Settings">
+            <!-- LLM Settings header icon — dev-mode only -->
+            <div class="modes-llm-btn dev-only" id="modes-llm-btn" title="LLM Settings">
               <span class="modes-llm-icon">✦</span>
               <span class="modes-llm-label" data-i18n="modes.llm.btn">LLM Settings</span>
             </div>
-            <div class="modes-sidebar-divider"></div>
+            <div class="modes-sidebar-divider dev-only"></div>
             <div class="modes-category active" data-category="personal-message">
               <div class="modes-category-row">
                 <span class="modes-category-icon">💬</span>
@@ -147,8 +147,8 @@
 
           <!-- Column 3: Content Area -->
           <div class="modes-content">
-            <!-- LLM Settings Panel (shown when LLM icon selected) -->
-            <div class="modes-scroll hidden" id="modes-llm-panel">
+            <!-- LLM Settings Panel (shown when LLM icon selected) — dev-mode only -->
+            <div class="modes-scroll hidden dev-only" id="modes-llm-panel">
               <div class="llm-panel-header">
                 <div class="llm-panel-title" data-i18n="modes.llm.title">LLM Settings</div>
                 <div class="llm-panel-subtitle" id="llm-panel-subtitle">Modes use a language model to reformat your transcribed speech. Choose a provider and enter your API key.</div>
@@ -157,6 +157,7 @@
                 <div class="picker-row">
                   <span data-i18n="modes.llm.provider">Provider</span>
                   <select id="sel-llm-provider">
+                    <option value="landa_proxy">Landa Proxy (default)</option>
                     <option value="openai">OpenAI</option>
                     <option value="anthropic">Anthropic</option>
                     <option value="google">Google</option>
@@ -190,8 +191,8 @@
 
             <!-- Category content (shown when a category is selected) -->
             <div class="modes-scroll" id="modes-category-panel">
-              <!-- No LLM API key notice -->
-              <div class="modes-no-llm-notice" id="modes-no-llm-notice">
+              <!-- No LLM API key notice — dev-mode only -->
+              <div class="modes-no-llm-notice dev-only" id="modes-no-llm-notice">
                 <div class="modes-no-llm-icon">✦</div>
                 <div class="modes-no-llm-text">
                   <strong data-i18n="modes.nollm.title">LLM not configured</strong>
@@ -235,8 +236,19 @@
               </div>
             </section>
 
-            <!-- Model -->
-            <section id="section-openai">
+            <!-- Transcription Language (visible to all users) -->
+            <section id="section-transcription-language">
+              <h3 class="section-title" data-i18n="settings.transcription.section">Transcription</h3>
+              <div class="settings-card">
+                <div class="picker-row">
+                  <span data-i18n="settings.model.language">Language</span>
+                  <select id="sel-openaiLang"></select>
+                </div>
+              </div>
+            </section>
+
+            <!-- Model — dev-mode only -->
+            <section id="section-openai" class="dev-only">
               <h3 class="section-title" data-i18n="settings.model.section">Model</h3>
               <div class="settings-card">
                 <div class="picker-row hidden" id="row-api-key">
@@ -258,11 +270,6 @@
                 </div>
                 <div id="local-model-divider" class="divider"></div>
                 <div id="local-model-status"></div>
-                <div class="divider"></div>
-                <div class="picker-row">
-                  <span data-i18n="settings.model.language">Language</span>
-                  <select id="sel-openaiLang"></select>
-                </div>
               </div>
             </section>
 

@@ -36,7 +36,7 @@ This will:
 - **Tray menu** — Right-click (or click on macOS) the tray icon to toggle reformat, change modes, open settings, or quit.
 - **Cancel recording** — Press the cancel hotkey (default: `Escape`) to discard a recording in progress.
 - **Hold/Resume recording** — Press the hold hotkey (default: `F6`) to pause and resume an active recording.
-- **Settings** — Click "Settings…" in the tray menu to configure API keys, hotkeys, sounds, and more.
+- **Settings** — Click "Settings…" in the tray menu to configure hotkeys, sounds, and more.
 - **Modes** — Each mode category (Personal Message, Email) can be toggled on/off. When disabled, no reformatting is applied — raw transcription only. Modes only activate when you're in a linked app or URL; unlinked apps always get raw transcription.
 - **Add to Vocabulary** — Press the "Add to Vocabulary" hotkey (default: `F7`) with a word selected in any app to instantly open Settings and add it to your vocabulary replacements.
 - **Vocabulary** — Define word replacements (e.g. correct spellings Whisper consistently mishears) in the Vocabulary tab in Settings.
