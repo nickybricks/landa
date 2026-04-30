@@ -19,6 +19,10 @@ window.api.onRecordingPaused((paused) => {
   if (paused) bars.forEach(b => { b.style.transform = 'scaleY(0.05)'; });
 });
 
+window.api.onRecordingProcessing((processing) => {
+  document.body.classList.toggle('is-processing', !!processing);
+});
+
 window.api.onAudioLevel((rms) => {
   const level = Math.min(1, rms);
   bars.forEach((bar, i) => {

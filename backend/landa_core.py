@@ -1,4 +1,4 @@
-"""FindMyVoice — lightweight voice-to-text backend.
+"""Landa — voice-to-text backend.
 
 Records from the default mic, transcribes via OpenAI Whisper API or NVIDIA
 NeMo Parakeet (local), and pastes the result into the active app.  Exposes a
@@ -641,7 +641,7 @@ def reformat_text(text: str, mode: str | None = None) -> tuple[str, dict | None]
             try:
                 import anthropic
             except ImportError:
-                print("[FindMyVoice] Anthropic SDK not installed. Run: pip install anthropic")
+                print("[Landa] Anthropic SDK not installed. Run: pip install anthropic")
                 return text, None
             client = anthropic.Anthropic(api_key=api_key)
             t0 = time.time()
@@ -690,7 +690,7 @@ def reformat_text(text: str, mode: str | None = None) -> tuple[str, dict | None]
             }
             return result, usage
     except Exception as e:
-        print(f"[FindMyVoice] Reformat error (falling back to raw text): {e}")
+        print(f"[Landa] Reformat error (falling back to raw text): {e}")
         return text, None
 
 
@@ -717,7 +717,7 @@ audio_frames: list[np.ndarray] = []
 _audio_sum_sq: float = 0.0      # incremental sum-of-squares for fast silence check
 _audio_peak: float = 0.0        # incremental peak abs value
 _audio_total_samples: int = 0   # total samples captured
-_current_level: float = 0.0     # per-chunk RMS for live audio level display (0.0–1.0 normalized)
+_current_level: float = 0.0     # per-chunk RMS normalized 0-1 for live visualizer
 stream: sd.InputStream | None = None
 _teardown_thread: threading.Thread | None = None  # tracks in-flight stream teardown
 lock = threading.Lock()
@@ -867,10 +867,19 @@ _HALLUCINATION_EXACT: set[str] = {
     "...",
     ".",
     "",
+    "(birds chirping)",
+    "(snoring)",
+    "(upbeat music)"
 }
 
 _HALLUCINATION_URL_RE = re.compile(
     r"^(https?://|www\.)\S+\.?\s*$",
+    re.IGNORECASE,
+)
+
+# Matches outputs that are purely bracketed sound tags, e.g. "[COUGH].", "[MUSIC] [APPLAUSE]"
+_HALLUCINATION_BRACKET_RE = re.compile(
+    r"^(\[[A-Z_ ]+\]\.?\s*)+$",
     re.IGNORECASE,
 )
 
@@ -881,6 +890,8 @@ def _is_hallucination(text: str) -> bool:
     if stripped.lower() in _HALLUCINATION_EXACT:
         return True
     if _HALLUCINATION_URL_RE.match(stripped):
+        return True
+    if _HALLUCINATION_BRACKET_RE.match(stripped):
         return True
     return False
 
@@ -1057,7 +1068,7 @@ def _audio_callback(indata: np.ndarray, frames: int, time_info, status) -> None:
     if chunk_peak > _audio_peak:
         _audio_peak = chunk_peak
     _audio_total_samples += flat.size
-    _current_level = min(1.0, float(np.sqrt(np.dot(flat, flat) / flat.size)) * 10.0)
+    _current_level = min(1.0, float(np.sqrt(np.dot(flat, flat) / flat.size)) * 40.0)
     if _rt_queue is not None:
         try:
             _rt_queue.put_nowait(indata.copy())
@@ -1535,7 +1546,7 @@ def _do_whisper_download(model_name: str) -> None:
             dest = WHISPER_MODELS_DIR / info["filename"]
             tmp = dest.with_suffix(".bin.tmp")
             url = f"{WHISPER_GGML_BASE_URL}/{info['filename']}"
-            print(f"[FindMyVoice] Downloading whisper.cpp model: {url}")
+            print(f"[Landa] Downloading whisper.cpp model: {url}")
             with httpx.stream("GET", url, follow_redirects=True, timeout=None) as resp:
                 resp.raise_for_status()
                 total = int(resp.headers.get("content-length", info.get("size_bytes", 0)))
@@ -1566,7 +1577,7 @@ def _do_whisper_download(model_name: str) -> None:
                     stop_polling.wait(0.5)
 
             threading.Thread(target=_poll_progress, daemon=True).start()
-            print(f"[FindMyVoice] Downloading faster-whisper model: {info['hf_repo']}")
+            print(f"[Landa] Downloading faster-whisper model: {info['hf_repo']}")
             snapshot_download(repo_id=info["hf_repo"], local_dir=str(dest_dir))
             stop_polling.set()
 
@@ -1575,7 +1586,7 @@ def _do_whisper_download(model_name: str) -> None:
                 "downloading": False, "cached": True, "error": None,
                 "progress_bytes": 0, "total_bytes": 0,
             }
-        print(f"[FindMyVoice] Model download complete: {model_name}")
+        print(f"[Landa] Model download complete: {model_name}")
     except Exception as e:
         if sys.platform == "darwin":
             dest = WHISPER_MODELS_DIR / info["filename"]
@@ -1592,7 +1603,7 @@ def _do_whisper_download(model_name: str) -> None:
                 "downloading": False, "cached": False, "error": str(e),
                 "progress_bytes": 0, "total_bytes": 0,
             }
-        print(f"[FindMyVoice] Model download failed: {e}")
+        print(f"[Landa] Model download failed: {e}")
 
 
 def start_whisper_download(model_name: str) -> None:
@@ -1657,7 +1668,7 @@ def transcribe_whisper_local(audio, model_name: str) -> tuple:
                 _detected_language = None
         kwargs = {
             "single_segment": True,
-            "no_context": False,
+            "no_context": True,
             "print_progress": False,
             "print_realtime": False,
         }
@@ -1684,7 +1695,13 @@ def transcribe_whisper_local(audio, model_name: str) -> tuple:
         language = config.get("openai_language", "auto")
         language_arg = None if (not language or language == "auto") else language
         t0 = time.time()
-        segments_gen, fw_info = model.transcribe(audio, language=language_arg, beam_size=5)
+        segments_gen, fw_info = model.transcribe(
+            audio,
+            language=language_arg,
+            beam_size=5,
+            vad_filter=True,
+            condition_on_previous_text=False,
+        )
         text = " ".join(seg.text for seg in segments_gen).strip()
         _detected_language = fw_info.language
         print(f"[Landa] faster-whisper: language={_detected_language} (prob={fw_info.language_probability:.2f})")
@@ -1708,18 +1725,18 @@ def _warmup_whisper_pipeline(model_name: str) -> None:
             model_path = WHISPER_MODELS_DIR / info["filename"]
             if not model_path.exists():
                 return
-            print(f"[FindMyVoice] Loading whisper.cpp model: {model_name}...")
+            print(f"[Landa] Loading whisper.cpp model: {model_name}...")
             _whisper_model_cache[model_name] = WhisperModel(str(model_path))
         else:
             from faster_whisper import WhisperModel
             model_dir = WHISPER_MODELS_DIR / model_name
             if not (model_dir / "model.bin").exists():
                 return
-            print(f"[FindMyVoice] Loading faster-whisper model: {model_name}...")
+            print(f"[Landa] Loading faster-whisper model: {model_name}...")
             _whisper_model_cache[model_name] = WhisperModel(str(model_dir), device="cpu", compute_type="int8")
-        print(f"[FindMyVoice] Whisper model ready: {model_name}")
+        print(f"[Landa] Whisper model ready: {model_name}")
     except Exception as e:
-        print(f"[FindMyVoice] Model warmup failed: {e}")
+        print(f"[Landa] Model warmup failed: {e}")
 
 
 def _startup_whisper_check() -> None:
@@ -1728,10 +1745,10 @@ def _startup_whisper_check() -> None:
     if model not in LOCAL_WHISPER_MODELS:
         return
     if not is_whisper_deps_installed():
-        print(f"[FindMyVoice] Local model '{model}' selected but whisper deps not installed.")
+        print(f"[Landa] Local model '{model}' selected but whisper deps not installed.")
         return
     if not is_whisper_model_cached(model):
-        print(f"[FindMyVoice] Auto-downloading model '{model}' in background...")
+        print(f"[Landa] Auto-downloading model '{model}' in background...")
         _do_whisper_download(model)  # blocks; sets state itself based on success/failure
     if not is_whisper_model_cached(model):
         return  # download failed; leave error state intact
@@ -1778,14 +1795,14 @@ def is_llm_deps_installed() -> tuple[bool, str | None]:
             import mlx_lm  # noqa: F401
             return True, None
         except Exception as e:
-            logging.warning(f"[FindMyVoice] mlx_lm import failed: {e}")
+            logging.warning(f"[Landa] mlx_lm import failed: {e}")
             return False, str(e)
     else:
         try:
             import llama_cpp  # noqa: F401
             return True, None
         except Exception as e:
-            logging.warning(f"[FindMyVoice] llama_cpp import failed: {e}")
+            logging.warning(f"[Landa] llama_cpp import failed: {e}")
             return False, str(e)
 
 
@@ -1815,14 +1832,14 @@ def _do_llm_download(model_id: str) -> None:
         if sys.platform == "darwin":
             # macOS: download the MLX HuggingFace repo (HF handles caching/resume)
             from huggingface_hub import snapshot_download
-            print(f"[FindMyVoice] Downloading MLX model: {info['mlx_repo']}")
+            print(f"[Landa] Downloading MLX model: {info['mlx_repo']}")
             snapshot_download(info["mlx_repo"])
         else:
             # Windows: stream the GGUF file with byte-level progress
             MODELS_DIR.mkdir(parents=True, exist_ok=True)
             dest = MODELS_DIR / info["filename"]
             url = f"https://huggingface.co/{info['hf_repo']}/resolve/main/{info['filename']}"
-            print(f"[FindMyVoice] Downloading GGUF: {url}")
+            print(f"[Landa] Downloading GGUF: {url}")
             with httpx.stream("GET", url, follow_redirects=True, timeout=None) as resp:
                 resp.raise_for_status()
                 total = int(resp.headers.get("content-length", info.get("size_bytes", 0)))
@@ -1841,7 +1858,7 @@ def _do_llm_download(model_id: str) -> None:
                 "downloading": False, "cached": True, "error": None,
                 "progress_bytes": 0, "total_bytes": 0,
             }
-        print(f"[FindMyVoice] LLM download complete: {model_id}")
+        print(f"[Landa] LLM download complete: {model_id}")
     except Exception as e:
         # Clean up partial GGUF on failure (macOS uses HF cache, no cleanup needed)
         if sys.platform != "darwin":
@@ -1853,7 +1870,7 @@ def _do_llm_download(model_id: str) -> None:
                 "downloading": False, "cached": False, "error": str(e),
                 "progress_bytes": 0, "total_bytes": 0,
             }
-        print(f"[FindMyVoice] LLM download failed: {e}")
+        print(f"[Landa] LLM download failed: {e}")
 
 
 def start_llm_download(model_id: str) -> None:
@@ -1874,23 +1891,23 @@ def _get_llm_model(model_id: str):
     try:
         if sys.platform == "darwin":
             from mlx_lm import load
-            print(f"[FindMyVoice] Loading MLX model: {model_id}")
+            print(f"[Landa] Loading MLX model: {model_id}")
             model, tokenizer = load(info["mlx_repo"])
             _llm_model_cache[model_id] = (model, tokenizer)
-            print(f"[FindMyVoice] MLX model ready: {model_id}")
+            print(f"[Landa] MLX model ready: {model_id}")
             return (model, tokenizer)
         else:
             from llama_cpp import Llama
             model_path = MODELS_DIR / info["filename"]
             if not model_path.exists():
                 return None
-            print(f"[FindMyVoice] Loading GGUF model: {model_id}")
+            print(f"[Landa] Loading GGUF model: {model_id}")
             llm = Llama(model_path=str(model_path), n_ctx=2048, n_gpu_layers=-1, verbose=False)
             _llm_model_cache[model_id] = llm
-            print(f"[FindMyVoice] GGUF model ready: {model_id}")
+            print(f"[Landa] GGUF model ready: {model_id}")
             return llm
     except Exception as e:
-        print(f"[FindMyVoice] Failed to load local LLM {model_id}: {e}")
+        print(f"[Landa] Failed to load local LLM {model_id}: {e}")
         return None
 
 
@@ -1923,7 +1940,7 @@ def reformat_text_local(text: str, prompt: str, model_id: str) -> str:
     The prompt already contains the language instruction (prepended by reformat_text)."""
     loaded = _get_llm_model(model_id)
     if loaded is None:
-        print(f"[FindMyVoice] Local LLM not available: {model_id}")
+        print(f"[Landa] Local LLM not available: {model_id}")
         return text
 
     # Also inject the language instruction into the user turn — Gemma3's chat
@@ -1951,11 +1968,11 @@ def reformat_text_local(text: str, prompt: str, model_id: str) -> str:
                     {"role": "user", "content": user_content},
                 ],
                 max_tokens=1024,
-                temperature=0.1,
+                temperature=0.0,
             )
             return response["choices"][0]["message"]["content"].strip()
     except Exception as e:
-        print(f"[FindMyVoice] Local LLM inference error: {e}")
+        print(f"[Landa] Local LLM inference error: {e}")
         return text
 
 
@@ -1969,13 +1986,13 @@ def _warmup_nemo() -> None:
         return
     try:
         import nemo.collections.asr as nemo_asr
-        print("[FindMyVoice] Warming up NeMo Parakeet model...")
+        print("[Landa] Warming up NeMo Parakeet model...")
         _nemo_model = nemo_asr.models.ASRModel.from_pretrained("nvidia/parakeet-tdt-0.6b-v3")
-        print("[FindMyVoice] NeMo model ready.")
+        print("[Landa] NeMo model ready.")
     except ImportError:
         pass  # NeMo not installed, skip silently
     except Exception as e:
-        print(f"[FindMyVoice] NeMo warmup failed: {e}")
+        print(f"[Landa] NeMo warmup failed: {e}")
 
 
 def _startup_nemo_check() -> None:
@@ -2019,7 +2036,7 @@ def transcribe_openai(wav_path: str, model_override: str | None = None) -> tuple
 
     api_key = config.get("api_key", "")
     if not api_key:
-        print("[FindMyVoice] No API key configured.")
+        print("[Landa] No API key configured.")
         return "", None
 
     client = OpenAI(api_key=api_key)
@@ -2061,7 +2078,7 @@ def transcribe_openai(wav_path: str, model_override: str | None = None) -> tuple
         }
         return transcript.text.strip(), usage
     except Exception as e:
-        print(f"[FindMyVoice] Transcription error: {e}")
+        print(f"[Landa] Transcription error: {e}")
         return "", None
 
 
@@ -2522,5 +2539,5 @@ def delete_history_entry(entry_id):
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    print("[FindMyVoice] Starting backend on http://localhost:7890")
+    print("[Landa] Starting backend on http://localhost:7890")
     app.run(host="127.0.0.1", port=7890, threaded=True)

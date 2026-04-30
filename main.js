@@ -26,6 +26,7 @@ let settingsWindow = null;
 let onboardingWindow = null;
 let recordingWindow = null;
 let recordingWindowStyle = 'mini'; // 'classic' | 'mini' | 'none'
+let audioLevelTimer = null;
 let backendProcess = null;
 let pollTimer = null;
 let isRecording = false;
@@ -42,6 +43,7 @@ let currentHoldSound = 'Tink'; // system sound name to play on hold
 let currentResumeSound = 'Pop'; // system sound name to play on resume
 let lastHotkeyTime = 0;
 let hotkeyInFlight = false; // re-entrancy guard
+let hotkeyCompletedAt = 0; // timestamp of last completed hotkey action
 let isCapturingHotkey = false;
 let updateDialogShown = false;
 
@@ -274,6 +276,10 @@ async function handleHotkeyPress() {
   try {
     try {
       if (isRecording) {
+        stopAudioLevelPolling();
+        if (recordingWindow && !recordingWindow.isDestroyed()) {
+          recordingWindow.webContents.send('recording-processing', true);
+        }
         const stopResponse = await api.stopRecording();
         console.log(`[Landa] stop API responded in ${Date.now() - t0}ms`);
         if (stopResponse && stopResponse.text && process.platform === 'darwin') {
@@ -303,6 +309,7 @@ async function handleHotkeyPress() {
     }
   } finally {
     console.log(`[Landa] Hotkey handling complete in ${Date.now() - t0}ms total`);
+    hotkeyCompletedAt = Date.now();
     hotkeyInFlight = false;
   }
 }
@@ -790,6 +797,7 @@ function createRecordingWindow() {
     if (recordingWindow && !recordingWindow.isDestroyed()) {
       recordingWindow.webContents.send('recording-style', recordingWindowStyle);
       recordingWindow.webContents.send('recording-paused', isOnHold);
+      recordingWindow.webContents.send('recording-processing', false);
     }
   });
 
@@ -819,22 +827,44 @@ function showRecordingWindow() {
     recordingWindow.setSize(size.width, size.height, false);
     recordingWindow.webContents.send('recording-style', recordingWindowStyle);
     recordingWindow.webContents.send('recording-paused', isOnHold);
+    recordingWindow.webContents.send('recording-processing', false);
   }
   positionRecordingWindow();
   recordingWindow.showInactive();
+  startAudioLevelPolling();
 }
 
 function hideRecordingWindow() {
+  stopAudioLevelPolling();
   if (recordingWindow && !recordingWindow.isDestroyed()) {
     recordingWindow.hide();
   }
 }
 
 function destroyRecordingWindow() {
+  stopAudioLevelPolling();
   if (recordingWindow && !recordingWindow.isDestroyed()) {
     recordingWindow.close();
   }
   recordingWindow = null;
+}
+
+function startAudioLevelPolling() {
+  stopAudioLevelPolling();
+  audioLevelTimer = setInterval(async () => {
+    if (!recordingWindow || recordingWindow.isDestroyed()) return;
+    try {
+      const data = await apiRequest('GET', '/audio-level');
+      recordingWindow.webContents.send('recording-level', data.level || 0);
+    } catch (_) {}
+  }, 80);
+}
+
+function stopAudioLevelPolling() {
+  if (audioLevelTimer) {
+    clearInterval(audioLevelTimer);
+    audioLevelTimer = null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1021,8 +1051,9 @@ function applyConfig(config) {
 
 function startStatusPolling() {
   pollTimer = setInterval(async () => {
-    // Don't overwrite state while a hotkey action is in-flight
-    if (!hotkeyInFlight) {
+    // Don't overwrite state while a hotkey action is in-flight or within one
+    // poll interval of it completing (backend may still be transitioning).
+    if (!hotkeyInFlight && Date.now() - hotkeyCompletedAt >= POLL_INTERVAL) {
       try {
         const status = await api.fetchStatus();
         const newIsOnHold = status.is_on_hold || false;
@@ -1289,20 +1320,15 @@ function setupIpcHandlers() {
     } catch { return null; }
   });
 
-  // Synchronous variant for beforeunload — writes config to disk AND updates
-  // the backend's in-memory state so the next GET /config returns fresh data.
+  // Synchronous variant for beforeunload — writes config to disk immediately
+  // and fires the backend update async (fire-and-forget). The disk write is
+  // the authoritative fallback; the async POST keeps the backend's in-memory
+  // state fresh so the next GET /config returns the right data on reload.
   ipcMain.on('save-config-sync', (event, cfg) => {
     try {
       fs.mkdirSync(CONFIG_DIR, { recursive: true });
       fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
-      // Synchronously POST to backend so its in-memory config is also updated
-      // before the renderer reloads and calls GET /config.
-      try {
-        require('child_process').execSync(
-          `curl -s -X POST -H "Content-Type: application/json" -d @"${CONFIG_PATH}" http://127.0.0.1:7890/config`,
-          { timeout: 2000 }
-        );
-      } catch { /* backend may not be running */ }
+      api.saveConfig(cfg).then(() => applyConfig(cfg)).catch(() => {});
       event.returnValue = true;
     } catch {
       event.returnValue = false;

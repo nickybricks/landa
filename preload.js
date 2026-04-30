@@ -87,6 +87,10 @@ contextBridge.exposeInMainWorld('api', {
   onAudioLevel: (callback) => {
     ipcRenderer.on('recording-level', (_event, level) => callback(level));
   },
+  onRecordingProcessing: (callback) => {
+    ipcRenderer.removeAllListeners('recording-processing');
+    ipcRenderer.on('recording-processing', (_event, processing) => callback(processing));
+  },
 
   // Onboarding
   getMicAccessStatus: () => ipcRenderer.invoke('get-mic-access-status'),

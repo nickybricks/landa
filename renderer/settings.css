@@ -1474,7 +1474,7 @@ select {
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   width: 380px;
-  max-height: 590px;
+  max-height: 690px;
   overflow: hidden;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
   display: flex;
@@ -1687,6 +1687,9 @@ select {
   gap: 6px;
   margin-top: 6px;
   align-items: center;
+  max-height: 88px;
+  overflow-y: auto;
+  padding: 4px 4px 4px 0;
 }
 
 .linked-apps-empty {

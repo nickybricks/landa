@@ -1,7 +1,7 @@
 {
   "name": "landa",
-  "version": "0.16.0",
-  "description": "Lightweight voice-to-text — global hotkey recording that pastes into any active app",
+  "version": "0.16.1",
+  "description": "Talk into any app. Landa types it for you — formatted, polished, and private.",
   "main": "main.js",
   "scripts": {
     "start": "ELECTRON_RUN_AS_NODE= electron .",

@@ -118,6 +118,30 @@ body.style-classic .bars span {
   height: 26px;
 }
 
+.spinner {
+  display: none;
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(0, 136, 255, 0.2);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ----- Processing state ----- */
+body.is-processing .bars { display: none; }
+body.is-processing .dot { display: none; }
+body.is-processing .spinner { display: block; }
+body.is-processing .pill {
+  border-color: var(--text-secondary);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
 /* ----- Paused state ----- */
 body.is-paused .bars { display: none; }
 body.is-paused .paused-icon { display: flex; }

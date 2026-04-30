@@ -2,6 +2,11 @@
 
 Cross-platform Electron frontend for Landa. Replaces the native SwiftUI app while using the same Python backend.
 
+## System Requirements
+
+- **macOS 10.15 Catalina or later** (Intel and Apple Silicon)
+- **Windows 10 or later**
+
 ## Prerequisites
 
 **End users:** No prerequisites — download the `.dmg` or `.exe` from the releases page and install normally. Installed copies auto-check for updates in the background and apply them on next restart.

@@ -65,7 +65,7 @@ const TRANSLATIONS = {
     'vocabulary.empty.title': 'No replacements yet',
     'vocabulary.empty.sub': 'Add words that Whisper consistently mishears.',
     // Home
-    'home.desc': 'Lightweight voice-to-text for macOS & Windows.<br>Press your hotkey to record, release to transcribe and paste.',
+    'home.desc': 'Talk into any app. Landa types it for you — formatted, polished, and private.<br>Press your hotkey to record, release to transcribe and paste.',
     // Settings tab — language section
     'settings.language.section': 'Language',
     'settings.language.label': 'App Language',
@@ -207,7 +207,7 @@ const TRANSLATIONS = {
     'vocabulary.empty.title': 'Noch keine Ersetzungen',
     'vocabulary.empty.sub': 'Füge Wörter hinzu, die Whisper häufig falsch erkennt.',
     // Home
-    'home.desc': 'Schlanke Sprach-zu-Text-App für macOS & Windows.<br>Drücke deinen Hotkey zum Aufnehmen, loslassen zum Transkribieren und Einfügen.',
+    'home.desc': 'Sprich in jede App rein – formatiert, bereinigt, privat<br>Drücke dein Tastaturkürzel zum Aufnehmen, erneut drücken zum Transkribieren und Einfügen.',
     // Settings tab — language section
     'settings.language.section': 'Sprache',
     'settings.language.label': 'App-Sprache',
@@ -2323,11 +2323,12 @@ function saveConfig() {
   saveInFlight = true;
   clearTimeout(saveDebounce);
   saveDebounce = setTimeout(async () => {
+    saveDebounce = null;
     if (!config) return;
     try {
       await window.api.saveConfig({ ...config });
     } finally {
-      saveInFlight = false;
+      if (!saveDebounce) saveInFlight = false;
     }
   }, 300);
 }
@@ -2337,8 +2338,9 @@ function saveConfig() {
 function saveConfigNow() {
   saveInFlight = true;
   clearTimeout(saveDebounce);
+  saveDebounce = null;
   if (!config) { saveInFlight = false; return; }
-  window.api.saveConfig({ ...config }).finally(() => { saveInFlight = false; });
+  window.api.saveConfig({ ...config }).finally(() => { if (!saveDebounce) saveInFlight = false; });
 }
 
 // ---------------------------------------------------------------------------

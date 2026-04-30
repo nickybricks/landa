@@ -119,7 +119,9 @@ class LandaStreamer:
                 except Exception as e:
                     print(f"[LandaStreamer] auto_detect_language failed: {e}")
 
-            kwargs = {"language": detected_language} if detected_language else {}
+            kwargs = {"no_context": True}
+            if detected_language:
+                kwargs["language"] = detected_language
             segments = model.transcribe(wav_path, **kwargs)
             text = " ".join(seg.text for seg in segments).strip()
             latency_ms = round((time.time() - t0) * 1000)

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "Setting up FindMyVoice backend..."
+echo "Setting up Landa backend..."
 
 # Create virtual environment
 python3 -m venv venv
@@ -12,6 +12,6 @@ pip install --upgrade pip
 pip install -r requirements.txt
 
 # Create default config directory
-mkdir -p ~/.findmyvoice
+mkdir -p ~/.Landa
 
 echo "Setup complete! Activate with: source venv/bin/activate"
