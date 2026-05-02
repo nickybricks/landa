@@ -95,6 +95,20 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('recording-processing', (_event, processing) => callback(processing));
   },
 
+  // Update progress window
+  onUpdateVersion: (callback) => {
+    ipcRenderer.removeAllListeners('update-version');
+    ipcRenderer.on('update-version', (_event, version) => callback(version));
+  },
+  onUpdateProgress: (callback) => {
+    ipcRenderer.removeAllListeners('update-progress');
+    ipcRenderer.on('update-progress', (_event, payload) => callback(payload));
+  },
+  onUpdateInstalling: (callback) => {
+    ipcRenderer.removeAllListeners('update-installing');
+    ipcRenderer.on('update-installing', () => callback());
+  },
+
   // Onboarding
   getMicAccessStatus: () => ipcRenderer.invoke('get-mic-access-status'),
   requestMicAccess: () => ipcRenderer.invoke('request-mic-access'),

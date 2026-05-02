@@ -49,6 +49,7 @@ let settingsWindow = null;
 let onboardingWindow = null;
 let recordingWindow = null;
 let recordingWindowStyle = 'mini'; // 'classic' | 'mini' | 'none'
+let updateWindow = null;
 let audioLevelTimer = null;
 let backendProcess = null;
 let pollTimer = null;
@@ -75,35 +76,59 @@ let updateDialogShown = false;
 // ---------------------------------------------------------------------------
 
 function setupAutoUpdater() {
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
 
   autoUpdater.on('update-available', (info) => {
     if (updateDialogShown) return;
     updateDialogShown = true;
     dialog.showMessageBox({
       type: 'info',
-      buttons: ['OK'],
-      title: 'Update Available',
-      message: `Landa ${info.version} is available`,
-      detail: 'Downloading in the background — you\'ll be prompted to install when it\'s ready.',
-    }).catch(() => {});
-  });
-
-  autoUpdater.on('update-downloaded', (info) => {
-    dialog.showMessageBox({
-      type: 'info',
-      buttons: ['Restart Now', 'Later'],
+      buttons: ['Install Now & Restart', 'Later'],
       defaultId: 0,
       cancelId: 1,
-      title: 'Update Ready',
-      message: `Landa ${info.version} has been downloaded`,
-      detail: 'Restart Landa now to install the update.',
+      title: 'Update Available',
+      message: `Landa ${info.version} is available`,
+      detail: 'The update will download now and Landa will restart automatically when it\'s ready.',
     }).then((result) => {
       if (result.response === 0) {
-        autoUpdater.quitAndInstall();
+        showUpdateWindow(info.version);
+        autoUpdater.downloadUpdate().catch((err) => {
+          console.error('[updater] downloadUpdate failed:', err && err.message ? err.message : err);
+          destroyUpdateWindow();
+          dialog.showMessageBox({
+            type: 'error',
+            buttons: ['OK'],
+            title: 'Update Failed',
+            message: 'The update could not be downloaded.',
+            detail: err && err.message ? err.message : 'Unknown error. Please try again later.',
+          }).catch(() => {});
+          updateDialogShown = false;
+        });
+      } else {
+        updateDialogShown = false;
       }
-    }).catch(() => {});
+    }).catch(() => { updateDialogShown = false; });
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    if (updateWindow && !updateWindow.isDestroyed()) {
+      updateWindow.webContents.send('update-progress', {
+        percent: progress.percent || 0,
+        bytesPerSecond: progress.bytesPerSecond || 0,
+        transferred: progress.transferred || 0,
+        total: progress.total || 0,
+      });
+    }
+  });
+
+  autoUpdater.on('update-downloaded', () => {
+    if (updateWindow && !updateWindow.isDestroyed()) {
+      updateWindow.webContents.send('update-installing');
+    }
+    setTimeout(() => {
+      autoUpdater.quitAndInstall();
+    }, 600);
   });
 
   autoUpdater.on('error', (err) => {
@@ -870,6 +895,55 @@ function destroyRecordingWindow() {
     recordingWindow.close();
   }
   recordingWindow = null;
+}
+
+// ---------------------------------------------------------------------------
+// Update progress window
+// ---------------------------------------------------------------------------
+
+function showUpdateWindow(version) {
+  if (updateWindow && !updateWindow.isDestroyed()) {
+    updateWindow.show();
+    updateWindow.focus();
+    return;
+  }
+  updateWindow = new BrowserWindow({
+    width: 380,
+    height: 180,
+    frame: false,
+    resizable: false,
+    movable: true,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    show: false,
+    title: 'Landa Update',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  updateWindow.setAlwaysOnTop(true, 'floating');
+  updateWindow.loadFile(path.join(__dirname, 'renderer', 'update.html'));
+  updateWindow.webContents.on('did-finish-load', () => {
+    if (updateWindow && !updateWindow.isDestroyed()) {
+      updateWindow.webContents.send('update-version', version);
+    }
+  });
+  updateWindow.on('closed', () => { updateWindow = null; });
+  updateWindow.once('ready-to-show', () => {
+    if (updateWindow && !updateWindow.isDestroyed()) updateWindow.show();
+  });
+}
+
+function destroyUpdateWindow() {
+  if (updateWindow && !updateWindow.isDestroyed()) {
+    updateWindow.close();
+  }
+  updateWindow = null;
 }
 
 function startAudioLevelPolling() {
