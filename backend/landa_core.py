@@ -313,6 +313,7 @@ def save_config(cfg: dict) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     with open(CONFIG_PATH, "w") as f:
         json.dump(cfg, f, indent=2)
+    os.chmod(CONFIG_PATH, 0o600)
 
 
 config = load_config()
@@ -338,6 +339,7 @@ def _save_history(entries: list) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     with open(HISTORY_PATH, "w") as f:
         json.dump(entries, f, indent=2)
+    os.chmod(HISTORY_PATH, 0o600)
 
 
 def add_history_entry(text: str, usage: dict | None = None) -> None:
