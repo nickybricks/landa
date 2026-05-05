@@ -1,6 +1,6 @@
 {
   "name": "landa",
-  "version": "0.18.4",
+  "version": "0.18.5",
   "description": "Talk into any app. Landa types it for you — formatted, polished, and private.",
   "main": "main.js",
   "scripts": {
@@ -20,6 +20,7 @@
       "owner": "nickybricks",
       "repo": "landa"
     },
+    "artifactName": "${productName}-${arch}.${ext}",
     "beforeBuild": "scripts/before_build.js",
     "afterSign": "scripts/notarize.js",
     "mac": {

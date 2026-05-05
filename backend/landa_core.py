@@ -2,8 +2,7 @@
 
 Records from the default mic, transcribes via OpenAI Whisper API or NVIDIA
 NeMo Parakeet (local), and pastes the result into the active app.  Exposes a
-local HTTP API on localhost:7890 for the SwiftUI frontend.  Hotkey listening is
-handled by the Swift app.
+local HTTP API on localhost:7890 for the Electron frontend.
 """
 
 import base64

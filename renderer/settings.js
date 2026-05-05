@@ -19,7 +19,7 @@ const DEFAULTS = {
   add_to_vocabulary: { key: 'f7', key_code: 98, modifiers: [] },
 };
 
-// OpenAI languages (matches Swift ModelsLibraryView)
+// OpenAI languages
 const OPENAI_LANGUAGES = [
   ['auto', 'Auto-detect'], ['en', 'English'], ['fr', 'French'], ['de', 'German'],
   ['es', 'Spanish'], ['it', 'Italian'], ['pt', 'Portuguese'], ['nl', 'Dutch'],
@@ -567,7 +567,7 @@ function setupSidebarNav() {
     });
   }
 
-  // Start on Configuration tab (matches Swift default)
+  // Start on Configuration tab
   document.querySelector('[data-tab="configuration"]').click();
 }
 

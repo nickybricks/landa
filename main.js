@@ -21,7 +21,7 @@ const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 // surprise users with the onboarding flow. The marker file is only ever
 // created (never written to), so it can't be clobbered by partial config saves.
 const ONBOARDED_MARKER_PATH = path.join(CONFIG_DIR, '.onboarded');
-const POLL_INTERVAL = 1000; // 1 second, matches Swift app
+const POLL_INTERVAL = 1000; // 1 second
 
 // In dev (unpackaged), load <repo>/.env so LANDA_PROXY_URL / LANDA_APP_SECRET
 // reach the Python subprocess via inherited env. Production builds bake the
@@ -51,6 +51,8 @@ if (!app.isPackaged) {
 // ---------------------------------------------------------------------------
 
 let tray = null;
+let trayIconIdle = null;
+let trayIconRecording = null;
 let settingsWindow = null;
 let onboardingWindow = null;
 let recordingWindow = null;
@@ -337,7 +339,7 @@ function setRecordingState(recording) {
 }
 
 async function handleHotkeyPress() {
-  // Debounce: 500ms like the Swift app
+  // Debounce: 500ms
   const now = Date.now();
   if (now - lastHotkeyTime < 500) return;
   lastHotkeyTime = now;
@@ -614,18 +616,15 @@ function openSettingsToAddVocab(word) {
 // ---------------------------------------------------------------------------
 
 function createTray() {
-  // Use a template image for macOS menu bar (16x16)
-  const iconPath = path.join(__dirname, 'assets', 'trayTemplate.png');
-  let icon;
-  if (fs.existsSync(iconPath)) {
-    icon = nativeImage.createFromPath(iconPath);
-  } else {
-    // Fallback: create a simple icon from data
-    icon = nativeImage.createEmpty();
-  }
-  icon.setTemplateImage(true);
+  const idlePath = path.join(__dirname, 'assets', 'trayTemplate.png');
+  const recordingPath = path.join(__dirname, 'assets', 'trayRecording.png');
 
-  tray = new Tray(icon);
+  trayIconIdle = fs.existsSync(idlePath) ? nativeImage.createFromPath(idlePath) : nativeImage.createEmpty();
+  trayIconIdle.setTemplateImage(true);
+
+  trayIconRecording = fs.existsSync(recordingPath) ? nativeImage.createFromPath(recordingPath) : nativeImage.createEmpty();
+
+  tray = new Tray(trayIconIdle);
   tray.setToolTip('Landa');
   if (process.platform === 'win32') {
     tray.on('click', openSettings);
@@ -722,13 +721,10 @@ function updateTray() {
   // Update tray icon based on recording state
   if (process.platform === 'darwin') {
     if (isRecording) {
-      const recordingIcon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayRecording.png'));
-      tray.setImage(recordingIcon);
+      tray.setImage(trayIconRecording);
       tray.setTitle('');
     } else {
-      const idleIcon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'));
-      idleIcon.setTemplateImage(true);
-      tray.setImage(idleIcon);
+      tray.setImage(trayIconIdle);
       tray.setTitle(isOnHold ? '⏸' : '');
     }
   }
@@ -1252,7 +1248,7 @@ function applyConfig(config) {
 }
 
 // ---------------------------------------------------------------------------
-// Status Polling (mirrors Swift's 1-second timer)
+// Status Polling
 // ---------------------------------------------------------------------------
 
 function startStatusPolling() {
