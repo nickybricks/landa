@@ -1,6 +1,6 @@
 {
   "name": "landa",
-  "version": "0.18.2",
+  "version": "0.18.3",
   "description": "Talk into any app. Landa types it for you — formatted, polished, and private.",
   "main": "main.js",
   "scripts": {

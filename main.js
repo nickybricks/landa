@@ -15,6 +15,12 @@ const os = require('os');
 const API_BASE = 'http://127.0.0.1:7890';
 const CONFIG_DIR = path.join(os.homedir(), '.landa');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
+// Sentinel for "user has finished onboarding". Source of truth instead of the
+// onboarding_completed flag in config.json — the flag has been observed to
+// flip back to false across updates (config rewrites, race conditions) and
+// surprise users with the onboarding flow. The marker file is only ever
+// created (never written to), so it can't be clobbered by partial config saves.
+const ONBOARDED_MARKER_PATH = path.join(CONFIG_DIR, '.onboarded');
 const POLL_INTERVAL = 1000; // 1 second, matches Swift app
 
 // In dev (unpackaged), load <repo>/.env so LANDA_PROXY_URL / LANDA_APP_SECRET
@@ -207,6 +213,37 @@ function readConfigFromDisk() {
     console.error(`[Landa] Failed to read config from disk: ${err.message}`);
     return null;
   }
+}
+
+function hasOnboardedMarker() {
+  try {
+    return fs.existsSync(ONBOARDED_MARKER_PATH);
+  } catch {
+    return false;
+  }
+}
+
+function writeOnboardedMarker() {
+  try {
+    fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    fs.writeFileSync(ONBOARDED_MARKER_PATH, '');
+  } catch (err) {
+    console.error(`[Landa] Failed to write onboarded marker: ${err.message}`);
+  }
+}
+
+// True if the user has finished onboarding at any point. The marker file is
+// authoritative; we also accept the legacy onboarding_completed flag so users
+// who onboarded on a previous version don't get re-onboarded after this change.
+function isOnboarded(config) {
+  if (hasOnboardedMarker()) return true;
+  if (config && config.onboarding_completed === true) {
+    // Legacy state: flag says done, marker is missing. Backfill the marker
+    // so future launches can rely on it even if the flag gets rewritten.
+    writeOnboardedMarker();
+    return true;
+  }
+  return false;
 }
 
 async function getBestAvailableConfig() {
@@ -1149,7 +1186,7 @@ function applyConfig(config) {
   // Don't register hotkeys until onboarding is complete — registering a global
   // shortcut on macOS triggers the Accessibility TCC prompt, which should only
   // appear inside the onboarding flow that explains why it's needed.
-  const onboardingDone = config.onboarding_completed !== false;
+  const onboardingDone = isOnboarded(config);
 
   const combo = config.toggle_recording;
   const newAccelerator = hotkeyToAccelerator(combo);
@@ -1730,6 +1767,9 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle('finish-onboarding', async (_event, { language }) => {
+    // Write the marker first so the user is treated as onboarded even if the
+    // backend patch fails or the app crashes between here and the next launch.
+    writeOnboardedMarker();
     const patch = { onboarding_completed: true, vocabulary: [] };
     if (language) patch.openai_language = language;
     try {
@@ -1802,7 +1842,7 @@ app.whenReady().then(() => {
         registerHoldHotkey({ key: 'f6', key_code: 97, modifiers: [] });
       }
 
-      if (config && config.onboarding_completed === false) {
+      if (!isOnboarded(config)) {
         openOnboarding();
       }
     }, 2000);
