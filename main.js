@@ -919,6 +919,12 @@ function showRecordingWindow() {
   }
   positionRecordingWindow();
   recordingWindow.showInactive();
+  // Re-assert regular activation policy on every show: setVisibleOnAllWorkspaces
+  // can briefly demote the app to accessory mode, which hides the dock icon and
+  // can break globalShortcut. Cheap insurance against the flip.
+  if (process.platform === 'darwin') {
+    app.setActivationPolicy('regular');
+  }
   startAudioLevelPolling();
 }
 
@@ -1229,8 +1235,9 @@ function applyConfig(config) {
   const newStyle = config.recording_window_style || 'mini';
   if (newStyle !== recordingWindowStyle) {
     recordingWindowStyle = newStyle;
-    // Recreate next show — sizes differ, simpler than resize+notify in place.
-    destroyRecordingWindow();
+    // Don't destroy — showRecordingWindow already resizes on next show. Destroying
+    // here re-triggers setVisibleOnAllWorkspaces on next create, which flips the
+    // macOS activation policy and causes the dock icon to vanish.
   }
 
   const newModes = config.modes || modesConfig;
