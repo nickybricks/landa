@@ -57,7 +57,7 @@ let isRecording = false;
 let isOnHold = false;
 let reformatEnabled = false;
 let reformatMode = 'default';
-let modesConfig = { selections: { 'personal-message': 'formal', 'email': 'formal' } };
+let modesConfig = { enabled: { 'personal-message': false, 'email': false }, selections: { 'personal-message': 'formal', 'email': 'formal' } };
 let currentShortcut = null; // Electron accelerator string
 let currentCancelShortcut = null; // Electron accelerator for cancel_recording
 let currentHoldShortcut = null; // Electron accelerator for hold_recording
@@ -950,6 +950,62 @@ function destroyUpdateWindow() {
   updateWindow = null;
 }
 
+// ---------------------------------------------------------------------------
+// Feedback window (Tally form)
+// ---------------------------------------------------------------------------
+
+let feedbackWindow = null;
+
+const FEEDBACK_URLS = {
+  en: 'https://tally.so/r/OD8V2g',
+  de: 'https://tally.so/r/aQZlJZ',
+};
+
+function openFeedbackWindow(lang) {
+  if (feedbackWindow && !feedbackWindow.isDestroyed()) {
+    feedbackWindow.focus();
+    return;
+  }
+
+  const url = FEEDBACK_URLS[lang] || FEEDBACK_URLS.en;
+  const title = lang === 'de' ? 'Feedback geben' : 'Give Feedback';
+
+  feedbackWindow = new BrowserWindow({
+    width: 560,
+    height: 760,
+    title,
+    parent: settingsWindow && !settingsWindow.isDestroyed() ? settingsWindow : undefined,
+    resizable: true,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1e1e1e' : '#ffffff',
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  // Open links Tally renders (privacy policy, etc.) in the user's default browser.
+  feedbackWindow.webContents.setWindowOpenHandler(({ url: target }) => {
+    shell.openExternal(target);
+    return { action: 'deny' };
+  });
+
+  // Tally registers a beforeunload handler once the user types — that blocks
+  // Electron's close button. Override it: clicking close means close.
+  feedbackWindow.webContents.on('will-prevent-unload', (event) => {
+    event.preventDefault();
+  });
+
+  feedbackWindow.loadURL(url);
+
+  feedbackWindow.on('closed', () => {
+    feedbackWindow = null;
+  });
+}
+
 function startAudioLevelPolling() {
   stopAudioLevelPolling();
   audioLevelTimer = setInterval(async () => {
@@ -1090,9 +1146,14 @@ let currentHoldCombo = null;
 let currentVocabCombo = null;
 
 function applyConfig(config) {
+  // Don't register hotkeys until onboarding is complete — registering a global
+  // shortcut on macOS triggers the Accessibility TCC prompt, which should only
+  // appear inside the onboarding flow that explains why it's needed.
+  const onboardingDone = config.onboarding_completed !== false;
+
   const combo = config.toggle_recording;
   const newAccelerator = hotkeyToAccelerator(combo);
-  if (newAccelerator !== currentShortcut) {
+  if (onboardingDone && newAccelerator !== currentShortcut) {
     registerHotkey(combo);
     currentHotkeyCombo = combo;
   }
@@ -1100,7 +1161,7 @@ function applyConfig(config) {
   const cancelCombo = config.cancel_recording;
   const newCancelAccelerator = hotkeyToAccelerator(cancelCombo);
   const savedCancelAccelerator = hotkeyToAccelerator(currentCancelCombo);
-  if (newCancelAccelerator !== savedCancelAccelerator) {
+  if (onboardingDone && newCancelAccelerator !== savedCancelAccelerator) {
     registerCancelHotkey(cancelCombo);
   }
 
@@ -1111,14 +1172,14 @@ function applyConfig(config) {
   const holdCombo = config.hold_recording;
   const newHoldAccelerator = hotkeyToAccelerator(holdCombo);
   const savedHoldAccelerator = hotkeyToAccelerator(currentHoldCombo);
-  if (newHoldAccelerator !== savedHoldAccelerator) {
+  if (onboardingDone && newHoldAccelerator !== savedHoldAccelerator) {
     registerHoldHotkey(holdCombo);
   }
 
   const vocabCombo = config.add_to_vocabulary;
   const newVocabAccelerator = hotkeyToAccelerator(vocabCombo);
   const savedVocabAccelerator = hotkeyToAccelerator(currentVocabCombo);
-  if (newVocabAccelerator !== savedVocabAccelerator) {
+  if (onboardingDone && newVocabAccelerator !== savedVocabAccelerator) {
     registerVocabHotkey(vocabCombo);
     currentVocabCombo = vocabCombo;
   }
@@ -1179,34 +1240,6 @@ function startStatusPolling() {
       }
     }
   }, POLL_INTERVAL);
-}
-
-// ---------------------------------------------------------------------------
-// Permissions (macOS)
-// ---------------------------------------------------------------------------
-
-function requestPermissions() {
-  if (process.platform === 'darwin') {
-    // Microphone — Electron handles the system prompt automatically
-    // when the app first tries to access the mic.
-    // We trigger it by checking systemPreferences.
-    const micStatus = systemPreferences.getMediaAccessStatus('microphone');
-    console.log(`[Landa] Microphone permission status: ${micStatus}`);
-    if (micStatus !== 'granted') {
-      systemPreferences.askForMediaAccess('microphone').then((granted) => {
-        console.log(`[Landa] Microphone permission after request: ${granted ? 'granted' : 'denied'}`);
-      });
-    }
-
-    // Accessibility — needed for paste simulation (handled by backend via osascript)
-    // We check and prompt via a dialog if not trusted
-    try {
-      const trusted = systemPreferences.isTrustedAccessibilityClient(true);
-      console.log(`[Landa] Accessibility trusted: ${trusted}`);
-    } catch {
-      // Not available on all versions
-    }
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1359,49 +1392,35 @@ function playSound(name) {
   }
 }
 
-function isInstalledMacAppPath(executablePath) {
-  if (process.platform !== 'darwin') return true;
-  const normalized = path.resolve(executablePath);
-  const appBundlePath = path.dirname(path.dirname(path.dirname(normalized)));
-  const userApplications = path.join(os.homedir(), 'Applications');
-
-  return (
-    appBundlePath.startsWith('/Applications/') ||
-    appBundlePath.startsWith(`${userApplications}/`)
-  );
-}
-
-function isTranslocatedMacApp(executablePath) {
-  return process.platform === 'darwin' && executablePath.includes('/AppTranslocation/');
-}
-
 async function ensureMacAppInstalled() {
   if (process.platform !== 'darwin' || !app.isPackaged) return true;
+  if (app.isInApplicationsFolder()) return true;
 
-  const executablePath = process.execPath;
-  const installed = isInstalledMacAppPath(executablePath);
-  const translocated = isTranslocatedMacApp(executablePath);
-  if (installed && !translocated) return true;
-
-  const appName = app.getName();
-  const message =
-    `${appName} needs to be moved to the Applications folder before it can use global hotkeys and macOS permissions correctly.\n\n` +
-    'Please drag the app from the DMG into Applications, quit this copy, and then open Landa again from Applications.';
-
-  const result = await dialog.showMessageBox({
-    type: 'warning',
-    buttons: ['Open Applications Folder', 'Reveal This App', 'Quit'],
-    defaultId: 0,
-    cancelId: 2,
-    noLink: true,
-    title: `${appName} Must Be Installed`,
-    message,
-  });
-
-  if (result.response === 0) {
-    await shell.openPath('/Applications');
-  } else if (result.response === 1) {
-    shell.showItemInFolder(executablePath);
+  try {
+    // Shows the native "Move to Applications Folder?" prompt, copies the app,
+    // and relaunches from /Applications. Returns true if the move started —
+    // this process is being replaced, so we bail out instead of continuing
+    // to spawn the backend / register hotkeys from /Volumes/...
+    const moved = app.moveToApplicationsFolder({
+      conflictHandler: (conflictType) => {
+        if (conflictType === 'exists') {
+          const choice = dialog.showMessageBoxSync({
+            type: 'question',
+            buttons: ['Replace', 'Cancel'],
+            defaultId: 0,
+            cancelId: 1,
+            message: 'A copy of Landa is already in the Applications folder.',
+            detail: 'Replace it with this copy?',
+          });
+          return choice === 0;
+        }
+        // 'existsAndRunning' — another copy is already running; don't clobber it.
+        return false;
+      },
+    });
+    if (moved) return false;
+  } catch (err) {
+    console.error('[Landa] moveToApplicationsFolder failed:', err.message);
   }
 
   app.quit();
@@ -1685,8 +1704,33 @@ function setupIpcHandlers() {
     }
   });
 
+  // Called after the Accessibility step passes so the training step can use the hotkey.
+  ipcMain.handle('register-main-hotkey', async () => {
+    try {
+      const config = await getBestAvailableConfig();
+      if (config && config.toggle_recording) {
+        registerHotkey(config.toggle_recording);
+        currentHotkeyCombo = config.toggle_recording;
+      }
+    } catch (err) {
+      console.error('[Landa] register-main-hotkey failed:', err.message);
+    }
+  });
+
+  // Called when entering the training step — brings onboarding window to front
+  // so paste lands in the test field after the user returns from System Settings.
+  ipcMain.handle('focus-onboarding-window', () => {
+    if (onboardingWindow && !onboardingWindow.isDestroyed()) {
+      onboardingWindow.focus();
+    }
+  });
+
+  ipcMain.handle('open-feedback', (_event, lang) => {
+    openFeedbackWindow(lang);
+  });
+
   ipcMain.handle('finish-onboarding', async (_event, { language }) => {
-    const patch = { onboarding_completed: true };
+    const patch = { onboarding_completed: true, vocabulary: [] };
     if (language) patch.openai_language = language;
     try {
       const result = await api.patchConfig(patch);
@@ -1699,6 +1743,16 @@ function setupIpcHandlers() {
       onboardingWindow.close();
     }
     openSettings();
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      // Window may still be loading (freshly opened) — send after load, or
+      // immediately if it was already open and just focused.
+      const win = settingsWindow;
+      if (win.webContents.isLoading()) {
+        win.webContents.once('did-finish-load', () => win.webContents.send('navigate-tab', 'home'));
+      } else {
+        win.webContents.send('navigate-tab', 'home');
+      }
+    }
     return true;
   });
 }
@@ -1723,7 +1777,6 @@ app.whenReady().then(() => {
 
     setupIpcHandlers();
 
-    requestPermissions();
     startBackend();
     createTray();
     app.on('activate', () => {
@@ -1744,7 +1797,7 @@ app.whenReady().then(() => {
 
       if (!config) {
         // Final fallback if neither backend nor disk config is available.
-        registerHotkey({ key: 'f5', key_code: 96, modifiers: ['command', 'shift'] });
+        registerHotkey({ key: 'space', key_code: 49, modifiers: ['command', 'shift'] });
         registerCancelHotkey({ key: 'escape', key_code: 53, modifiers: [] });
         registerHoldHotkey({ key: 'f6', key_code: 97, modifiers: [] });
       }

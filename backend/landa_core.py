@@ -112,7 +112,7 @@ def _calc_cost(model: str, input_tokens: int = 0, output_tokens: int = 0, durati
 DEFAULT_CONFIG: dict = {
     "api_key": "",
     "api_provider": "openai",
-    "openai_model": "whisper-small",
+    "openai_model": "whisper-large-v3-turbo",
     "openai_language": "de",
     "nemo_language": "auto",
     "sound_start": "Tink",
@@ -120,7 +120,7 @@ DEFAULT_CONFIG: dict = {
     "auto_paste": True,
     "auto_capitalize": True,
     "auto_punctuate": True,
-    "toggle_recording": {"key": "f5", "key_code": 96, "modifiers": ["command", "shift"]},
+    "toggle_recording": {"key": "space", "key_code": 49, "modifiers": ["command", "shift"]},
     "cancel_recording": {"key": "escape", "key_code": 53, "modifiers": []},
     "hold_recording": {"key": "f6", "key_code": 97, "modifiers": []},
     "sound_hold": "Tink",
@@ -133,16 +133,15 @@ DEFAULT_CONFIG: dict = {
     "llm_provider": "landa_proxy",
     "llm_api_key": "",
     "llm_model": "",
-    "vocabulary": [
-        {"from": "Lambda", "to": "Landa"},
-        {"from": "Landau", "to": "Landa"},
-        {"from": "Landar", "to": "Landa"},
-        {"from": "Londoner", "to": "Landa"},
-    ],
+    "vocabulary": [],
     "add_to_vocabulary": {"key": "f7", "key_code": 98, "modifiers": []},
     "recording_window_style": "mini",
     "onboarding_completed": False,
     "modes": {
+        "enabled": {
+            "personal-message": False,
+            "email": False,
+        },
         "selections": {
             "personal-message": "formal",
             "email": "formal",
@@ -185,7 +184,7 @@ def _migrate(cfg: dict) -> tuple[dict, bool]:
     if "model" in cfg:
         old_model = cfg.pop("model")
         if "openai_model" not in cfg:
-            allowed = {"whisper-1", "whisper-base", "whisper-small", "whisper-medium", "whisper-large-v3", "whisper-large-v3-turbo", "gpt-4o-transcribe", "gpt-4o-mini-transcribe"}
+            allowed = {"whisper-1", "whisper-base", "whisper-small", "whisper-medium", "whisper-large-v3", "whisper-large-v3-turbo", "landa-de-small", "gpt-4o-transcribe", "gpt-4o-mini-transcribe"}
             cfg["openai_model"] = old_model if old_model in allowed else "whisper-1"
         changed = True
 
@@ -949,17 +948,27 @@ def _is_hallucination(text: str) -> bool:
     return False
 
 
+# Built-in brand corrections that always apply regardless of user vocabulary.
+# Separate from user config so they survive vocabulary clears.
+_BRAND_VOCAB: list[dict] = [
+    {"from": "Lambda", "to": "Landa"},
+    {"from": "Landau", "to": "Landa"},
+    {"from": "Landar", "to": "Landa"},
+    {"from": "Londoner", "to": "Landa"},
+    {"from": "Lander", "to": "Landa"},
+]
+
+
 def _build_vocabulary_prompt() -> str:
     """Return comma-separated correct spellings for Whisper prompt hint."""
-    vocab = config.get("vocabulary", [])
+    vocab = _BRAND_VOCAB + config.get("vocabulary", [])
     terms = [e["to"] for e in vocab if e.get("to", "").strip()]
     return ", ".join(terms) if terms else ""
 
 
 def apply_vocabulary_replacements(text: str) -> str:
-    """Case-insensitive whole-word replacements from config vocabulary list."""
-    vocab = config.get("vocabulary", [])
-    for entry in vocab:
+    """Case-insensitive whole-word replacements: built-in brand bias + user vocabulary."""
+    for entry in _BRAND_VOCAB + config.get("vocabulary", []):
         from_word = entry.get("from", "").strip()
         to_word = entry.get("to", "").strip()
         if not from_word or not to_word:
@@ -1509,6 +1518,7 @@ def _transcribe_and_paste(force_model: str | None = None) -> None:
 LOCAL_WHISPER_MODELS = {
     "whisper-base", "whisper-small", "whisper-medium",
     "whisper-large-v3", "whisper-large-v3-turbo",
+    "landa-de-small",
 }
 
 # Each entry carries both the GGML filename (macOS/pywhispercpp) and the
@@ -1548,6 +1558,14 @@ WHISPER_MODELS: dict[str, dict] = {
         "hf_repo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
         "size_label": "~1.6 GB",
         "size_bytes": 1_620_000_000,
+    },
+    "landa-de-small": {
+        "name": "Landa DE Small",
+        "filename": "ggml-landa-de-small.bin",
+        "download_url": "https://huggingface.co/NickyBricks/whisper-small-de-finetuned-ggml/resolve/main/ggml-model.bin",
+        "hf_repo": "NickyBricks/whisper-small-de-finetuned",
+        "size_label": "~465 MB",
+        "size_bytes": 487_601_984,
     },
 }
 
@@ -1598,7 +1616,7 @@ def _do_whisper_download(model_name: str) -> None:
         if sys.platform == "darwin":
             dest = WHISPER_MODELS_DIR / info["filename"]
             tmp = dest.with_suffix(".bin.tmp")
-            url = f"{WHISPER_GGML_BASE_URL}/{info['filename']}"
+            url = info.get("download_url") or f"{WHISPER_GGML_BASE_URL}/{info['filename']}"
             print(f"[Landa] Downloading whisper.cpp model: {url}")
             with httpx.stream("GET", url, follow_redirects=True, timeout=None) as resp:
                 resp.raise_for_status()

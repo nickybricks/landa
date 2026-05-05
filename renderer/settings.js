@@ -39,6 +39,7 @@ const WHISPER_MODELS = [
   { value: 'whisper-medium', label: 'Whisper Medium', logo: 'openai' },
   { value: 'whisper-small', label: 'Whisper Small', logo: 'openai' },
   { value: 'whisper-base', label: 'Whisper Base', logo: 'openai' },
+  { value: 'landa-de-small', label: 'Landa DE Small', logo: 'openai' },
   { value: 'whisper-1', label: 'whisper-1 (API)', logo: 'openai' },
   { value: 'nemo', label: 'NeMo Parakeet', logo: 'nvidia' },
   { value: 'landa-base', label: 'Landa Base (Bundled)', logo: 'openai' },
@@ -56,6 +57,7 @@ const TRANSLATIONS = {
     'nav.settings': 'Settings',
     'nav.history': 'History',
     'nav.vocabulary': 'Vocabulary',
+    'nav.feedback': 'Give Feedback',
     // Vocabulary tab
     'vocabulary.title': 'Vocabulary',
     'vocabulary.subtitle': 'Words that will be auto-corrected in transcriptions',
@@ -199,6 +201,7 @@ const TRANSLATIONS = {
     'nav.settings': 'Einstellungen',
     'nav.history': 'Verlauf',
     'nav.vocabulary': 'Vokabular',
+    'nav.feedback': 'Feedback geben',
     // Vocabulary tab
     'vocabulary.title': 'Vokabular',
     'vocabulary.subtitle': 'Wörter, die in Transkriptionen automatisch korrigiert werden',
@@ -546,9 +549,9 @@ function setupSidebarToggle() {
 // ---------------------------------------------------------------------------
 
 function setupSidebarNav() {
-  document.querySelectorAll('.sidebar-item').forEach((item) => {
+  document.querySelectorAll('.sidebar-item[data-tab]').forEach((item) => {
     item.addEventListener('click', () => {
-      document.querySelectorAll('.sidebar-item').forEach((i) => i.classList.remove('active'));
+      document.querySelectorAll('.sidebar-item[data-tab]').forEach((i) => i.classList.remove('active'));
       item.classList.add('active');
 
       const tab = item.dataset.tab;
@@ -556,6 +559,13 @@ function setupSidebarNav() {
       document.getElementById(`tab-${tab}`).classList.add('active');
     });
   });
+
+  const feedbackBtn = document.getElementById('sidebar-feedback');
+  if (feedbackBtn) {
+    feedbackBtn.addEventListener('click', () => {
+      window.api.openFeedback(getCurrentLang());
+    });
+  }
 
   // Start on Configuration tab (matches Swift default)
   document.querySelector('[data-tab="configuration"]').click();
@@ -1019,6 +1029,7 @@ function populateLanguageSelect() {
 
 const LOCAL_WHISPER_MODELS = new Set([
   'whisper-large-v3-turbo', 'whisper-large-v3', 'whisper-medium', 'whisper-small', 'whisper-base',
+  'landa-de-small',
 ]);
 let _whisperStatusPollTimer = null;
 let _whisperDepsInstalling = false;
@@ -2471,6 +2482,7 @@ function getUsageTooltip() {
 
 function buildUsageHtml(usage) {
   if (!usage?.steps?.length) return '';
+  if (!document.body.classList.contains('dev-mode')) return '';
   const totalCost = typeof usage.total_cost === 'number' ? '$' + usage.total_cost.toFixed(4) : '—';
   const totalTokens = typeof usage.total_tokens === 'number' ? usage.total_tokens.toLocaleString() : '—';
   return `<div class="history-usage"><button class="usage-badge" type="button">${totalTokens} tokens · ${totalCost}</button></div>`;

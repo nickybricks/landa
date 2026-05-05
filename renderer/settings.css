@@ -147,6 +147,12 @@ body.platform-darwin .titlebar-lead {
   overflow: hidden;
   transition: width 0.25s ease;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-feedback {
+  margin-top: auto;
 }
 
 .sidebar.collapsed {

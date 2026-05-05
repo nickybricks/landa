@@ -109,10 +109,15 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('update-installing', () => callback());
   },
 
+  // Feedback (Tally form)
+  openFeedback: (lang) => ipcRenderer.invoke('open-feedback', lang),
+
   // Onboarding
   getMicAccessStatus: () => ipcRenderer.invoke('get-mic-access-status'),
   requestMicAccess: () => ipcRenderer.invoke('request-mic-access'),
   getAccessibilityStatus: () => ipcRenderer.invoke('get-accessibility-status'),
   openAccessibilitySettings: () => ipcRenderer.invoke('open-accessibility-settings'),
+  registerMainHotkey: () => ipcRenderer.invoke('register-main-hotkey'),
+  focusOnboardingWindow: () => ipcRenderer.invoke('focus-onboarding-window'),
   finishOnboarding: (payload) => ipcRenderer.invoke('finish-onboarding', payload),
 });

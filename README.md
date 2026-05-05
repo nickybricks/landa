@@ -28,7 +28,7 @@ npm start
 This will:
 1. Show a microphone icon in your system tray / menu bar
 2. Automatically start the Python backend (`landa_core.py`) on `localhost:7890`
-3. Register the global hotkey (default: `Cmd+Shift+F5` on macOS)
+3. Register the global hotkey (default: `Cmd+Shift+Space` on macOS)
 
 ## Usage
 

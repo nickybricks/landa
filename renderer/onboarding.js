@@ -26,8 +26,8 @@ const TRANSLATIONS = {
     'lang.en': 'Englisch',
     'lang.both': 'Beides',
     'lang.cta': 'Fertig',
-    'kbd.macos': '⌘ ⇧ F5',
-    'kbd.windows': 'Strg ⇧ F5',
+    'kbd.macos': '⌘ ⇧ Space',
+    'kbd.windows': 'Strg ⇧ Space',
     'demo.text': 'Hallo, das ist mein erster Test mit Landa.',
   },
   en: {
@@ -53,8 +53,8 @@ const TRANSLATIONS = {
     'lang.en': 'English',
     'lang.both': 'Both',
     'lang.cta': 'Done',
-    'kbd.macos': '⌘ ⇧ F5',
-    'kbd.windows': 'Ctrl ⇧ F5',
+    'kbd.macos': '⌘ ⇧ Space',
+    'kbd.windows': 'Ctrl ⇧ Space',
     'demo.text': 'Hello, this is my first test with Landa.',
   },
 };
@@ -181,6 +181,9 @@ function showAccGranted() {
   const panel = document.querySelector('.ob-panel[data-step="3"]');
   panel.querySelector('#acc-status').hidden = false;
   panel.querySelector('#acc-open-btn').disabled = true;
+  // Register the hotkey now that Accessibility is granted, so the training
+  // step (step 4) can receive the keypress.
+  window.api.registerMainHotkey();
 }
 
 async function handleAccOpenClick() {
@@ -195,8 +198,10 @@ function initTrainStep() {
   const ta = document.getElementById('train-textarea');
   const cont = document.querySelector('.ob-panel[data-step="4"] [data-action="next"]');
   ta.value = '';
-  ta.focus();
   cont.disabled = true;
+  // Re-focus the window (user may have just returned from System Settings) then
+  // focus the textarea so paste lands in the right place.
+  window.api.focusOnboardingWindow().then(() => ta.focus());
   trainingAttempts = 0;
 
   ta.addEventListener('input', () => {
