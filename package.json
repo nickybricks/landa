@@ -1,6 +1,6 @@
 {
   "name": "landa",
-  "version": "0.18.0",
+  "version": "0.18.1",
   "description": "Talk into any app. Landa types it for you — formatted, polished, and private.",
   "main": "main.js",
   "scripts": {
@@ -24,7 +24,7 @@
     "afterSign": "scripts/notarize.js",
     "mac": {
       "category": "public.app-category.utilities",
-      "target": "dmg",
+      "target": ["dmg", "zip"],
       "icon": "assets/icon.icns",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
