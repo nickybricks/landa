@@ -2,6 +2,13 @@
   const PROXY_URL = 'https://landa-proxy.vercel.app/api/transcribe';
   const t = () => window.__i18n?.strings || {};
 
+  const isMac = /mac/i.test(navigator.platform);
+  const ctrlKey = isMac ? '⌃' : (window.__i18n?.lang === 'de' ? 'Strg' : 'Ctrl');
+
+  function hint(key) {
+    return (t()[key] || '').replace('{ctrl}', `<kbd>${ctrlKey}</kbd>`);
+  }
+
   const island   = document.querySelector('.demo-island');
   const btnAction = document.querySelector('.btn-action');
   const elInner  = document.querySelector('.demo-inner');
@@ -29,7 +36,7 @@
 
     micReady = true;
     elInner.hidden = false;
-    elHint.innerHTML = t().shortcutHint;
+    elHint.innerHTML = hint('shortcutHint');
     elField.focus();
   });
 
@@ -114,7 +121,7 @@
       elField.value += (elField.value ? '\n' : '') + '[Error: ' + err.message + ']';
     }
 
-    elHint.innerHTML = t().shortcutHint;
+    elHint.innerHTML = hint('shortcutHint');
     elField.focus();
   }
 })();
