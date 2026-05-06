@@ -47,7 +47,7 @@ Do these in any order within the tier. Each touches one spot and has no side eff
 - [ ] **Refuse version downgrades in auto-updater** (`main.js:79`)
   - What breaks for users today: a tampered update metadata file could silently roll all users back to an older, more vulnerable version.
 
-- [ ] **Load tray icons once at startup instead of re-reading from disk every update** (`main.js:686-697`)
+- [x] **Load tray icons once at startup instead of re-reading from disk every update** (`main.js:686-697`) — Fixed: pending commit
   - What breaks for users today: every second, the app reads the tray icon file from disk again. Not user-visible, but unnecessary work every second of uptime.
 
 - [ ] **Fix preload.js audio-level listener accumulation** (`preload.js:90-92`)
@@ -59,7 +59,7 @@ Do these in any order within the tier. Each touches one spot and has no side eff
 - [ ] **Fix accessibility prompt firing every launch** (`main.js:1199-1204`)
   - What breaks for users today: app asks for Accessibility permission on every launch, even if it's already granted.
 
-- [ ] **Strip stale "Swift app" comments** (`main.js:18`, `landa_core.py:5-6`, `renderer/settings.js:22`)
+- [x] **Strip stale "Swift app" comments** (`main.js:18`, `landa_core.py:5-6`, `renderer/settings.js:22`) — Fixed: pending commit
   - What breaks for users today: nothing. But any future engineer will waste time looking for a Swift codebase that no longer exists.
 
 ---

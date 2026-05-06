@@ -947,6 +947,23 @@ def _is_hallucination(text: str) -> bool:
     return False
 
 
+_HALLUCINATION_SUFFIXES: tuple[str, ...] = tuple(
+    " " + p for p in _HALLUCINATION_EXACT if p  # e.g. " Thank you."
+)
+
+
+def _strip_trailing_hallucinations(text: str) -> str:
+    """Strip a known Whisper hallucination phrase appended to real transcribed text."""
+    lower = text.lower()
+    for suffix in _HALLUCINATION_SUFFIXES:
+        if lower.endswith(suffix.lower()):
+            stripped = text[: len(text) - len(suffix)].rstrip()
+            if stripped:
+                logging.info("[transcribe] Stripped trailing hallucination %r from text", suffix.strip())
+                return stripped
+    return text
+
+
 # Built-in brand corrections that always apply regardless of user vocabulary.
 # Separate from user config so they survive vocabulary clears.
 _BRAND_VOCAB: list[dict] = [
@@ -1151,12 +1168,14 @@ def start_recording() -> bool:
         logging.info("[start_recording] waiting for previous stream teardown...")
         _teardown_thread.join(timeout=5.0)
         if _teardown_thread.is_alive():
-            # PortAudio can't open a new stream while the previous one is mid-teardown.
-            # Proceeding anyway guarantees an 8s hang — fail fast instead.
-            logging.error("[start_recording] previous teardown still hung after 5s — aborting start (audio device stuck)")
-            return False
-        logging.info("[start_recording] previous teardown finished")
-        _teardown_thread = None
+            # close() is still hung on macOS PortAudio — detach the zombie thread
+            # and try to open a new stream anyway.  If the device is truly stuck,
+            # InputStream creation will fail within its own 8s timeout below.
+            logging.error("[start_recording] previous teardown still hung after 5s — forcing past stuck teardown and retrying")
+            _teardown_thread = None
+        else:
+            logging.info("[start_recording] previous teardown finished")
+            _teardown_thread = None
     with lock:
         if recording:
             logging.info("[start_recording] already recording, returning False")
@@ -1276,24 +1295,32 @@ def stop_recording() -> bool:
         except queue.Full:
             logging.warning("[stop_recording] realtime queue full — sender may have crashed")
 
-    def _finalize_then_teardown():
+    # Stream teardown in its own thread so _teardown_thread only tracks the audio
+    # hardware release, not the transcription pipeline.  abort() stops the callback
+    # immediately; close() can hang on macOS — logged individually to diagnose which.
+    if old_stream is not None:
+        t_td = time.time()
+        def _do_teardown():
+            try:
+                logging.info("[stop_recording] stream.abort() starting...")
+                old_stream.abort()
+                logging.info("[stop_recording] stream.abort() done (%.3fs)", time.time() - t_td)
+                old_stream.close()
+                logging.info("[stop_recording] stream.close() done, teardown complete (%.3fs)", time.time() - t_td)
+            except Exception as e:
+                logging.error("[stop_recording] stream teardown error: %s", e)
+        td = threading.Thread(target=_do_teardown, daemon=True)
+        td.start()
+        _teardown_thread = td
+
+    # Transcription runs concurrently — it only needs audio_frames, not the stream.
+    def _finalize():
         try:
             _finalize_transcription()
         finally:
-            _transcription_ready.set()  # unblock api_stop before teardown starts
-        # Teardown happens after paste — off the user-perceived critical path
-        if old_stream is not None:
-            t1 = time.time()
-            try:
-                old_stream.abort()
-                old_stream.close()
-                logging.info("[stop_recording] stream teardown completed in %.3fs", time.time() - t1)
-            except Exception as e:
-                logging.error("[stop_recording] stream teardown error: %s", e)
+            _transcription_ready.set()
 
-    td = threading.Thread(target=_finalize_then_teardown, daemon=True)
-    td.start()
-    _teardown_thread = td
+    threading.Thread(target=_finalize, daemon=True).start()
     logging.info("[stop_recording] done in %.3fs total", time.time() - t0)
     return True
 
@@ -1478,6 +1505,7 @@ def _transcribe_and_paste(force_model: str | None = None) -> None:
             if text:
                 logging.info("[transcribe] Discarding hallucination: %r", text)
             return
+        text = _strip_trailing_hallucinations(text)
         t_post = time.time()
         text = post_process(text)
         text = apply_vocabulary_replacements(text)

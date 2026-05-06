@@ -378,8 +378,11 @@ async function handleHotkeyPress() {
           }
         }
       } else {
-        await api.startRecording();
+        const startResp = await api.startRecording();
         console.log(`[Landa] start API responded in ${Date.now() - t0}ms`);
+        if (startResp && startResp.started === false) {
+          console.error('[Landa] Backend failed to start recording — audio device may be stuck, see backend logs');
+        }
       }
     } catch (err) {
       console.error(`[Landa] Hotkey action failed (${action}) after ${Date.now() - t0}ms: ${err.message}`);
