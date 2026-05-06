@@ -25,7 +25,10 @@
     "afterSign": "scripts/notarize.js",
     "mac": {
       "category": "public.app-category.utilities",
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "assets/icon.icns",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
@@ -72,6 +75,7 @@
     "electron-builder": "^25.0.0"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "electron-updater": "^6.8.3"
   }
 }
