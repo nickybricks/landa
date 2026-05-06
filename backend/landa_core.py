@@ -908,16 +908,6 @@ def post_process(text: str) -> str:
 
 _HALLUCINATION_EXACT: set[str] = {
     "[blank_audio]",
-    "you there?",
-    "thanks for watching.",
-    "thanks for watching!",
-    "thank you for watching.",
-    "thank you.",
-    "bye.",
-    "bye!",
-    "...",
-    ".",
-    "",
     "(birds chirping)",
     "(snoring)",
     "(upbeat music)"
