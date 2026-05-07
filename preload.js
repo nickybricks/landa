@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Sounds
   getSystemSounds: () => ipcRenderer.invoke('get-system-sounds'),
+  getDefaultSounds: () => ipcRenderer.invoke('get-default-sounds'),
   playSound: (name) => ipcRenderer.invoke('play-sound', name),
 
   // Platform

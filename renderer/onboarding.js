@@ -26,8 +26,6 @@ const TRANSLATIONS = {
     'lang.en': 'Englisch',
     'lang.both': 'Beides',
     'lang.cta': 'Fertig',
-    'kbd.macos': '⌘ ⇧ Space',
-    'kbd.windows': 'Strg ⇧ Space',
     'demo.text': 'Hallo, das ist mein erster Test mit Landa.',
   },
   en: {
@@ -53,8 +51,6 @@ const TRANSLATIONS = {
     'lang.en': 'English',
     'lang.both': 'Both',
     'lang.cta': 'Done',
-    'kbd.macos': '⌘ ⇧ Space',
-    'kbd.windows': 'Ctrl ⇧ Space',
     'demo.text': 'Hello, this is my first test with Landa.',
   },
 };
@@ -77,9 +73,34 @@ function applyTranslations() {
     el.textContent = t(el.dataset.i18n);
   });
   const kbd = document.getElementById('train-kbd');
-  if (kbd) {
-    kbd.textContent = t(platform === 'win32' ? 'kbd.windows' : 'kbd.macos');
+  if (kbd) renderHotkeyKeys(kbd);
+}
+
+function getHotkeyLabels() {
+  // The default toggle hotkey is Ctrl/⌘ + Shift + Space. Render real key
+  // labels per platform + locale, with shift always shown as the up-arrow ⇧.
+  if (platform === 'win32') {
+    const ctrl = lang === 'de' ? 'Strg' : 'Ctrl';
+    return [ctrl, '⇧', 'Space'];
   }
+  return ['⌘', '⇧', 'Space'];
+}
+
+function renderHotkeyKeys(container) {
+  container.innerHTML = '';
+  const labels = getHotkeyLabels();
+  labels.forEach((label, i) => {
+    if (i > 0) {
+      const plus = document.createElement('span');
+      plus.className = 'ob-key-plus';
+      plus.textContent = '+';
+      container.appendChild(plus);
+    }
+    const key = document.createElement('span');
+    key.className = 'ob-key';
+    key.textContent = label;
+    container.appendChild(key);
+  });
 }
 
 // ---------------------------------------------------------------------------

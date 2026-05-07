@@ -5,6 +5,7 @@
 let config = null;
 let platform = 'darwin';
 let systemSounds = [];
+let defaultSounds = { start: 'Tink', stop: 'Pop', cancel: 'Funk', hold: 'Tink', resume: 'Pop' };
 let recordingAction = null; // which shortcut is being recorded
 let _setupDone = false; // true once UI is populated & first applyConfig has run
 
@@ -446,6 +447,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.body.classList.add('platform-' + platform);
   if (await window.api.isDevMode()) document.body.classList.add('dev-mode');
   systemSounds = await window.api.getSystemSounds();
+  defaultSounds = await window.api.getDefaultSounds();
 
   const version = await window.api.getAppVersion();
   document.getElementById('app-version-label').textContent = `Version ${version}`;
@@ -658,11 +660,11 @@ function applyConfig(cfg, { fromPoll = false } = {}) {
 
   // Sounds
   document.getElementById('opt-soundMuted').checked = cfg.sound_muted || false;
-  document.getElementById('sel-soundStart').value = cfg.sound_start || 'Tink';
-  document.getElementById('sel-soundStop').value = cfg.sound_stop || 'Pop';
-  document.getElementById('sel-soundCancel').value = cfg.sound_cancel || 'Funk';
-  document.getElementById('sel-soundHold').value = cfg.sound_hold || 'Tink';
-  document.getElementById('sel-soundResume').value = cfg.sound_resume || 'Pop';
+  document.getElementById('sel-soundStart').value = cfg.sound_start || defaultSounds.start;
+  document.getElementById('sel-soundStop').value = cfg.sound_stop || defaultSounds.stop;
+  document.getElementById('sel-soundCancel').value = cfg.sound_cancel || defaultSounds.cancel;
+  document.getElementById('sel-soundHold').value = cfg.sound_hold || defaultSounds.hold;
+  document.getElementById('sel-soundResume').value = cfg.sound_resume || defaultSounds.resume;
   updateSoundRowsDisabled(cfg.sound_muted || false);
 
   // Transcription model
@@ -712,12 +714,38 @@ function setupRecordingWindowStyle() {
 // Shortcut Rendering
 // ---------------------------------------------------------------------------
 
-const MOD_SYMBOLS = {
-  command: '⌘', shift: '⇧', option: '⌥', control: '⌃',
+const MOD_SYMBOLS_MAC = {
+  command: '⌘', shift: '⇧', option: '⌥', control: 'control',
 };
 
+// Windows key labels — locale-aware. Shift always renders as the up-arrow,
+// matching the physical key cap on both German and English keyboards.
+const MOD_SYMBOLS_WIN_EN = {
+  command: '⊞', shift: '⇧', option: 'alt', control: 'ctrl',
+};
+const MOD_SYMBOLS_WIN_DE = {
+  command: '⊞', shift: '⇧', option: 'alt', control: 'strg',
+};
+
+function modSymbolsForPlatform() {
+  if (platform === 'win32') {
+    return getCurrentLang() === 'de' ? MOD_SYMBOLS_WIN_DE : MOD_SYMBOLS_WIN_EN;
+  }
+  return MOD_SYMBOLS_MAC;
+}
+
+// Universal physical-key glyphs — same on Mac and Windows so the user sees
+// what's printed on the actual key cap and doesn't have to translate.
 const KEY_DISPLAY = {
-  escape: 'Esc', space: 'Space', tab: 'Tab', return: 'Return', delete: 'Delete',
+  escape: 'Esc',
+  space: 'Space',
+  tab: '⇥',
+  capslock: '⇪',
+  return: '⏎',
+  enter: '⏎',
+  delete: '⌫',
+  backspace: '⌫',
+  up: '↑', down: '↓', left: '←', right: '→',
 };
 
 function renderShortcutBadges(action, combo) {
@@ -741,20 +769,26 @@ function renderShortcutBadges(action, combo) {
     return;
   }
 
-  // Modifier badges
+  const symbols = modSymbolsForPlatform();
+  const labels = [];
   for (const mod of (combo.modifiers || [])) {
+    labels.push(symbols[mod] || mod);
+  }
+  const keyLower = combo.key.toLowerCase();
+  labels.push(KEY_DISPLAY[keyLower] || combo.key.toUpperCase());
+
+  labels.forEach((label, i) => {
+    if (i > 0) {
+      const plus = document.createElement('span');
+      plus.className = 'key-plus';
+      plus.textContent = '+';
+      container.appendChild(plus);
+    }
     const badge = document.createElement('span');
     badge.className = 'key-badge';
-    badge.textContent = MOD_SYMBOLS[mod] || mod;
+    badge.textContent = label;
     container.appendChild(badge);
-  }
-
-  // Key badge
-  const keyBadge = document.createElement('span');
-  keyBadge.className = 'key-badge';
-  const keyLower = combo.key.toLowerCase();
-  keyBadge.textContent = KEY_DISPLAY[keyLower] || combo.key.toUpperCase();
-  container.appendChild(keyBadge);
+  });
 }
 
 function updateResetButton(action, combo, defaultCombo) {
@@ -778,10 +812,15 @@ function setupShortcutCapture() {
     });
   });
 
-  // Reset buttons
+  // Reset buttons — while recording, act as cancel (restore previous);
+  // otherwise reset to default.
   document.querySelectorAll('.shortcut-reset').forEach((btn) => {
     btn.addEventListener('click', () => {
       const action = btn.dataset.action;
+      if (recordingAction === action) {
+        stopRecording();
+        return;
+      }
       setShortcut(action, { ...DEFAULTS[action] });
     });
   });
@@ -936,11 +975,11 @@ function populateSoundSelects() {
   const cancelSel = document.getElementById('sel-soundCancel');
   const holdSel = document.getElementById('sel-soundHold');
   const resumeSel = document.getElementById('sel-soundResume');
-  const startVal = (config && config.sound_start) || 'Tink';
-  const stopVal = (config && config.sound_stop) || 'Pop';
-  const cancelVal = (config && config.sound_cancel) || 'Funk';
-  const holdVal = (config && config.sound_hold) || 'Tink';
-  const resumeVal = (config && config.sound_resume) || 'Pop';
+  const startVal = (config && config.sound_start) || defaultSounds.start;
+  const stopVal = (config && config.sound_stop) || defaultSounds.stop;
+  const cancelVal = (config && config.sound_cancel) || defaultSounds.cancel;
+  const holdVal = (config && config.sound_hold) || defaultSounds.hold;
+  const resumeVal = (config && config.sound_resume) || defaultSounds.resume;
 
   for (const sound of systemSounds) {
     startSel.add(new Option(sound, sound, false, sound === startVal));

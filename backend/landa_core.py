@@ -114,16 +114,16 @@ DEFAULT_CONFIG: dict = {
     "openai_model": "whisper-small",
     "openai_language": "de",
     "nemo_language": "auto",
-    "sound_start": "Tink",
-    "sound_stop": "Pop",
+    "sound_start": "Windows Notify" if sys.platform == "win32" else "Tink",
+    "sound_stop": "tada" if sys.platform == "win32" else "Pop",
     "auto_paste": True,
     "auto_capitalize": True,
     "auto_punctuate": True,
     "toggle_recording": {"key": "space", "key_code": 49, "modifiers": ["command", "shift"]},
     "cancel_recording": {"key": "escape", "key_code": 53, "modifiers": []},
     "hold_recording": {"key": "f6", "key_code": 97, "modifiers": []},
-    "sound_hold": "Tink",
-    "sound_resume": "Pop",
+    "sound_hold": "Windows Ding" if sys.platform == "win32" else "Tink",
+    "sound_resume": "chimes" if sys.platform == "win32" else "Pop",
     "change_mode": {"key": "k", "key_code": 40, "modifiers": ["option", "shift"]},
     "push_to_talk": {"key": "", "key_code": -1, "modifiers": []},
     "mouse_shortcut": {"key": "", "key_code": -1, "modifiers": []},
@@ -147,11 +147,11 @@ DEFAULT_CONFIG: dict = {
         },
         "categories": {
             "email": {
-                "linkedApps": ["Mail", "Outlook", "Superhuman"],
+                "linkedApps": ["Mail", "Outlook"],
                 "linkedUrls": ["mail.google.com", "outlook.live.com", "outlook.office.com"],
             },
             "personal-message": {
-                "linkedApps": ["Slack", "Discord", "WhatsApp", "Telegram", "Signal"],
+                "linkedApps": ["Slack", "Discord", "WhatsApp"],
                 "linkedUrls": [],
             },
         },
@@ -836,6 +836,8 @@ _rt_error: bool = False
 
 def play_sound(name: str) -> None:
     """Play a system sound by name (non-blocking)."""
+    if not name:
+        return
     if sys.platform == "darwin":
         path = f"/System/Library/Sounds/{name}.aiff"
         if os.path.exists(path):
@@ -843,7 +845,9 @@ def play_sound(name: str) -> None:
     elif sys.platform == "win32":
         try:
             import winsound
-            winsound.PlaySound("SystemDefault", winsound.SND_ALIAS | winsound.SND_ASYNC)
+            path = os.path.join(r"C:\Windows\Media", f"{name}.wav")
+            if os.path.exists(path):
+                winsound.PlaySound(path, winsound.SND_FILENAME | winsound.SND_ASYNC)
         except Exception:
             pass
 
@@ -892,9 +896,22 @@ def paste_text(text: str) -> None:
                     ("dwExtraInfo", ctypes.POINTER(ctypes.c_ulong)),
                 ]
 
+            # Real Win32 INPUT.union holds MOUSEINPUT/KEYBDINPUT/HARDWAREINPUT;
+            # SendInput rejects mismatched cbSize, so the union must be sized to
+            # the largest member (MOUSEINPUT, 32 bytes on x64).
+            class MOUSEINPUT(ctypes.Structure):
+                _fields_ = [
+                    ("dx", ctypes.wintypes.LONG),
+                    ("dy", ctypes.wintypes.LONG),
+                    ("mouseData", ctypes.wintypes.DWORD),
+                    ("dwFlags", ctypes.wintypes.DWORD),
+                    ("time", ctypes.wintypes.DWORD),
+                    ("dwExtraInfo", ctypes.POINTER(ctypes.c_ulong)),
+                ]
+
             class INPUT(ctypes.Structure):
                 class _INPUT(ctypes.Union):
-                    _fields_ = [("ki", KEYBDINPUT)]
+                    _fields_ = [("mi", MOUSEINPUT), ("ki", KEYBDINPUT)]
                 _anonymous_ = ("_input",)
                 _fields_ = [("type", ctypes.wintypes.DWORD), ("_input", _INPUT)]
 
@@ -911,7 +928,10 @@ def paste_text(text: str) -> None:
                 make_key(VK_V, KEYEVENTF_KEYUP),
                 make_key(VK_CONTROL, KEYEVENTF_KEYUP),
             )
-            ctypes.windll.user32.SendInput(4, inputs, ctypes.sizeof(INPUT))
+            sent = ctypes.windll.user32.SendInput(4, inputs, ctypes.sizeof(INPUT))
+            if sent != 4:
+                err = ctypes.windll.kernel32.GetLastError()
+                logging.error("SendInput sent %d/4 events (GetLastError=%d, cbSize=%d)", sent, err, ctypes.sizeof(INPUT))
         except Exception as e:
             logging.error("Auto-paste failed on Windows: %s", e)
         finally:
@@ -1308,7 +1328,7 @@ def start_recording() -> bool:
         _rt_thread = threading.Thread(target=_realtime_sender_thread, daemon=True)
         _rt_thread.start()
         logging.info("[start_recording] realtime WebSocket sender started")
-    play_sound(config.get("sound_start", "Tink"))
+    play_sound(config.get("sound_start", DEFAULT_CONFIG["sound_start"]))
     logging.info("[start_recording] done in %.3fs total", time.time() - t0)
     return True
 
@@ -1327,7 +1347,7 @@ def stop_recording() -> bool:
         recording = False
         _is_on_hold = False
     logging.info("[stop_recording] state updated in %.3fs", time.time() - t0)
-    play_sound(config.get("sound_stop", "Pop"))
+    play_sound(config.get("sound_stop", DEFAULT_CONFIG["sound_stop"]))
     # Signal realtime sender to commit and finalize
     if _rt_queue is not None:
         try:

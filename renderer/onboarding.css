@@ -154,18 +154,37 @@ html, body {
   flex-wrap: wrap;
 }
 
-.ob-kbd {
+.ob-kbd-group {
   display: inline-flex;
   align-items: center;
-  padding: 6px 12px;
-  border-radius: 8px;
+  gap: 6px;
+  vertical-align: middle;
+}
+
+.ob-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
   background: var(--bg-card);
   border: 1px solid var(--border);
-  font-family: var(--font-body);
+  border-bottom-width: 2px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-weight: 600;
   font-size: 13px;
+  line-height: 1;
   color: var(--text);
   white-space: nowrap;
+}
+
+.ob-key-plus {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 /* ---------------------------------------------------------------------------

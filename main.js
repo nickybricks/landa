@@ -75,9 +75,9 @@ let currentShortcut = null; // Electron accelerator string
 let currentCancelShortcut = null; // Electron accelerator for cancel_recording
 let currentHoldShortcut = null; // Electron accelerator for hold_recording
 let currentVocabShortcut = null; // Electron accelerator for add_to_vocabulary
-let currentCancelSound = 'Funk'; // system sound name to play on cancel
-let currentHoldSound = 'Tink'; // system sound name to play on hold
-let currentResumeSound = 'Pop'; // system sound name to play on resume
+let currentCancelSound = null; // system sound name to play on cancel
+let currentHoldSound = null; // system sound name to play on hold
+let currentResumeSound = null; // system sound name to play on resume
 let lastHotkeyTime = 0;
 let hotkeyInFlight = false; // re-entrancy guard
 let hotkeyCompletedAt = 0; // timestamp of last completed hotkey action
@@ -1263,9 +1263,9 @@ function applyConfig(config) {
     registerCancelHotkey(cancelCombo);
   }
 
-  currentCancelSound = config.sound_cancel || 'Funk';
-  currentHoldSound = config.sound_hold || 'Tink';
-  currentResumeSound = config.sound_resume || 'Pop';
+  currentCancelSound = config.sound_cancel || getDefaultSound('cancel');
+  currentHoldSound = config.sound_hold || getDefaultSound('hold');
+  currentResumeSound = config.sound_resume || getDefaultSound('resume');
 
   const holdCombo = config.hold_recording;
   const newHoldAccelerator = hotkeyToAccelerator(holdCombo);
@@ -1479,15 +1479,65 @@ async function getInstalledAppsWin() {
   return apps;
 }
 
+const WIN_MEDIA_DIR = 'C:\\Windows\\Media';
+
+// Platform-aware default sound names. Mac defaults reference /System/Library/Sounds.
+// Windows defaults reference .wav files in C:\Windows\Media.
+const DEFAULT_SOUNDS = {
+  darwin: { start: 'Tink', stop: 'Pop', cancel: 'Funk', hold: 'Tink', resume: 'Pop' },
+  win32: {
+    start: 'Windows Notify',
+    stop: 'tada',
+    cancel: 'Windows Critical Stop',
+    hold: 'Windows Ding',
+    resume: 'chimes',
+  },
+};
+
+function getDefaultSound(kind) {
+  const defaults = DEFAULT_SOUNDS[process.platform] || DEFAULT_SOUNDS.darwin;
+  return defaults[kind];
+}
+
+function listSystemSounds() {
+  if (process.platform === 'darwin') {
+    try {
+      return fs.readdirSync('/System/Library/Sounds')
+        .filter((f) => f.endsWith('.aiff'))
+        .map((f) => f.replace('.aiff', ''))
+        .sort();
+    } catch { return []; }
+  }
+  if (process.platform === 'win32') {
+    try {
+      return fs.readdirSync(WIN_MEDIA_DIR)
+        .filter((f) => f.toLowerCase().endsWith('.wav'))
+        .map((f) => f.replace(/\.wav$/i, ''))
+        .sort();
+    } catch { return []; }
+  }
+  return [];
+}
+
 function playSound(name) {
+  if (!name) return;
   if (process.platform === 'darwin') {
     const soundPath = `/System/Library/Sounds/${name}.aiff`;
     if (fs.existsSync(soundPath)) {
       spawn('afplay', [soundPath], { stdio: 'ignore' });
     }
-  } else if (process.platform === 'win32') {
-    spawn('powershell', ['-c', '[System.Media.SystemSounds]::Beep.Play()'],
-      { stdio: 'ignore', windowsHide: true });
+    return;
+  }
+  if (process.platform === 'win32') {
+    const soundPath = path.join(WIN_MEDIA_DIR, `${name}.wav`);
+    if (!fs.existsSync(soundPath)) return;
+    // Single-quote-escape the path for PowerShell, then play asynchronously.
+    const psPath = soundPath.replace(/'/g, "''");
+    spawn(
+      'powershell',
+      ['-NoProfile', '-Command', `(New-Object Media.SoundPlayer '${psPath}').Play()`],
+      { stdio: 'ignore', windowsHide: true },
+    );
   }
 }
 
@@ -1718,19 +1768,9 @@ function setupIpcHandlers() {
     catch (err) { return { error: err.message }; }
   });
 
-  ipcMain.handle('get-system-sounds', () => {
-    if (process.platform === 'darwin') {
-      const soundsDir = '/System/Library/Sounds';
-      try {
-        return fs.readdirSync(soundsDir)
-          .filter((f) => f.endsWith('.aiff'))
-          .map((f) => f.replace('.aiff', ''))
-          .sort();
-      } catch { return []; }
-    }
-    // Windows — return some common system sound names
-    return ['Default', 'Notify', 'Alert'];
-  });
+  ipcMain.handle('get-system-sounds', () => listSystemSounds());
+
+  ipcMain.handle('get-default-sounds', () => DEFAULT_SOUNDS[process.platform] || DEFAULT_SOUNDS.darwin);
 
   ipcMain.handle('play-sound', (_event, name) => playSound(name));
 
