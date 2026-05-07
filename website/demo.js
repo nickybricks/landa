@@ -19,6 +19,28 @@
   let mediaRecorder = null;
   let audioChunks = [];
   let isRecording = false;
+  let recordingMime = '';
+
+  function pickMime() {
+    const candidates = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/mp4;codecs=mp4a.40.2',
+      'audio/mp4',
+      'audio/aac',
+    ];
+    for (const m of candidates) {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported?.(m)) return m;
+    }
+    return '';
+  }
+
+  function extFor(mime) {
+    if (!mime) return 'webm';
+    if (mime.includes('mp4') || mime.includes('aac')) return 'mp4';
+    if (mime.includes('ogg')) return 'ogg';
+    return 'webm';
+  }
 
   // ── First click: request mic, reveal textarea ────────────────────────────
 
@@ -76,7 +98,9 @@
   async function startRecording() {
     if (isRecording) return;
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(stream);
+    const mime = pickMime();
+    mediaRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    recordingMime = mediaRecorder.mimeType || mime || '';
     audioChunks = [];
 
     mediaRecorder.ondataavailable = (e) => {
@@ -107,18 +131,24 @@
   // ── Transcription ────────────────────────────────────────────────────────
 
   async function sendAudio() {
-    const blob = new Blob(audioChunks, { type: 'audio/webm' });
+    const mime = recordingMime || 'audio/webm';
+    const ext = extFor(mime);
+    const blob = new Blob(audioChunks, { type: mime });
     const form = new FormData();
-    form.append('file', blob, 'recording.webm');
+    form.append('file', blob, `recording.${ext}`);
 
     try {
       const res = await fetch(PROXY_URL, { method: 'POST', body: form });
-      if (!res.ok) throw new Error(res.statusText);
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status}${body ? ' – ' + body.slice(0, 200) : ''}`);
+      }
       const data = await res.json();
       const text = data.text?.trim();
       if (text) elField.value += (elField.value ? '\n' : '') + text;
     } catch (err) {
-      elField.value += (elField.value ? '\n' : '') + '[Error: ' + err.message + ']';
+      const msg = err?.message || String(err) || 'unknown';
+      elField.value += (elField.value ? '\n' : '') + '[Error: ' + msg + ']';
     }
 
     elHint.innerHTML = hint('shortcutHint');

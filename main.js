@@ -21,6 +21,11 @@ const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 // surprise users with the onboarding flow. The marker file is only ever
 // created (never written to), so it can't be clobbered by partial config saves.
 const ONBOARDED_MARKER_PATH = path.join(CONFIG_DIR, '.onboarded');
+// First app launch timestamp (ISO string) and a sentinel marking that the
+// in-app feedback prompt has been shown (or skipped for existing users).
+const FIRST_LAUNCH_PATH = path.join(CONFIG_DIR, '.first-launch-at');
+const FEEDBACK_PROMPTED_PATH = path.join(CONFIG_DIR, '.feedback-prompted');
+const FEEDBACK_PROMPT_DELAY_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 const POLL_INTERVAL = 1000; // 1 second
 
 // In dev (unpackaged), load <repo>/.env so LANDA_PROXY_URL / LANDA_APP_SECRET
@@ -246,6 +251,48 @@ function isOnboarded(config) {
     return true;
   }
   return false;
+}
+
+// Feedback prompt bookkeeping. Called once at startup. Three cases:
+//   - feedback already prompted → no-op
+//   - first-launch timestamp already recorded → no-op
+//   - user is already onboarded but has no first-launch marker → existing
+//     user from before this feature; mark as prompted so we don't bother them
+//   - otherwise → record first-launch timestamp for a new user
+function recordFirstLaunchOrSkip() {
+  try {
+    if (fs.existsSync(FEEDBACK_PROMPTED_PATH)) return;
+    if (fs.existsSync(FIRST_LAUNCH_PATH)) return;
+    fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    if (hasOnboardedMarker()) {
+      fs.writeFileSync(FEEDBACK_PROMPTED_PATH, '');
+    } else {
+      fs.writeFileSync(FIRST_LAUNCH_PATH, new Date().toISOString());
+    }
+  } catch (err) {
+    console.error(`[Landa] Failed to record first-launch state: ${err.message}`);
+  }
+}
+
+function shouldShowFeedbackPrompt() {
+  try {
+    if (fs.existsSync(FEEDBACK_PROMPTED_PATH)) return false;
+    if (!fs.existsSync(FIRST_LAUNCH_PATH)) return false;
+    const ts = Date.parse(fs.readFileSync(FIRST_LAUNCH_PATH, 'utf8').trim());
+    if (Number.isNaN(ts)) return false;
+    return Date.now() - ts >= FEEDBACK_PROMPT_DELAY_MS;
+  } catch {
+    return false;
+  }
+}
+
+function markFeedbackPrompted() {
+  try {
+    fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    fs.writeFileSync(FEEDBACK_PROMPTED_PATH, '');
+  } catch (err) {
+    console.error(`[Landa] Failed to write feedback-prompted marker: ${err.message}`);
+  }
 }
 
 async function getBestAvailableConfig() {
@@ -777,6 +824,14 @@ function openSettings() {
 
   settingsWindow.loadFile(path.join(__dirname, 'renderer', 'settings.html'));
 
+  settingsWindow.webContents.once('did-finish-load', () => {
+    if (!feedbackPromptSentThisSession && shouldShowFeedbackPrompt()
+        && settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.webContents.send('show-feedback-prompt');
+      feedbackPromptSentThisSession = true;
+    }
+  });
+
   // Prevent Cmd+R / Ctrl+R / F5 from reloading the settings window.
   // Reloading races with debounced config saves and causes settings to revert.
   // F5 is allowed through when the renderer is actively capturing a hotkey.
@@ -997,6 +1052,7 @@ function destroyUpdateWindow() {
 // ---------------------------------------------------------------------------
 
 let feedbackWindow = null;
+let feedbackPromptSentThisSession = false;
 
 const FEEDBACK_URLS = {
   en: 'https://tally.so/r/OD8V2g',
@@ -1772,6 +1828,10 @@ function setupIpcHandlers() {
     openFeedbackWindow(lang);
   });
 
+  ipcMain.handle('mark-feedback-prompted', () => {
+    markFeedbackPrompted();
+  });
+
   ipcMain.handle('finish-onboarding', async (_event, { language }) => {
     // Write the marker first so the user is treated as onboarded even if the
     // backend patch fails or the app crashes between here and the next launch.
@@ -1822,6 +1882,8 @@ app.whenReady().then(() => {
     if (!ok) return;
 
     setupIpcHandlers();
+
+    recordFirstLaunchOrSkip();
 
     startBackend();
     createTray();

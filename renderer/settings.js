@@ -67,7 +67,7 @@ const TRANSLATIONS = {
     'vocabulary.empty.title': 'No replacements yet',
     'vocabulary.empty.sub': 'Add words that Whisper consistently mishears.',
     // Home
-    'home.desc': 'Talk into any app. Landa types it for you — formatted, polished, and private.<br>Press your hotkey to record, release to transcribe and paste.',
+    'home.desc': 'Talk into any app. Landa types it for you — formatted, polished, and private.<br>Press your hotkey to start recording, press again to transcribe and paste.',
     // Settings tab — language section
     'settings.language.section': 'Language',
     'settings.language.label': 'App Language',
@@ -524,7 +524,75 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  window.api.onShowFeedbackPrompt(() => showFeedbackPrompt());
+
 });
+
+// ---------------------------------------------------------------------------
+// Feedback prompt (shown automatically 3 days after first launch)
+// ---------------------------------------------------------------------------
+
+function showFeedbackPrompt() {
+  if (document.getElementById('feedback-prompt-overlay')) return;
+  const lang = getCurrentLang();
+  const copy = lang === 'de'
+    ? {
+        title: 'Wie läuft es mit Landa?',
+        body: 'Du nutzt Landa jetzt seit ein paar Tagen. Hast du eine Minute, um zu teilen, was funktioniert und was nicht? Es hilft uns enorm.',
+        give: 'Feedback geben',
+        later: 'Später',
+        never: 'Nicht mehr fragen',
+      }
+    : {
+        title: 'How\'s Landa working out?',
+        body: 'You\'ve been using Landa for a few days. Got a minute to share what\'s working and what\'s not? It really helps us improve.',
+        give: 'Give feedback',
+        later: 'Maybe later',
+        never: 'Don\'t ask again',
+      };
+
+  const overlay = document.createElement('div');
+  overlay.className = 'popup-overlay';
+  overlay.id = 'feedback-prompt-overlay';
+
+  const panel = document.createElement('div');
+  panel.className = 'popup-panel feedback-prompt-panel';
+  panel.innerHTML = `
+    <div class="popup-header">
+      <div class="popup-title"></div>
+    </div>
+    <div class="popup-section feedback-prompt-body"></div>
+    <div class="popup-section feedback-prompt-actions">
+      <button class="btn-secondary" id="feedback-prompt-never"></button>
+      <div class="feedback-prompt-actions-right">
+        <button class="btn-secondary" id="feedback-prompt-later"></button>
+        <button class="btn-primary" id="feedback-prompt-give"></button>
+      </div>
+    </div>
+  `;
+  panel.querySelector('.popup-title').textContent = copy.title;
+  panel.querySelector('.feedback-prompt-body').textContent = copy.body;
+  panel.querySelector('#feedback-prompt-give').textContent = copy.give;
+  panel.querySelector('#feedback-prompt-later').textContent = copy.later;
+  panel.querySelector('#feedback-prompt-never').textContent = copy.never;
+
+  const dismiss = () => {
+    window.api.markFeedbackPrompted();
+    overlay.remove();
+  };
+
+  panel.querySelector('#feedback-prompt-give').addEventListener('click', () => {
+    window.api.openFeedback(lang);
+    dismiss();
+  });
+  panel.querySelector('#feedback-prompt-later').addEventListener('click', () => {
+    overlay.remove(); // do not mark — they'll see it again next launch
+  });
+  panel.querySelector('#feedback-prompt-never').addEventListener('click', dismiss);
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+}
 
 // ---------------------------------------------------------------------------
 // Sidebar Toggle

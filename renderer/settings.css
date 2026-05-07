@@ -2382,3 +2382,46 @@ body:not(.dev-mode) .dev-only {
   font-weight: 500;
 }
 
+/* ---------------------------------------------------------------------------
+   Feedback Prompt
+   --------------------------------------------------------------------------- */
+
+.feedback-prompt-panel {
+  width: 420px;
+}
+
+.feedback-prompt-body {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.feedback-prompt-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.feedback-prompt-actions-right {
+  display: flex;
+  gap: 8px;
+}
+
+.feedback-prompt-actions .btn-secondary {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.feedback-prompt-actions .btn-secondary:hover {
+  background: var(--bg);
+}
+

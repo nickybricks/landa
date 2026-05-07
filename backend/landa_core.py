@@ -111,7 +111,7 @@ def _calc_cost(model: str, input_tokens: int = 0, output_tokens: int = 0, durati
 DEFAULT_CONFIG: dict = {
     "api_key": "",
     "api_provider": "openai",
-    "openai_model": "whisper-large-v3-turbo",
+    "openai_model": "whisper-small",
     "openai_language": "de",
     "nemo_language": "auto",
     "sound_start": "Tink",
@@ -358,67 +358,113 @@ def add_history_entry(text: str, usage: dict | None = None) -> None:
 # Reformat prompts (2 categories × 3 styles)
 # ---------------------------------------------------------------------------
 
-_ANTI_HALLUCINATION = (
+_PM_GUARDRAILS = (
+    "Preserve every fact, name, number, and intent that was spoken. "
+    "Do not invent names, dates, numbers, or facts that were not spoken. "
     "Do not translate or change the language. "
-    "Do not replace greetings, names, or terms of address with alternatives. "
-    "Do not invent, hallucinate, or fill in any names, sign-offs, or greetings "
-    "that were not explicitly spoken. Only include what was actually said."
+    "Return only the message text."
+)
+
+_EMAIL_GUARDRAILS = (
+    "Preserve every fact, name, number, request, and intent that was spoken. "
+    "Do not invent names, companies, dates, numbers, or facts that were not spoken. "
+    "Preserve the address form that was spoken: keep 'Sie/Ihnen/Ihr' if used, keep 'du/dir/dein' if used — never switch between them. "
+    "Greetings, sign-offs, transitions, and polite framing are formatting — adding them is allowed. "
+    "Do not translate or change the language. Do not include a subject line. "
+    "Return only the email body."
 )
 
 MODE_SYSTEM_PROMPTS: dict[str, dict[str, str]] = {
     "personal-message": {
         "formal": (
-            "Reformat the following dictated text into a personal message. "
-            "Use proper capitalization and full punctuation. Keep it direct and concise — "
-            "no greeting or sign-off needed. Fix grammar and remove filler words. "
-            "Do not add content that wasn't spoken. "
-            + _ANTI_HALLUCINATION +
-            " Return only the message text."
+            "Rewrite the following dictated text as a polished personal message. "
+            "This is a TRANSFORMATION, not a cleanup — change wording and sentence structure "
+            "so it reads like a written chat message, not transcribed speech. "
+            "Use proper capitalization and full punctuation. Keep it direct and concise. "
+            "Preserve the address form that was spoken: keep 'Sie/Ihnen/Ihr' if used, keep 'du/dir/dein' if used — never switch between them. "
+            "No greeting or sign-off. Match the dictation language. "
+            + _PM_GUARDRAILS
         ),
         "casual": (
-            "Reformat the following dictated text into a casual personal message. "
-            "Use capitalization but relaxed punctuation — skip periods at the end of sentences where it feels natural. "
-            "Keep it short and conversational. No greeting or sign-off. Fix filler words. "
-            "Do not add content that wasn't spoken. "
-            + _ANTI_HALLUCINATION +
-            " Return only the message text."
+            "Rewrite the following dictated text as a casual personal message — texting style. "
+            "Transform spoken phrasing into natural written prose; rephrase, don't just clean up. "
+            "Spelling and grammar must be correct."
+            "Preserve the address form that was spoken: keep 'Sie/Ihnen/Ihr' if used, keep 'du/dir/dein' if used — never switch between them. "
+            "Keep it short. No greeting or sign-off. Match the dictation language. "
+            + _PM_GUARDRAILS
         ),
         "excited": (
-            "Reformat the following dictated text into an enthusiastic personal message. "
-            "Use exclamation marks to convey energy and excitement. Keep it short, warm, and upbeat. "
-            "No greeting or sign-off needed. Fix grammar and filler words. "
-            "Do not add content that wasn't spoken. "
-            + _ANTI_HALLUCINATION +
-            " Return only the message text."
+            "Rewrite the following dictated text as an enthusiastic personal message — texting style with energy. "
+            "Transform spoken phrasing into energetic written prose; rephrase, don't just clean up. "
+            "Spelling and grammar must be correct. "
+            "Keep it short, warm, and upbeat. "
+            "Preserve the address form that was spoken: keep 'Sie/Ihnen/Ihr' if used, keep 'du/dir/dein' if used — never switch between them. "
+            "No greeting or sign-off. Match the dictation language. "
+            + _PM_GUARDRAILS
         ),
     },
     "email": {
         "formal": (
-            "Reformat the following dictated text into a professional email body. "
-            "Use proper capitalization, full punctuation, and formal tone. Structure into clear paragraphs. "
-            "Fix grammar and remove filler words. Do not add content that wasn't spoken. "
-            "Do not include a subject line. "
-            + _ANTI_HALLUCINATION +
-            " Return only the email body."
+            "Rewrite the following dictated text as a professional email body. "
+            "This is a TRANSFORMATION, not a cleanup — change wording, sentence structure, "
+            "and register so it reads like written prose, not transcribed speech. "
+            "Required: convert spoken phrasing into written equivalents "
+            "(e.g. 'I just wanted to let you know that…' → 'I'm writing to inform you that…'; "
+            "'Ich wollte dir kurz Bescheid geben, dass…' → 'Hiermit möchte ich dich darüber informieren, dass…'), "
+            "merge short fragments into complete sentences, group related thoughts into 2–4 short paragraphs. "
+            + _EMAIL_GUARDRAILS
         ),
         "casual": (
-            "Reformat the following dictated text into a casual email body. "
-            "Use capitalization but lighter punctuation. Keep sentences flowing naturally. "
-            "Fix grammar and filler words. "
-            "Do not add content that wasn't spoken. Do not include a subject line. "
-            + _ANTI_HALLUCINATION +
-            " Return only the email body."
+            "Rewrite the following dictated text as a casual email body. "
+            "Transform spoken phrasing into natural written prose — don't just clean it up, rephrase it. "
+            "Use a friendly, conversational register with short flowing sentences and lighter punctuation. "
+            "Group ideas into 1–3 short paragraphs. "
+            + _EMAIL_GUARDRAILS
         ),
         "excited": (
-            "Reformat the following dictated text into an enthusiastic email body. "
-            "Use exclamation marks to convey energy and positivity. "
-            "Keep the tone warm, upbeat, and professional. "
-            "Fix grammar and filler words. Do not add content that wasn't spoken. "
-            "Do not include a subject line. "
-            + _ANTI_HALLUCINATION +
-            " Return only the email body."
+            "Rewrite the following dictated text as an enthusiastic, upbeat email body. "
+            "Transform spoken phrasing into energetic written prose — rephrase, don't just clean up. "
+            "Use exclamation marks where they convey genuine warmth, keep the tone professional but lively, "
+            "and structure into 1–3 short paragraphs. "
+            + _EMAIL_GUARDRAILS
         ),
     },
+}
+
+# Per-style greeting / sign-off instructions, applied conditionally via toggles in get_mode_prompt.
+_EMAIL_GREETINGS: dict[str, str] = {
+    "formal": (
+        " Add a formal greeting matching the dictation language. "
+        "German: if a surname with title was spoken (e.g. 'Herr Müller', 'Frau Schmidt'), use 'Sehr geehrter Herr [Nachname],' or 'Sehr geehrte Frau [Nachname],'. "
+        "If only a first name was spoken (e.g. 'Maxi', 'Anna'), use 'Hallo [Vorname],' or 'Guten Tag [Vorname],' — never 'Sehr geehrter [Vorname]', that is grammatically wrong in German. "
+        "If no name was spoken, use 'Sehr geehrte Damen und Herren,'. "
+        "English: 'Dear [Name],' works for both first names and surnames; use 'Hello,' if no name was spoken."
+    ),
+    "casual": (
+        " Add a casual greeting matching the dictation language: "
+        "German → 'Hallo [Name],' (or 'Hallo,' if no name was spoken). "
+        "English → 'Hi [Name],' (or 'Hi,' if no name was spoken)."
+    ),
+    "excited": (
+        " Add a warm greeting matching the dictation language: "
+        "German → 'Hallo [Name]!' (or 'Hallo zusammen!' if no name was spoken). "
+        "English → 'Hi [Name]!' (or 'Hi there!' if no name was spoken)."
+    ),
+}
+
+_EMAIL_SIGNOFFS: dict[str, str] = {
+    "formal": (
+        " Add a formal sign-off matching the dictation language: "
+        "German → 'Mit freundlichen Grüßen,'. English → 'Best regards,'."
+    ),
+    "casual": (
+        " Add a casual sign-off matching the dictation language: "
+        "German → 'Viele Grüße,'. English → 'Cheers,' or 'Thanks,'."
+    ),
+    "excited": (
+        " Add a warm sign-off matching the dictation language: "
+        "German → 'Liebe Grüße,'. English → 'Cheers,' or 'Thanks so much,'."
+    ),
 }
 
 # Legacy prompts for backward compatibility with old reformat_mode config
@@ -568,16 +614,20 @@ def get_mode_prompt() -> str | None:
     toggles = config.get("modes", {}).get("toggles", {}).get(category, {}).get(style, {})
     if category == "email":
         if toggles.get("include_greeting", True):
-            prompt += " Include an appropriate greeting or opening salutation."
+            prompt += _EMAIL_GREETINGS.get(style, _EMAIL_GREETINGS["formal"])
         else:
             prompt += " Do not include a greeting or opening salutation."
         if toggles.get("include_sign_off", True):
-            prompt += " Include an appropriate sign-off or closing."
+            prompt += _EMAIL_SIGNOFFS.get(style, _EMAIL_SIGNOFFS["formal"])
         else:
             prompt += " Do not include a sign-off or closing. Still use proper email paragraph structure with line breaks between sections."
     elif category == "personal-message":
         if toggles.get("use_emoji", False):
-            prompt += " Use relevant emoji to add expressiveness."
+            prompt += (
+                " You may add at most one relevant emoji if it fits the message naturally and adds genuine value. "
+                "Do not decorate every sentence. Many messages should have no emoji at all — only use one when it clearly enhances the meaning or tone. "
+                "Place it inline where it feels organic, never as decoration at the start or end."
+            )
     return prompt
 
 

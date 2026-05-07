@@ -111,6 +111,11 @@ contextBridge.exposeInMainWorld('api', {
 
   // Feedback (Tally form)
   openFeedback: (lang) => ipcRenderer.invoke('open-feedback', lang),
+  onShowFeedbackPrompt: (callback) => {
+    ipcRenderer.removeAllListeners('show-feedback-prompt');
+    ipcRenderer.on('show-feedback-prompt', () => callback());
+  },
+  markFeedbackPrompted: () => ipcRenderer.invoke('mark-feedback-prompted'),
 
   // Onboarding
   getMicAccessStatus: () => ipcRenderer.invoke('get-mic-access-status'),
