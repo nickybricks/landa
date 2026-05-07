@@ -119,7 +119,11 @@ DEFAULT_CONFIG: dict = {
     "auto_paste": True,
     "auto_capitalize": True,
     "auto_punctuate": True,
-    "toggle_recording": {"key": "space", "key_code": 49, "modifiers": ["command", "shift"]},
+    "toggle_recording": (
+        {"key": "space", "key_code": 49, "modifiers": ["control", "super", "option"]}
+        if sys.platform == "win32"
+        else {"key": "space", "key_code": 49, "modifiers": ["option"]}
+    ),
     "cancel_recording": {"key": "escape", "key_code": 53, "modifiers": []},
     "hold_recording": {"key": "f6", "key_code": 97, "modifiers": []},
     "sound_hold": "Windows Ding" if sys.platform == "win32" else "Tink",

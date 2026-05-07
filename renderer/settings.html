@@ -225,9 +225,9 @@
         <div class="tab-panel" id="tab-configuration">
           <div class="tab-scroll">
 
-            <!-- App Language -->
+            <!-- App Settings -->
             <section id="section-language">
-              <h3 class="section-title" data-i18n="settings.language.section">Language</h3>
+              <h3 class="section-title" data-i18n="settings.language.section">App Settings</h3>
               <div class="settings-card">
                 <div class="toggle-row">
                   <span data-i18n="settings.language.label">App Language</span>
@@ -240,6 +240,14 @@
                     <div class="logo-select-menu"></div>
                   </div>
                 </div>
+                <div class="divider"></div>
+                <div class="toggle-row">
+                  <span data-i18n="settings.app.startWithSystem">Start with system</span>
+                  <label class="switch">
+                    <input type="checkbox" id="opt-startWithSystem" checked>
+                    <span class="slider"></span>
+                  </label>
+                </div>
               </div>
             </section>
 
@@ -248,8 +256,18 @@
               <h3 class="section-title" data-i18n="settings.transcription.section">Transcription</h3>
               <div class="settings-card">
                 <div class="picker-row">
-                  <span data-i18n="settings.model.language">Language</span>
-                  <select id="sel-openaiLang"></select>
+                  <div class="picker-info">
+                    <div class="picker-title" data-i18n="settings.model.language">Language</div>
+                    <div class="picker-subtitle" id="transcription-lang-hint"></div>
+                  </div>
+                  <div class="logo-select" id="sel-openaiLang">
+                    <div class="logo-select-trigger">
+                      <img class="logo-select-icon" src="" width="16" height="16" alt="">
+                      <span class="logo-select-label">Select…</span>
+                      <svg class="logo-select-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <div class="logo-select-menu"></div>
+                  </div>
                 </div>
               </div>
             </section>
@@ -397,7 +415,14 @@
                 <div class="sound-row" id="sound-start-row">
                   <span data-i18n="settings.sounds.start">Start sound</span>
                   <div class="sound-controls">
-                    <select id="sel-soundStart"></select>
+                    <div class="logo-select" id="sel-soundStart">
+                      <div class="logo-select-trigger">
+                        <img class="logo-select-icon" src="" width="16" height="16" alt="">
+                        <span class="logo-select-label">Select…</span>
+                        <svg class="logo-select-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </div>
+                      <div class="logo-select-menu"></div>
+                    </div>
                     <button class="play-btn" data-sound="start" title="Preview">▶</button>
                   </div>
                 </div>
@@ -405,7 +430,14 @@
                 <div class="sound-row" id="sound-stop-row">
                   <span data-i18n="settings.sounds.stop">Stop sound</span>
                   <div class="sound-controls">
-                    <select id="sel-soundStop"></select>
+                    <div class="logo-select" id="sel-soundStop">
+                      <div class="logo-select-trigger">
+                        <img class="logo-select-icon" src="" width="16" height="16" alt="">
+                        <span class="logo-select-label">Select…</span>
+                        <svg class="logo-select-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </div>
+                      <div class="logo-select-menu"></div>
+                    </div>
                     <button class="play-btn" data-sound="stop" title="Preview">▶</button>
                   </div>
                 </div>
@@ -413,7 +445,14 @@
                 <div class="sound-row" id="sound-cancel-row">
                   <span data-i18n="settings.sounds.cancel">Cancel sound</span>
                   <div class="sound-controls">
-                    <select id="sel-soundCancel"></select>
+                    <div class="logo-select" id="sel-soundCancel">
+                      <div class="logo-select-trigger">
+                        <img class="logo-select-icon" src="" width="16" height="16" alt="">
+                        <span class="logo-select-label">Select…</span>
+                        <svg class="logo-select-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </div>
+                      <div class="logo-select-menu"></div>
+                    </div>
                     <button class="play-btn" data-sound="cancel" title="Preview">▶</button>
                   </div>
                 </div>
@@ -421,7 +460,14 @@
                 <div class="sound-row" id="sound-hold-row">
                   <span data-i18n="settings.sounds.hold">Hold sound</span>
                   <div class="sound-controls">
-                    <select id="sel-soundHold"></select>
+                    <div class="logo-select" id="sel-soundHold">
+                      <div class="logo-select-trigger">
+                        <img class="logo-select-icon" src="" width="16" height="16" alt="">
+                        <span class="logo-select-label">Select…</span>
+                        <svg class="logo-select-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </div>
+                      <div class="logo-select-menu"></div>
+                    </div>
                     <button class="play-btn" data-sound="hold" title="Preview">▶</button>
                   </div>
                 </div>
@@ -429,7 +475,14 @@
                 <div class="sound-row" id="sound-resume-row">
                   <span data-i18n="settings.sounds.resume">Resume sound</span>
                   <div class="sound-controls">
-                    <select id="sel-soundResume"></select>
+                    <div class="logo-select" id="sel-soundResume">
+                      <div class="logo-select-trigger">
+                        <img class="logo-select-icon" src="" width="16" height="16" alt="">
+                        <span class="logo-select-label">Select…</span>
+                        <svg class="logo-select-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </div>
+                      <div class="logo-select-menu"></div>
+                    </div>
                     <button class="play-btn" data-sound="resume" title="Preview">▶</button>
                   </div>
                 </div>

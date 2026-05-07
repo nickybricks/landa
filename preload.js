@@ -126,4 +126,7 @@ contextBridge.exposeInMainWorld('api', {
   registerMainHotkey: () => ipcRenderer.invoke('register-main-hotkey'),
   focusOnboardingWindow: () => ipcRenderer.invoke('focus-onboarding-window'),
   finishOnboarding: (payload) => ipcRenderer.invoke('finish-onboarding', payload),
+
+  getLoginItemEnabled: () => ipcRenderer.invoke('get-login-item-enabled'),
+  setLoginItemEnabled: (enabled) => ipcRenderer.invoke('set-login-item-enabled', enabled),
 });

@@ -70,14 +70,25 @@
     <!-- Screen 4 — Hotkey Training -->
     <section class="ob-panel" data-step="4">
       <h1 class="ob-title" data-i18n="train.title"></h1>
-      <p class="ob-body ob-train-prompt">
-        <span data-i18n="train.lead"></span>
-        <span class="ob-kbd-group" id="train-kbd"></span>
-        <span data-i18n="train.tail"></span>
-      </p>
+      <ol class="ob-train-steps">
+        <li class="ob-train-step">
+          <span class="ob-train-num">1</span>
+          <span class="ob-train-text" data-i18n="train.step1"></span>
+          <span class="ob-kbd-group ob-kbd-big" data-train-kbd></span>
+        </li>
+        <li class="ob-train-step">
+          <span class="ob-train-num">2</span>
+          <span class="ob-train-text" data-i18n="train.step2lead"></span>
+          <span class="ob-train-quote" data-i18n="train.step2quote"></span>
+        </li>
+        <li class="ob-train-step">
+          <span class="ob-train-num">3</span>
+          <span class="ob-train-text" data-i18n="train.step3"></span>
+          <span class="ob-kbd-group ob-kbd-big" data-train-kbd></span>
+        </li>
+      </ol>
       <textarea class="ob-textarea" id="train-textarea" autofocus rows="3"></textarea>
       <div class="ob-footer">
-        <button class="ob-btn-secondary ob-hidden" id="train-demo-btn" data-i18n="train.demo"></button>
         <button class="ob-btn-primary" data-action="next" data-i18n="common.continue" disabled></button>
       </div>
     </section>
@@ -91,8 +102,24 @@
         <button class="ob-pill" data-lang="en" data-i18n="lang.en"></button>
         <button class="ob-pill" data-lang="auto" data-i18n="lang.both"></button>
       </div>
+      <p class="ob-body ob-lang-hint" id="lang-hint"></p>
       <div class="ob-footer">
-        <button class="ob-btn-primary" id="finish-btn" data-i18n="lang.cta" disabled></button>
+        <button class="ob-btn-primary" id="lang-next-btn" data-action="next" data-i18n="common.continue" disabled></button>
+      </div>
+    </section>
+
+    <!-- Screen 6 — Done -->
+    <section class="ob-panel" data-step="6">
+      <div class="ob-icon">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5"/>
+        </svg>
+      </div>
+      <h1 class="ob-title" data-i18n="done.title"></h1>
+      <p class="ob-body" data-i18n="done.body"></p>
+      <p class="ob-body ob-done-note" data-i18n="done.settings"></p>
+      <div class="ob-footer">
+        <button class="ob-btn-primary" id="finish-btn" data-i18n="done.cta"></button>
       </div>
     </section>
 

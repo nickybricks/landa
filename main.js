@@ -321,6 +321,7 @@ function hotkeyToAccelerator(combo) {
       case 'shift': parts.push('Shift'); break;
       case 'option': parts.push('Alt'); break;
       case 'control': parts.push('Ctrl'); break;
+      case 'super': parts.push('Super'); break;
     }
   }
 
@@ -1776,6 +1777,14 @@ function setupIpcHandlers() {
 
   ipcMain.handle('get-platform', () => process.platform);
   ipcMain.handle('get-app-version', () => app.getVersion());
+
+  ipcMain.handle('get-login-item-enabled', () => {
+    return app.getLoginItemSettings().openAtLogin;
+  });
+
+  ipcMain.handle('set-login-item-enabled', (_event, enabled) => {
+    app.setLoginItemSettings({ openAtLogin: enabled });
+  });
 
   ipcMain.handle('is-dev-mode', () => {
     if (process.env.LANDA_DEV === '1') return true;

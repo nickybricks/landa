@@ -17,16 +17,23 @@ const TRANSLATIONS = {
     'acc.cta': 'Systemeinstellungen öffnen',
     'acc.granted': 'Zugriff erteilt',
     'train.title': 'Probier\'s aus',
-    'train.lead': 'Drücke',
-    'train.tail': ', sag „Hallo, das ist mein erster Test mit Landa.", drück nochmal.',
-    'train.demo': 'Lass es mich dir zeigen',
+    'train.step1': 'Drücke',
+    'train.step2lead': 'Sag',
+    'train.step2quote': '„Hallo, das ist mein erster Test mit Landa."',
+    'train.step3': 'Drücke nochmal',
     'lang.title': 'Sprache',
     'lang.body': 'Wie sprichst du meistens?',
     'lang.de': 'Deutsch',
     'lang.en': 'Englisch',
     'lang.both': 'Beides',
-    'lang.cta': 'Fertig',
-    'demo.text': 'Hallo, das ist mein erster Test mit Landa.',
+    'lang.cta': 'Weiter',
+    'lang.hint.de': 'Landa versteht dich nur auf Deutsch.',
+    'lang.hint.en': 'Landa versteht dich nur auf Englisch.',
+    'lang.hint.both': 'Landa versteht dich in jeder Sprache.',
+    'done.title': 'Fertig!',
+    'done.body': 'Du kannst jetzt loslegen — drück das Tastenkürzel, sprich, drück nochmal.',
+    'done.settings': 'Tastenkürzel und Sprache änderst du jederzeit in den Einstellungen.',
+    'done.cta': 'Los geht\'s',
   },
   en: {
     'common.continue': 'Continue',
@@ -42,25 +49,31 @@ const TRANSLATIONS = {
     'acc.cta': 'Open System Settings',
     'acc.granted': 'Access granted',
     'train.title': 'Try it',
-    'train.lead': 'Press',
-    'train.tail': ', say "Hello, this is my first test with Landa.", press again.',
-    'train.demo': 'Let me show you',
+    'train.step1': 'Press',
+    'train.step2lead': 'Say',
+    'train.step2quote': '"Hello, this is my first test with Landa."',
+    'train.step3': 'Press again',
     'lang.title': 'Language',
     'lang.body': 'Which language do you speak most?',
     'lang.de': 'German',
     'lang.en': 'English',
     'lang.both': 'Both',
-    'lang.cta': 'Done',
-    'demo.text': 'Hello, this is my first test with Landa.',
+    'lang.cta': 'Continue',
+    'lang.hint.de': 'Landa only understands you in German.',
+    'lang.hint.en': 'Landa only understands you in English.',
+    'lang.hint.both': 'Landa understands you in any language.',
+    'done.title': 'Done!',
+    'done.body': 'You\'re set — press the shortcut, speak, press again.',
+    'done.settings': 'Change the shortcut and language anytime in Settings.',
+    'done.cta': 'Let\'s go',
   },
 };
 
 let lang = 'en';
 let platform = 'darwin';
-let steps = [1, 2, 3, 4, 5];
+let steps = [1, 2, 3, 4, 5, 6];
 let currentIdx = 0;
 let chosenLang = null;
-let trainingAttempts = 0;
 let accPollTimer = null;
 
 function t(key) {
@@ -72,18 +85,16 @@ function applyTranslations() {
   document.querySelectorAll('[data-i18n]').forEach((el) => {
     el.textContent = t(el.dataset.i18n);
   });
-  const kbd = document.getElementById('train-kbd');
-  if (kbd) renderHotkeyKeys(kbd);
+  document.querySelectorAll('[data-train-kbd]').forEach(renderHotkeyKeys);
 }
 
 function getHotkeyLabels() {
-  // The default toggle hotkey is Ctrl/⌘ + Shift + Space. Render real key
-  // labels per platform + locale, with shift always shown as the up-arrow ⇧.
+  // Default toggle hotkey: ⌥+Space (Mac), Ctrl+⊞+Alt+Space (Windows).
   if (platform === 'win32') {
     const ctrl = lang === 'de' ? 'Strg' : 'Ctrl';
-    return [ctrl, '⇧', 'Space'];
+    return [ctrl, '⊞', 'Alt', 'Space'];
   }
-  return ['⌘', '⇧', 'Space'];
+  return ['⌥', 'Space'];
 }
 
 function renderHotkeyKeys(container) {
@@ -154,7 +165,7 @@ async function initMicStep() {
 function markMicGranted() {
   const panel = document.querySelector('.ob-panel[data-step="2"]');
   panel.querySelector('#mic-status').hidden = false;
-  panel.querySelector('#mic-grant-btn').disabled = true;
+  panel.querySelector('#mic-grant-btn').hidden = true;
   panel.querySelector('[data-action="next"]').disabled = false;
 }
 
@@ -223,32 +234,10 @@ function initTrainStep() {
   // Re-focus the window (user may have just returned from System Settings) then
   // focus the textarea so paste lands in the right place.
   window.api.focusOnboardingWindow().then(() => ta.focus());
-  trainingAttempts = 0;
 
   ta.addEventListener('input', () => {
     cont.disabled = ta.value.trim().length === 0;
-    if (ta.value.trim().length > 0) trainingAttempts = 0;
   });
-
-  const demoBtn = document.getElementById('train-demo-btn');
-  demoBtn.classList.add('ob-hidden');
-  demoBtn.addEventListener('click', () => {
-    ta.value = t('demo.text');
-    cont.disabled = false;
-  }, { once: true });
-
-  // After 30s of an empty textarea, count it as a failed attempt and
-  // surface the demo escape hatch on the second strike.
-  const tick = setInterval(() => {
-    const stepActive = document.querySelector('.ob-panel[data-step="4"]').dataset.active === 'true';
-    if (!stepActive) { clearInterval(tick); return; }
-    if (ta.value.trim().length > 0) return;
-    trainingAttempts += 1;
-    if (trainingAttempts >= 2) {
-      demoBtn.classList.remove('ob-hidden');
-      clearInterval(tick);
-    }
-  }, 30000);
 }
 
 // ---------------------------------------------------------------------------
@@ -256,7 +245,17 @@ function initTrainStep() {
 // ---------------------------------------------------------------------------
 
 function initLangStep() {
-  document.getElementById('finish-btn').disabled = chosenLang === null;
+  document.getElementById('lang-next-btn').disabled = chosenLang === null;
+  updateLangHint();
+}
+
+function updateLangHint() {
+  const hint = document.getElementById('lang-hint');
+  if (!hint) return;
+  if (chosenLang === 'de') hint.textContent = t('lang.hint.de');
+  else if (chosenLang === 'en') hint.textContent = t('lang.hint.en');
+  else if (chosenLang === 'auto') hint.textContent = t('lang.hint.both');
+  else hint.textContent = '';
 }
 
 function handleLangSelect(value) {
@@ -264,7 +263,8 @@ function handleLangSelect(value) {
   document.querySelectorAll('.ob-pill').forEach((p) => {
     p.dataset.selected = String(p.dataset.lang === value);
   });
-  document.getElementById('finish-btn').disabled = false;
+  document.getElementById('lang-next-btn').disabled = false;
+  updateLangHint();
 
   // Persist UI lang choice for the settings window.
   // 'auto' keeps whatever was picked at boot from system locale.
@@ -292,7 +292,7 @@ async function init() {
 
   // Skip the macOS-only Accessibility screen on Windows.
   if (platform === 'win32') {
-    steps = [1, 2, 4, 5];
+    steps = [1, 2, 4, 5, 6];
     document.querySelector('.ob-panel[data-step="3"]').remove();
   }
 

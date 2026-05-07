@@ -10,8 +10,9 @@ let recordingAction = null; // which shortcut is being recorded
 let _setupDone = false; // true once UI is populated & first applyConfig has run
 
 // Default shortcuts (must match Python backend's DEFAULT_CONFIG)
+// `toggle_recording` is overridden for Windows after platform is detected.
 const DEFAULTS = {
-  toggle_recording: { key: 'f5', key_code: 96, modifiers: ['command', 'shift'] },
+  toggle_recording: { key: 'space', key_code: 49, modifiers: ['option'] },
   cancel_recording: { key: 'escape', key_code: 53, modifiers: [] },
   hold_recording: { key: 'f6', key_code: 97, modifiers: [] },
   change_mode: { key: 'k', key_code: 40, modifiers: ['option', 'shift'] },
@@ -69,15 +70,19 @@ const TRANSLATIONS = {
     'vocabulary.empty.sub': 'Add words that Whisper consistently mishears.',
     // Home
     'home.desc': 'Talk into any app. Landa types it for you — formatted, polished, and private.<br>Press your hotkey to start recording, press again to transcribe and paste.',
-    // Settings tab — language section
-    'settings.language.section': 'Language',
+    // Settings tab — app settings section
+    'settings.language.section': 'App Settings',
     'settings.language.label': 'App Language',
+    'settings.app.startWithSystem': 'Start with system',
     // Settings tab — transcription (user-visible) + model (dev-only) sections
     'settings.transcription.section': 'Transcription',
     'settings.model.section': 'Model',
     'settings.model.apikey': 'API Key',
     'settings.model.model': 'Model',
     'settings.model.language': 'Language',
+    'settings.model.language.auto': 'Auto-detect',
+    'settings.model.language.hint': 'Landa only understands {lang}. Set to "Auto-detect" so Landa understands you in any language.',
+    'settings.model.language.hint.auto': 'Landa understands you in any language.',
     // Settings tab — shortcuts
     'settings.shortcuts.section': 'Keyboard Shortcuts',
     'settings.shortcuts.toggle': 'Toggle Recording',
@@ -213,18 +218,22 @@ const TRANSLATIONS = {
     'vocabulary.empty.sub': 'Füge Wörter hinzu, die Whisper häufig falsch erkennt.',
     // Home
     'home.desc': 'Sprich in jede App rein – formatiert, bereinigt, privat<br>Drücke dein Tastaturkürzel zum Aufnehmen, erneut drücken zum Transkribieren und Einfügen.',
-    // Settings tab — language section
-    'settings.language.section': 'Sprache',
+    // Settings tab — app settings section
+    'settings.language.section': 'App-Einstellungen',
     'settings.language.label': 'App-Sprache',
+    'settings.app.startWithSystem': 'Mit System starten',
     // Settings tab — transcription (user-visible) + model (dev-only) sections
     'settings.transcription.section': 'Transkription',
     'settings.model.section': 'Modell',
     'settings.model.apikey': 'API-Schlüssel',
     'settings.model.model': 'Modell',
     'settings.model.language': 'Sprache',
+    'settings.model.language.auto': 'Automatisch',
+    'settings.model.language.hint': 'Landa versteht nur {lang}. Setze "Automatisch", damit Landa dich in jeder Sprache versteht.',
+    'settings.model.language.hint.auto': 'Landa versteht dich in jeder Sprache.',
     // Settings tab — shortcuts
     'settings.shortcuts.section': 'Tastaturkürzel',
-    'settings.shortcuts.toggle': 'Aufnahme umschalten',
+    'settings.shortcuts.toggle': 'Aufnahme starten/stoppen',
     'settings.shortcuts.toggle.sub': 'Startet und stoppt Aufnahmen',
     'settings.shortcuts.cancel': 'Aufnahme abbrechen',
     'settings.shortcuts.cancel.sub': 'Bricht aktive Aufnahme ab',
@@ -233,12 +242,12 @@ const TRANSLATIONS = {
     'settings.shortcuts.record': 'Kürzel aufzeichnen',
     'settings.shortcuts.recording': 'Kürzel drücken…',
     'settings.shortcuts.vocab': 'Zum Vokabular hinzufügen',
-    'settings.shortcuts.vocab.sub': 'Fügt das markierte Wort zu den Vokabularersetzungen hinzu',
+    'settings.shortcuts.vocab.sub': 'Fügt das markierte Wort/Wörter zu den Vokabularersetzungen hinzu',
     // Settings tab — application
     'settings.app.section': 'Anwendung',
     'settings.app.autopaste': 'Automatisch in aktive App einfügen',
     'settings.app.autocapitalize': 'Automatisch großschreiben',
-    'settings.app.autopunctuate': 'Automatisch interpunktieren',
+    'settings.app.autopunctuate': 'Automatische Zeichensetzung',
     // Settings tab — sounds
     'settings.sounds.section': 'Aufnahmetöne',
     'settings.sounds.mute': 'Alle Töne stummschalten',
@@ -388,6 +397,11 @@ function setupLanguagePicker() {
   document.getElementById('sel-ui-lang').addEventListener('logo-select-change', (e) => {
     localStorage.setItem('ui-lang', e.detail.value);
     applyTranslations();
+    populateLanguageSelect();
+    if (config) {
+      setLogoSelect('sel-openaiLang', config.openai_language || 'auto');
+      updateTranscriptionLangHint(config.openai_language || 'auto');
+    }
     // Re-render dynamic content that's currently visible
     if (config) {
       for (const action of Object.keys(DEFAULTS)) {
@@ -445,6 +459,9 @@ window.api.onConfigUpdated((updated) => {
 document.addEventListener('DOMContentLoaded', async () => {
   platform = await window.api.getPlatform();
   document.body.classList.add('platform-' + platform);
+  if (platform === 'win32') {
+    DEFAULTS.toggle_recording = { key: 'space', key_code: 49, modifiers: ['control', 'super', 'option'] };
+  }
   if (await window.api.isDevMode()) document.body.classList.add('dev-mode');
   systemSounds = await window.api.getSystemSounds();
   defaultSounds = await window.api.getDefaultSounds();
@@ -491,6 +508,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupRecordingWindowStyle();
 
   if (config) applyConfig(config);
+
+  // Load login item (start with system) state
+  window.api.getLoginItemEnabled().then(enabled => {
+    document.getElementById('opt-startWithSystem').checked = enabled;
+  });
 
   // Mark setup as done — any future config-updated events apply immediately.
   _setupDone = true;
@@ -660,11 +682,11 @@ function applyConfig(cfg, { fromPoll = false } = {}) {
 
   // Sounds
   document.getElementById('opt-soundMuted').checked = cfg.sound_muted || false;
-  document.getElementById('sel-soundStart').value = cfg.sound_start || defaultSounds.start;
-  document.getElementById('sel-soundStop').value = cfg.sound_stop || defaultSounds.stop;
-  document.getElementById('sel-soundCancel').value = cfg.sound_cancel || defaultSounds.cancel;
-  document.getElementById('sel-soundHold').value = cfg.sound_hold || defaultSounds.hold;
-  document.getElementById('sel-soundResume').value = cfg.sound_resume || defaultSounds.resume;
+  setLogoSelect('sel-soundStart', cfg.sound_start || defaultSounds.start);
+  setLogoSelect('sel-soundStop', cfg.sound_stop || defaultSounds.stop);
+  setLogoSelect('sel-soundCancel', cfg.sound_cancel || defaultSounds.cancel);
+  setLogoSelect('sel-soundHold', cfg.sound_hold || defaultSounds.hold);
+  setLogoSelect('sel-soundResume', cfg.sound_resume || defaultSounds.resume);
   updateSoundRowsDisabled(cfg.sound_muted || false);
 
   // Transcription model
@@ -674,8 +696,8 @@ function applyConfig(cfg, { fromPoll = false } = {}) {
   // If the backend provider is nemo, show nemo in the model dropdown
   const openaiModel = cfg.api_provider === 'nemo' ? 'nemo' : (cfg.openai_model || 'whisper-large-v3');
   setLogoSelect('sel-openaiModel', openaiModel);
-  const langSel = document.getElementById('sel-openaiLang');
-  langSel.value = cfg.openai_language || 'auto';
+  setLogoSelect('sel-openaiLang', cfg.openai_language || 'auto');
+  updateTranscriptionLangHint(cfg.openai_language || 'auto');
   if (!fromPoll) updateLocalModelStatus(openaiModel);
 
   // LLM Settings — auto-populate key from transcription api_key when openai+unset
@@ -715,16 +737,16 @@ function setupRecordingWindowStyle() {
 // ---------------------------------------------------------------------------
 
 const MOD_SYMBOLS_MAC = {
-  command: '⌘', shift: '⇧', option: '⌥', control: 'control',
+  command: '⌘', shift: '⇧', option: '⌥', control: 'control', super: '⌘',
 };
 
 // Windows key labels — locale-aware. Shift always renders as the up-arrow,
 // matching the physical key cap on both German and English keyboards.
 const MOD_SYMBOLS_WIN_EN = {
-  command: '⊞', shift: '⇧', option: 'alt', control: 'ctrl',
+  command: '⊞', shift: '⇧', option: 'alt', control: 'ctrl', super: '⊞',
 };
 const MOD_SYMBOLS_WIN_DE = {
-  command: '⊞', shift: '⇧', option: 'alt', control: 'strg',
+  command: '⊞', shift: '⇧', option: 'alt', control: 'strg', super: '⊞',
 };
 
 function modSymbolsForPlatform() {
@@ -955,6 +977,10 @@ function setupOptionToggles() {
       saveConfig();
     });
   }
+
+  document.getElementById('opt-startWithSystem').addEventListener('change', (e) => {
+    window.api.setLoginItemEnabled(e.target.checked);
+  });
 }
 
 function updateSoundRowsDisabled(muted) {
@@ -970,59 +996,45 @@ function updateSoundRowsDisabled(muted) {
 // ---------------------------------------------------------------------------
 
 function populateSoundSelects() {
-  const startSel = document.getElementById('sel-soundStart');
-  const stopSel = document.getElementById('sel-soundStop');
-  const cancelSel = document.getElementById('sel-soundCancel');
-  const holdSel = document.getElementById('sel-soundHold');
-  const resumeSel = document.getElementById('sel-soundResume');
-  const startVal = (config && config.sound_start) || defaultSounds.start;
-  const stopVal = (config && config.sound_stop) || defaultSounds.stop;
-  const cancelVal = (config && config.sound_cancel) || defaultSounds.cancel;
-  const holdVal = (config && config.sound_hold) || defaultSounds.hold;
-  const resumeVal = (config && config.sound_resume) || defaultSounds.resume;
-
-  for (const sound of systemSounds) {
-    startSel.add(new Option(sound, sound, false, sound === startVal));
-    stopSel.add(new Option(sound, sound, false, sound === stopVal));
-    cancelSel.add(new Option(sound, sound, false, sound === cancelVal));
-    holdSel.add(new Option(sound, sound, false, sound === holdVal));
-    resumeSel.add(new Option(sound, sound, false, sound === resumeVal));
+  const soundOptions = systemSounds.map((s) => ({ value: s, label: s }));
+  for (const id of ['sel-soundStart', 'sel-soundStop', 'sel-soundCancel', 'sel-soundHold', 'sel-soundResume']) {
+    initLogoSelect(id, soundOptions);
   }
 }
 
 function setupSoundControls() {
-  document.getElementById('sel-soundStart').addEventListener('change', (e) => {
+  document.getElementById('sel-soundStart').addEventListener('logo-select-change', (e) => {
     if (!config) return;
-    config.sound_start = e.target.value;
-    window.api.playSound(e.target.value);
+    config.sound_start = e.detail.value;
+    window.api.playSound(e.detail.value);
     saveConfig();
   });
 
-  document.getElementById('sel-soundStop').addEventListener('change', (e) => {
+  document.getElementById('sel-soundStop').addEventListener('logo-select-change', (e) => {
     if (!config) return;
-    config.sound_stop = e.target.value;
-    window.api.playSound(e.target.value);
+    config.sound_stop = e.detail.value;
+    window.api.playSound(e.detail.value);
     saveConfig();
   });
 
-  document.getElementById('sel-soundCancel').addEventListener('change', (e) => {
+  document.getElementById('sel-soundCancel').addEventListener('logo-select-change', (e) => {
     if (!config) return;
-    config.sound_cancel = e.target.value;
-    window.api.playSound(e.target.value);
+    config.sound_cancel = e.detail.value;
+    window.api.playSound(e.detail.value);
     saveConfig();
   });
 
-  document.getElementById('sel-soundHold').addEventListener('change', (e) => {
+  document.getElementById('sel-soundHold').addEventListener('logo-select-change', (e) => {
     if (!config) return;
-    config.sound_hold = e.target.value;
-    window.api.playSound(e.target.value);
+    config.sound_hold = e.detail.value;
+    window.api.playSound(e.detail.value);
     saveConfig();
   });
 
-  document.getElementById('sel-soundResume').addEventListener('change', (e) => {
+  document.getElementById('sel-soundResume').addEventListener('logo-select-change', (e) => {
     if (!config) return;
-    config.sound_resume = e.target.value;
-    window.api.playSound(e.target.value);
+    config.sound_resume = e.detail.value;
+    window.api.playSound(e.detail.value);
     saveConfig();
   });
 
@@ -1034,7 +1046,7 @@ function setupSoundControls() {
                   : which === 'hold'   ? 'sel-soundHold'
                   : which === 'resume' ? 'sel-soundResume'
                   : 'sel-soundCancel';
-      window.api.playSound(document.getElementById(selId).value);
+      window.api.playSound(document.getElementById(selId).dataset.value);
     });
   });
 }
@@ -1116,18 +1128,37 @@ function setupApiKeyInput() {
 
   // Language picker — save immediately so the setting persists even if the
   // window is closed right after the change (no 300ms debounce).
-  document.getElementById('sel-openaiLang').addEventListener('change', (e) => {
+  document.getElementById('sel-openaiLang').addEventListener('logo-select-change', (e) => {
     if (!config) return;
-    config.openai_language = e.target.value;
+    config.openai_language = e.detail.value;
+    updateTranscriptionLangHint(e.detail.value);
     saveConfigNow();
   });
 }
 
 function populateLanguageSelect() {
-  const sel = document.getElementById('sel-openaiLang');
-  for (const [code, name] of OPENAI_LANGUAGES) {
-    sel.add(new Option(name, code));
+  const options = OPENAI_LANGUAGES.map(([value, label]) => ({
+    value,
+    label: value === 'auto' ? t('settings.model.language.auto') : label,
+  }));
+  initLogoSelect('sel-openaiLang', options);
+}
+
+function updateTranscriptionLangHint(langValue) {
+  const hint = document.getElementById('transcription-lang-hint');
+  if (!hint) return;
+  if (!langValue || langValue === 'auto') {
+    hint.textContent = t('settings.model.language.hint.auto');
+    return;
   }
+  let langName;
+  try {
+    langName = new Intl.DisplayNames([getCurrentLang()], { type: 'language' }).of(langValue);
+  } catch {
+    const entry = OPENAI_LANGUAGES.find(([v]) => v === langValue);
+    langName = entry ? entry[1] : langValue;
+  }
+  hint.textContent = t('settings.model.language.hint').replace('{lang}', langName);
 }
 
 // ---------------------------------------------------------------------------
