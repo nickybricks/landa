@@ -666,6 +666,23 @@ function openSettingsToAddVocab(word) {
 // Tray
 // ---------------------------------------------------------------------------
 
+// macOS quirk: setVisibleOnAllWorkspaces briefly demotes the process to
+// accessory mode. Calling setActivationPolicy('regular') restores the
+// process type, but the Dock can latch onto the empty slot it cached during
+// the flip — leaving a visible "running" indicator dot with no icon above it.
+// Re-setting the dock icon forces the Dock to re-render the slot, which is
+// the per-app equivalent of `killall Dock`.
+function reassertDockIcon() {
+  if (process.platform !== 'darwin' || !app.dock) return;
+  const iconPath = path.join(__dirname, 'assets', 'icon.png');
+  if (!fs.existsSync(iconPath)) return;
+  try {
+    app.dock.setIcon(iconPath);
+  } catch (err) {
+    console.error('[Landa] reassertDockIcon failed:', err && err.message ? err.message : err);
+  }
+}
+
 function createTray() {
   const idlePath = path.join(__dirname, 'assets', 'trayTemplate.png');
   const recordingPath = path.join(__dirname, 'assets', 'trayRecording.png');
@@ -930,6 +947,7 @@ function createRecordingWindow() {
   // accessory mode, which removes the dock icon. Force it back explicitly.
   if (process.platform === 'darwin') {
     app.setActivationPolicy('regular');
+    reassertDockIcon();
   }
   // Ignore mouse — never steal clicks from the app the user is dictating into.
   recordingWindow.setIgnoreMouseEvents(true);
@@ -979,6 +997,7 @@ function showRecordingWindow() {
   // can break globalShortcut. Cheap insurance against the flip.
   if (process.platform === 'darwin') {
     app.setActivationPolicy('regular');
+    reassertDockIcon();
   }
   startAudioLevelPolling();
 }

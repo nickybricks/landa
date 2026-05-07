@@ -1541,10 +1541,22 @@ function initLogoSelect(id, options) {
         closeAllLogoSelects();
         if (!isOpen) {
           const rect = trigger.getBoundingClientRect();
-          menu.style.top = `${rect.bottom + 4}px`;
           menu.style.minWidth = `${rect.width}px`;
+          menu.style.maxHeight = '';
+          menu.style.top = `${rect.bottom + 4}px`;
           menu.style.display = 'block';
           const menuWidth = menu.offsetWidth;
+          const menuHeight = menu.offsetHeight;
+          const spaceBelow = window.innerHeight - rect.bottom - 8;
+          const spaceAbove = rect.top - 8;
+          const flipUp = menuHeight > spaceBelow && spaceAbove > spaceBelow;
+          if (flipUp) {
+            const cappedHeight = Math.min(menuHeight, spaceAbove);
+            menu.style.maxHeight = `${cappedHeight}px`;
+            menu.style.top = `${rect.top - 4 - cappedHeight}px`;
+          } else {
+            menu.style.maxHeight = `${Math.min(menuHeight, spaceBelow)}px`;
+          }
           const wouldOverflow = rect.left + menuWidth > window.innerWidth;
           menu.style.left = wouldOverflow
             ? `${rect.right - menuWidth}px`
