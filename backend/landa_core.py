@@ -29,6 +29,7 @@ from openai import OpenAI
 
 from landa_streamer import LandaStreamer
 from landa_constants import LANDA_APP_SECRET, LANDA_PROXY_URL
+from landa_lexicon import LexiconSet, load_lexicon
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
@@ -137,6 +138,7 @@ DEFAULT_CONFIG: dict = {
     "llm_api_key": "",
     "llm_model": "",
     "vocabulary": [],
+    "active_lexicons": [],
     "add_to_vocabulary": {"key": "f7", "key_code": 98, "modifiers": []},
     "recording_window_style": "mini",
     "onboarding_completed": False,
@@ -1060,6 +1062,71 @@ def apply_vocabulary_replacements(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Lexicons — domain vocabulary post-correction
+# ---------------------------------------------------------------------------
+
+LEXICONS_DIR = CONFIG_DIR / "lexicons"
+_lexicon_cache: dict[str, LexiconSet] = {}
+
+
+def _resolve_active_lexicon_paths() -> list[Path]:
+    active_ids = config.get("active_lexicons", []) or []
+    paths: list[Path] = []
+    for lex_id in active_ids:
+        path = LEXICONS_DIR / f"{lex_id}.lex"
+        if path.exists():
+            paths.append(path)
+    return paths
+
+
+def _get_lexicon_set_for(language: str) -> LexiconSet | None:
+    """Lazy-load and cache the LexiconSet for the active language.
+
+    Cache key includes the manifest IDs so toggling lexicons in settings
+    invalidates correctly.
+    """
+    paths = _resolve_active_lexicon_paths()
+    if not paths:
+        return None
+    cache_key = f"{language}|" + "|".join(sorted(str(p) for p in paths))
+    cached = _lexicon_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    loaded = []
+    for p in paths:
+        try:
+            lex = load_lexicon(p)
+        except Exception as e:
+            logging.warning("[lexicon] Failed to load %s: %s", p, e)
+            continue
+        if lex.language != language:
+            continue
+        loaded.append(lex)
+    if not loaded:
+        return None
+    lset = LexiconSet(loaded)
+    _lexicon_cache[cache_key] = lset
+    logging.info("[lexicon] Loaded %d lexicon(s) for language=%s", len(loaded), language)
+    return lset
+
+
+def apply_lexicon_correction(text: str) -> str:
+    if not text:
+        return text
+    language = config.get("openai_language") or "auto"
+    if language == "auto":
+        language = _detected_language or "de"
+    lset = _get_lexicon_set_for(language)
+    if lset is None:
+        return text
+    try:
+        return lset.correct(text)
+    except Exception as e:
+        logging.warning("[lexicon] Correction failed, returning original text: %s", e)
+        return text
+
+
+# ---------------------------------------------------------------------------
 # Realtime WebSocket streaming
 # ---------------------------------------------------------------------------
 
@@ -1489,6 +1556,7 @@ def _finalize_transcription() -> None:
                 "cost": _calc_cost(model, duration_seconds=duration_seconds),
             }
             text = post_process(text)
+            text = apply_lexicon_correction(text)
             reformat_usage = None
             if text:
                 text, reformat_usage = reformat_text(text)
@@ -1573,6 +1641,7 @@ def _transcribe_and_paste(force_model: str | None = None) -> None:
         text = _strip_trailing_hallucinations(text)
         t_post = time.time()
         text = post_process(text)
+        text = apply_lexicon_correction(text)
         text = apply_vocabulary_replacements(text)
         reformat_usage = None
         if text:
