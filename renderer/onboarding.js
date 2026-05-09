@@ -14,13 +14,13 @@ const TRANSLATIONS = {
     'mic.granted': 'Mikrofon bereit',
     'acc.title': 'Bedienungshilfen',
     'acc.body': 'Damit Landa Text in andere Apps einfügen kann, brauchen wir Zugriff auf die „Bedienungshilfen".',
+    'acc.note': 'Landa simuliert nur Cmd+V zum Einfügen — es liest weder deinen Bildschirm noch steuert es deinen Computer.',
     'acc.cta': 'Systemeinstellungen öffnen',
     'acc.granted': 'Zugriff erteilt',
     'train.title': 'Probier\'s aus',
-    'train.step1': 'Drücke',
-    'train.step2lead': 'Sag',
-    'train.step2quote': '„Hallo, das ist mein erster Test mit Landa."',
-    'train.step3': 'Drücke nochmal',
+    'train.notesTab': 'Neue Notiz',
+    'train.prompt': 'Kürzel drücken zum Starten',
+    'train.settingsNote': 'Das Tastenkürzel kannst du jederzeit in den Einstellungen ändern.',
     'lang.title': 'Sprache',
     'lang.body': 'Wie sprichst du meistens?',
     'lang.de': 'Deutsch',
@@ -30,6 +30,7 @@ const TRANSLATIONS = {
     'lang.hint.de': 'Landa versteht dich nur auf Deutsch.',
     'lang.hint.en': 'Landa versteht dich nur auf Englisch.',
     'lang.hint.both': 'Landa versteht dich in jeder Sprache.',
+    'lang.settingsNote': 'Das kannst du jederzeit in den Einstellungen ändern.',
     'done.title': 'Fertig!',
     'done.body': 'Du kannst jetzt loslegen — drück das Tastenkürzel, sprich, drück nochmal.',
     'done.settings': 'Tastenkürzel und Sprache änderst du jederzeit in den Einstellungen.',
@@ -46,13 +47,13 @@ const TRANSLATIONS = {
     'mic.granted': 'Microphone ready',
     'acc.title': 'Accessibility',
     'acc.body': 'So Landa can paste text into other apps, we need access to "Accessibility".',
+    'acc.note': 'Landa only simulates Cmd+V to paste — it does not read your screen or control your computer.',
     'acc.cta': 'Open System Settings',
     'acc.granted': 'Access granted',
     'train.title': 'Try it',
-    'train.step1': 'Press',
-    'train.step2lead': 'Say',
-    'train.step2quote': '"Hello, this is my first test with Landa."',
-    'train.step3': 'Press again',
+    'train.notesTab': 'New Note',
+    'train.prompt': 'Press the shortcut to start',
+    'train.settingsNote': 'You can change the shortcut anytime in Settings.',
     'lang.title': 'Language',
     'lang.body': 'Which language do you speak most?',
     'lang.de': 'German',
@@ -62,6 +63,7 @@ const TRANSLATIONS = {
     'lang.hint.de': 'Landa only understands you in German.',
     'lang.hint.en': 'Landa only understands you in English.',
     'lang.hint.both': 'Landa understands you in any language.',
+    'lang.settingsNote': 'You can change this anytime in Settings.',
     'done.title': 'Done!',
     'done.body': 'You\'re set — press the shortcut, speak, press again.',
     'done.settings': 'Change the shortcut and language anytime in Settings.',
@@ -227,16 +229,28 @@ async function handleAccOpenClick() {
 // ---------------------------------------------------------------------------
 
 function initTrainStep() {
-  const ta = document.getElementById('train-textarea');
+  const content = document.getElementById('train-content');
+  const cta = document.getElementById('train-cta');
+  const dateEl = document.getElementById('train-date');
   const cont = document.querySelector('.ob-panel[data-step="4"] [data-action="next"]');
-  ta.value = '';
-  cont.disabled = true;
-  // Re-focus the window (user may have just returned from System Settings) then
-  // focus the textarea so paste lands in the right place.
-  window.api.focusOnboardingWindow().then(() => ta.focus());
 
-  ta.addEventListener('input', () => {
-    cont.disabled = ta.value.trim().length === 0;
+  content.textContent = '';
+  cont.disabled = true;
+  cta.hidden = false;
+
+  const locale = lang === 'de' ? 'de-DE' : 'en-US';
+  dateEl.textContent = new Date().toLocaleString(locale, {
+    month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+
+  // Re-focus the window (user may have just returned from System Settings) then
+  // focus the content area so paste lands in the right place.
+  window.api.focusOnboardingWindow().then(() => content.focus());
+
+  content.addEventListener('input', () => {
+    const hasText = content.textContent.trim().length > 0;
+    cont.disabled = !hasText;
+    if (hasText) cta.hidden = true;
   });
 }
 
@@ -286,9 +300,8 @@ async function init() {
   platform = await window.api.getPlatform();
   document.body.classList.add(`platform-${platform}`);
 
-  // Always default to German — Landa's positioning is German-first ("Die einzige
-  // Diktier-App, die Deutsch wirklich versteht"). The user can switch on screen 5.
-  lang = 'de';
+  // No default — user picks on screen 1. 'en' is a safe fallback for t() internals.
+  lang = 'en';
 
   // Skip the macOS-only Accessibility screen on Windows.
   if (platform === 'win32') {
@@ -301,14 +314,34 @@ async function init() {
   showStep(0);
 }
 
+// ---------------------------------------------------------------------------
+// Step 1 — Welcome language pick
+// ---------------------------------------------------------------------------
+
+function handleWelcomeLangSelect(value) {
+  lang = value;
+  localStorage.setItem('ui-lang', value);
+  applyTranslations();
+  document.getElementById('welcome-titles').dataset.chosen = value;
+  document.querySelectorAll('[data-ui-lang]').forEach((el) => {
+    el.dataset.selected = String(el.dataset.uiLang === value);
+  });
+  document.getElementById('welcome-next-btn').disabled = false;
+}
+
 function bindEvents() {
   document.querySelectorAll('[data-action="next"]').forEach((btn) => {
     btn.addEventListener('click', next);
   });
+  document.querySelectorAll('[data-ui-lang]').forEach((el) => {
+    if (el.tagName === 'BUTTON') {
+      el.addEventListener('click', () => handleWelcomeLangSelect(el.dataset.uiLang));
+    }
+  });
   document.getElementById('mic-grant-btn').addEventListener('click', handleMicGrantClick);
   const accBtn = document.getElementById('acc-open-btn');
   if (accBtn) accBtn.addEventListener('click', handleAccOpenClick);
-  document.querySelectorAll('.ob-pill').forEach((p) => {
+  document.querySelectorAll('.ob-pill[data-lang]').forEach((p) => {
     p.addEventListener('click', () => handleLangSelect(p.dataset.lang));
   });
   document.getElementById('finish-btn').addEventListener('click', handleFinish);

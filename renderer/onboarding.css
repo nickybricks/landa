@@ -138,6 +138,23 @@ html, body {
   color: var(--text);
 }
 
+.ob-welcome-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 32px;
+}
+
+.ob-welcome-titles .ob-title {
+  margin-bottom: 0;
+  transition: opacity 0.2s;
+}
+
+.ob-welcome-titles[data-chosen="de"] [data-ui-lang="en"],
+.ob-welcome-titles[data-chosen="en"] [data-ui-lang="de"] {
+  opacity: 0.25;
+}
+
 .ob-body {
   font-size: 15px;
   line-height: 1.55;
@@ -146,12 +163,14 @@ html, body {
   max-width: 420px;
 }
 
-.ob-train-prompt {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  flex-wrap: wrap;
+.ob-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  opacity: 0.6;
+  margin-top: -18px;
+  margin-bottom: 24px;
+  max-width: 380px;
 }
 
 .ob-kbd-group {
@@ -202,52 +221,109 @@ html, body {
   font-size: 16px;
 }
 
-/* Training step layout */
-.ob-train-steps {
-  list-style: none;
+/* Notes window — training step */
+.ob-notes-window {
+  width: 100%;
+  background: #fdfdf6;
+  border-radius: 12px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    0 12px 40px rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  text-align: left;
+  margin-bottom: 20px;
+}
+
+.ob-notes-toolbar {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 12px;
+  background: linear-gradient(to bottom, #f3f1ec, #ebe9e3);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  position: relative;
+}
+
+.ob-traffic-lights {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ob-tl {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: block;
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.15);
+}
+
+.ob-tl-red    { background: #ff5f57; }
+.ob-tl-yellow { background: #febc2e; }
+.ob-tl-green  { background: #28c840; }
+
+.ob-notes-tab {
+  font-size: 0.78rem;
+  color: #1d1d1f;
+  font-weight: 500;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.ob-notes-titlebar {
+  text-align: center;
+  padding: 8px 0 2px;
+  font-size: 0.75rem;
+  color: #8a8a8e;
+  background: #fdfdf6;
+}
+
+.ob-notes-body {
+  padding: 14px 22px 20px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin: 0 auto 24px;
-  padding: 0;
-  width: 100%;
-  max-width: 460px;
+  background: #fdfdf6;
+  min-height: 140px;
 }
 
-.ob-train-step {
+.ob-notes-content {
+  min-height: 48px;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: #1d1d1f;
+  outline: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  -webkit-app-region: no-drag;
+}
+
+.ob-notes-cta {
   display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 12px;
-  font-size: 16px;
-  color: var(--text);
-  text-align: left;
-}
-
-.ob-train-num {
-  flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: rgba(0, 136, 255, 0.12);
-  color: var(--primary);
-  display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-headline);
-  font-weight: 700;
-  font-size: 13px;
+  gap: 12px;
+  padding-top: 16px;
+  flex: 1;
 }
 
-.ob-train-text {
-  color: var(--text);
-  font-weight: 500;
-}
-
-.ob-train-quote {
-  color: var(--text);
+.ob-notes-prompt {
+  font-size: 0.9rem;
   font-weight: 600;
-  font-style: italic;
+  color: #1d1d1f;
+  text-align: center;
+  margin: 0;
+}
+
+/* Big kbd inside notes window gets dark keys to sit on the light background */
+.ob-notes-window .ob-key {
+  background: #e8e6e0;
+  border-color: rgba(0, 0, 0, 0.18);
+  color: #1d1d1f;
 }
 
 /* Done step — small follow-up notes under the lead body */
@@ -365,30 +441,6 @@ html, body {
 /* ---------------------------------------------------------------------------
    Textarea (training screen)
    --------------------------------------------------------------------------- */
-
-.ob-textarea {
-  width: 100%;
-  min-height: 110px;
-  resize: none;
-  font-family: var(--font-body);
-  font-size: 15px;
-  line-height: 1.5;
-  color: var(--text);
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-  padding: 16px 18px;
-  margin-bottom: 24px;
-  outline: none;
-  user-select: text;
-  -webkit-app-region: no-drag;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.ob-textarea:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(0, 136, 255, 0.18);
-}
 
 /* ---------------------------------------------------------------------------
    Language pills

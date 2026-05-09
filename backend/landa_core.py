@@ -984,7 +984,8 @@ _HALLUCINATION_EXACT: set[str] = {
     "[blank_audio]",
     "(birds chirping)",
     "(snoring)",
-    "(upbeat music)"
+    "(upbeat music)",
+    "[End of Audio]."
 }
 
 _HALLUCINATION_URL_RE = re.compile(

@@ -40,9 +40,96 @@ html, body {
   border: 1.5px solid var(--primary);
   color: var(--text);
   border-radius: var(--radius-pill);
-  box-shadow: 0 6px 20px rgba(0, 136, 255, 0.22), 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   transition: opacity 180ms ease, background 180ms ease, border-color 180ms ease;
 }
+
+/* ----- Apple-Intelligence-style halo (rendered behind pill in DOM order) ---
+   Two stroke-only rings (mask-composite excludes the inner content box).
+   Each ring uses a conic-gradient with a multi-color palette so the halo
+   wraps the whole pill perimeter; the gradient angle slowly rotates so the
+   colors drift. Audio amplitude smoothly modulates thickness, blur and
+   opacity — no jitter. */
+
+@property --halo-a {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+@property --halo-b {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+body {
+  /* Pill dimensions, mirrored on glow layers. Set per style below. */
+  --pill-w: 118px;
+  --pill-h: 32px;
+
+  /* Smoothed by JS from audio level. */
+  --flicker-w: 3px;
+  --flicker-blur: 2px;
+  --flicker-opacity: 0.65;
+  --bloom-w: 4px;
+  --bloom-blur: 8px;
+  --bloom-opacity: 0;
+}
+
+body.style-mini    { --pill-w: 118px; --pill-h: 32px; }
+body.style-classic { --pill-w: 258px; --pill-h: 48px; }
+
+.glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  border-radius: var(--radius-pill);
+  box-sizing: content-box;
+  width: var(--pill-w);
+  height: var(--pill-h);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+          mask-composite: exclude;
+}
+
+.glow-flicker {
+  padding: var(--flicker-w);
+  background: conic-gradient(
+    from var(--halo-a),
+    #a855f7,
+    #3b82f6,
+    #06b6d4,
+    #ec4899,
+    #a855f7
+  );
+  filter: blur(var(--flicker-blur));
+  opacity: var(--flicker-opacity);
+  animation: halo-spin-a 9s linear infinite;
+}
+
+.glow-bloom {
+  padding: var(--bloom-w);
+  background: conic-gradient(
+    from var(--halo-b),
+    #ec4899,
+    #a855f7,
+    #3b82f6,
+    #06b6d4,
+    #ec4899
+  );
+  filter: blur(var(--bloom-blur));
+  opacity: var(--bloom-opacity);
+  animation: halo-spin-b 14s linear infinite reverse;
+}
+
+@keyframes halo-spin-a { to { --halo-a: 360deg; } }
+@keyframes halo-spin-b { to { --halo-b: 360deg; } }
 
 .dot {
   width: 8px;
@@ -141,6 +228,7 @@ body.is-processing .pill {
   border-color: var(--text-secondary);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
 }
+body.is-processing .glow { display: none; }
 
 /* ----- Paused state ----- */
 body.is-paused .bars { display: none; }
@@ -155,3 +243,4 @@ body.is-paused .pill {
   border-color: var(--text-secondary);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
 }
+body.is-paused .glow { display: none; }

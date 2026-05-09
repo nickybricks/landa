@@ -19,10 +19,16 @@
 
     <!-- Screen 1 — Welcome -->
     <section class="ob-panel" data-step="1">
-      <h1 class="ob-title" data-i18n="welcome.title"></h1>
-      <p class="ob-body" data-i18n="welcome.body"></p>
+      <div class="ob-welcome-titles" id="welcome-titles">
+        <h1 class="ob-title" data-ui-lang="de">Willkommen bei Landa.</h1>
+        <h1 class="ob-title" data-ui-lang="en">Welcome to Landa.</h1>
+      </div>
+      <div class="ob-lang-row">
+        <button class="ob-pill" data-ui-lang="de">Deutsch</button>
+        <button class="ob-pill" data-ui-lang="en">English</button>
+      </div>
       <div class="ob-footer">
-        <button class="ob-btn-primary" data-action="next" data-i18n="welcome.cta"></button>
+        <button class="ob-btn-primary" data-action="next" id="welcome-next-btn" data-i18n="welcome.cta" disabled></button>
       </div>
     </section>
 
@@ -58,6 +64,7 @@
       </div>
       <h1 class="ob-title" data-i18n="acc.title"></h1>
       <p class="ob-body" data-i18n="acc.body"></p>
+      <p class="ob-note" data-i18n="acc.note"></p>
       <div class="ob-status" id="acc-status" hidden>
         <span class="ob-check">✓</span>
         <span data-i18n="acc.granted"></span>
@@ -70,24 +77,25 @@
     <!-- Screen 4 — Hotkey Training -->
     <section class="ob-panel" data-step="4">
       <h1 class="ob-title" data-i18n="train.title"></h1>
-      <ol class="ob-train-steps">
-        <li class="ob-train-step">
-          <span class="ob-train-num">1</span>
-          <span class="ob-train-text" data-i18n="train.step1"></span>
-          <span class="ob-kbd-group ob-kbd-big" data-train-kbd></span>
-        </li>
-        <li class="ob-train-step">
-          <span class="ob-train-num">2</span>
-          <span class="ob-train-text" data-i18n="train.step2lead"></span>
-          <span class="ob-train-quote" data-i18n="train.step2quote"></span>
-        </li>
-        <li class="ob-train-step">
-          <span class="ob-train-num">3</span>
-          <span class="ob-train-text" data-i18n="train.step3"></span>
-          <span class="ob-kbd-group ob-kbd-big" data-train-kbd></span>
-        </li>
-      </ol>
-      <textarea class="ob-textarea" id="train-textarea" autofocus rows="3"></textarea>
+      <div class="ob-notes-window">
+        <div class="ob-notes-toolbar">
+          <div class="ob-traffic-lights">
+            <span class="ob-tl ob-tl-red"></span>
+            <span class="ob-tl ob-tl-yellow"></span>
+            <span class="ob-tl ob-tl-green"></span>
+          </div>
+          <span class="ob-notes-tab" data-i18n="train.notesTab"></span>
+        </div>
+        <div class="ob-notes-titlebar" id="train-date"></div>
+        <div class="ob-notes-body">
+          <div class="ob-notes-content" id="train-content" contenteditable="true" spellcheck="false"></div>
+          <div class="ob-notes-cta" id="train-cta">
+            <p class="ob-notes-prompt" data-i18n="train.prompt"></p>
+            <div class="ob-kbd-group ob-kbd-big" data-train-kbd></div>
+          </div>
+        </div>
+      </div>
+      <p class="ob-note" data-i18n="train.settingsNote"></p>
       <div class="ob-footer">
         <button class="ob-btn-primary" data-action="next" data-i18n="common.continue" disabled></button>
       </div>
@@ -103,6 +111,7 @@
         <button class="ob-pill" data-lang="auto" data-i18n="lang.both"></button>
       </div>
       <p class="ob-body ob-lang-hint" id="lang-hint"></p>
+      <p class="ob-note" data-i18n="lang.settingsNote"></p>
       <div class="ob-footer">
         <button class="ob-btn-primary" id="lang-next-btn" data-action="next" data-i18n="common.continue" disabled></button>
       </div>

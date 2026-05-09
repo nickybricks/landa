@@ -684,11 +684,14 @@ function reassertDockIcon() {
 }
 
 function createTray() {
-  const idlePath = path.join(__dirname, 'assets', 'trayTemplate.png');
+  const isWin = process.platform === 'win32';
+  const idlePath = isWin
+    ? path.join(__dirname, 'assets', 'icon.ico')
+    : path.join(__dirname, 'assets', 'trayTemplate.png');
   const recordingPath = path.join(__dirname, 'assets', 'trayRecording.png');
 
   trayIconIdle = fs.existsSync(idlePath) ? nativeImage.createFromPath(idlePath) : nativeImage.createEmpty();
-  trayIconIdle.setTemplateImage(true);
+  if (!isWin) trayIconIdle.setTemplateImage(true);
 
   trayIconRecording = fs.existsSync(recordingPath) ? nativeImage.createFromPath(recordingPath) : nativeImage.createEmpty();
 

@@ -16,7 +16,7 @@
     <span class="logo-name">Landa</span>
   </div>
   <main>
-    <h1 data-i18n="hero"></h1>
+    <h1 data-hero></h1>
     <p class="subtext" data-i18n="subtext"></p>
 <div class="buttons">
       <a href="https://github.com/nickybricks/landa/releases/latest/download/Landa-arm64.dmg" class="btn btn-mac">
@@ -29,15 +29,57 @@
       </a>
     </div>
 
-    <div class="demo-island liquid-glass">
-      <div class="demo-inner" hidden>
-        <p class="demo-hint"></p>
-        <textarea class="demo-field" readonly></textarea>
+    <div class="try-row">
+      <button class="try-btn" data-demo-try data-i18n="tryItOut"></button>
+    </div>
+
+    <div class="demo-block" data-state="idle-no-mic" hidden>
+      <div class="notes-window">
+        <div class="notes-toolbar">
+          <div class="traffic-lights">
+            <span class="tl tl-red"></span>
+            <span class="tl tl-yellow"></span>
+            <span class="tl tl-green"></span>
+          </div>
+          <span class="notes-tab">New Note</span>
+          <div class="notes-toolbar-icons" aria-hidden="true">
+            <span>Aa</span>
+            <span>☰</span>
+            <span>⊞</span>
+            <span>📎</span>
+            <span>↗</span>
+          </div>
+        </div>
+        <div class="notes-titlebar">
+          <span class="notes-date" data-demo-date></span>
+        </div>
+        <div class="notes-body">
+          <div class="notes-content" contenteditable="true" spellcheck="false" data-demo-content></div>
+          <div class="notes-cta" data-demo-cta>
+            <p class="shortcut-prompt" data-demo-prompt></p>
+            <div class="key-row" data-demo-keys></div>
+          </div>
+        </div>
       </div>
-      <button class="btn-action" data-i18n-html="tryIt"></button>
+      <div class="rec-overlay" data-demo-rec hidden>
+        <div class="glow glow-bloom"></div>
+        <div class="glow glow-flicker"></div>
+        <div class="pill">
+          <div class="dot"></div>
+          <div class="bars" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <div class="spinner" aria-hidden="true"></div>
+        </div>
+      </div>
     </div>
   </main>
+  <footer class="site-footer liquid-glass">
+    <p>Made with love from Berlin</p>
+  </footer>
   <script src="i18n.js"></script>
+  <script src="hero-typer.js"></script>
   <script src="demo.js"></script>
 </body>
 </html>
