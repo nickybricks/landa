@@ -34,6 +34,7 @@ const OPENAI_LANGUAGES = [
 ];
 
 const WHISPER_MODELS = [
+  { value: 'gpt-realtime-whisper', label: 'GPT Realtime Whisper (Realtime)', logo: 'openai' },
   { value: 'gpt-4o-transcribe', label: 'GPT-4o Transcribe (Realtime)', logo: 'openai' },
   { value: 'gpt-4o-mini-transcribe', label: 'GPT-4o Mini Transcribe (Realtime)', logo: 'openai' },
   { value: 'whisper-large-v3-turbo', label: 'Whisper Large V3 Turbo', logo: 'openai' },
@@ -60,6 +61,7 @@ const TRANSLATIONS = {
     'nav.history': 'History',
     'nav.vocabulary': 'Vocabulary',
     'nav.feedback': 'Give Feedback',
+    'nav.updateReady': 'Update ready — restart',
     // Vocabulary tab
     'vocabulary.title': 'Vocabulary',
     'vocabulary.subtitle': 'Words that will be auto-corrected in transcriptions',
@@ -208,6 +210,7 @@ const TRANSLATIONS = {
     'nav.history': 'Verlauf',
     'nav.vocabulary': 'Vokabular',
     'nav.feedback': 'Feedback geben',
+    'nav.updateReady': 'Update bereit — neu starten',
     // Vocabulary tab
     'vocabulary.title': 'Vokabular',
     'vocabulary.subtitle': 'Wörter, die in Transkriptionen automatisch korrigiert werden',
@@ -456,7 +459,33 @@ window.api.onConfigUpdated((updated) => {
   applyConfig(config, { fromPoll: true });
 });
 
+// Pending initial navigation requests from main process. Registered
+// synchronously below before any await so messages sent on did-finish-load
+// (e.g. "open settings and jump to vocabulary") are never lost to a race
+// with the async setup. Applied once setup is ready.
+let _initialNavTab = null;
+let _pendingVocabWord = null;
+let _navReady = false;
+
 document.addEventListener('DOMContentLoaded', async () => {
+  // Register IPC listeners FIRST, before any await, so messages from main
+  // that arrive on did-finish-load are captured.
+  window.api.onNavigateTab((tab) => {
+    if (_navReady) {
+      const item = document.querySelector(`.sidebar-item[data-tab="${tab}"]`);
+      if (item) item.click();
+    } else {
+      _initialNavTab = tab;
+    }
+  });
+  window.api.onAddToVocabulary((word) => {
+    if (_setupDone) {
+      addWordToVocabulary(word);
+    } else {
+      _pendingVocabWord = word;
+    }
+  });
+
   platform = await window.api.getPlatform();
   document.body.classList.add('platform-' + platform);
   if (platform === 'win32') {
@@ -525,16 +554,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   _pendingConfig = null;
 
-  // Listen for tab navigation from tray menu
-  window.api.onNavigateTab((tab) => {
-    const item = document.querySelector(`.sidebar-item[data-tab="${tab}"]`);
-    if (item) item.click();
-  });
-
-  // Listen for add-to-vocabulary from global hotkey
-  window.api.onAddToVocabulary((word) => {
+  // Apply any vocabulary word that arrived before setup finished.
+  if (_pendingVocabWord) {
+    const word = _pendingVocabWord;
+    _pendingVocabWord = null;
     addWordToVocabulary(word);
-  });
+  }
 
   // Invalidate history cache when a new transcription lands so the next
   // history/home tab visit re-fetches fresh data.
@@ -549,6 +574,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   window.api.onShowFeedbackPrompt(() => showFeedbackPrompt());
+
+  window.api.onUpdateReady((version) => {
+    const btn = document.getElementById('sidebar-update');
+    if (!btn) return;
+    btn.hidden = false;
+    if (version) btn.title = `Install Landa ${version} and restart`;
+  });
 
 });
 
@@ -659,8 +691,21 @@ function setupSidebarNav() {
     });
   }
 
-  // Start on Configuration tab
-  document.querySelector('[data-tab="configuration"]').click();
+  const updateBtn = document.getElementById('sidebar-update');
+  if (updateBtn) {
+    updateBtn.addEventListener('click', () => {
+      window.api.installUpdate();
+    });
+  }
+
+  // Default to Home, unless main process requested a specific tab
+  // (e.g. "vocabulary" via the add-to-vocabulary hotkey).
+  const initialTab = _initialNavTab || 'home';
+  _initialNavTab = null;
+  _navReady = true;
+  const target = document.querySelector(`[data-tab="${initialTab}"]`)
+    || document.querySelector('[data-tab="home"]');
+  if (target) target.click();
 }
 
 // ---------------------------------------------------------------------------

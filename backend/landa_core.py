@@ -189,7 +189,7 @@ def _migrate(cfg: dict) -> tuple[dict, bool]:
     if "model" in cfg:
         old_model = cfg.pop("model")
         if "openai_model" not in cfg:
-            allowed = {"whisper-1", "whisper-base", "whisper-small", "whisper-medium", "whisper-large-v3", "whisper-large-v3-turbo", "landa-de-small", "gpt-4o-transcribe", "gpt-4o-mini-transcribe"}
+            allowed = {"whisper-1", "whisper-base", "whisper-small", "whisper-medium", "whisper-large-v3", "whisper-large-v3-turbo", "landa-de-small", "gpt-4o-transcribe", "gpt-4o-mini-transcribe", "gpt-realtime-whisper"}
             cfg["openai_model"] = old_model if old_model in allowed else "whisper-1"
         changed = True
 
@@ -807,12 +807,13 @@ def reformat_text(text: str, mode: str | None = None) -> tuple[str, dict | None]
 
 SAMPLE_RATE = 16000
 REALTIME_SAMPLE_RATE = 24000
-REALTIME_MODELS = {"gpt-4o-transcribe", "gpt-4o-mini-transcribe"}
+REALTIME_MODELS = {"gpt-4o-transcribe", "gpt-4o-mini-transcribe", "gpt-realtime-whisper"}
 # Realtime API requires a realtime model in the WebSocket URL;
 # the transcribe model name goes in input_audio_transcription config.
 REALTIME_WS_MODEL = {
     "gpt-4o-transcribe":      "gpt-4o-realtime-preview",
     "gpt-4o-mini-transcribe": "gpt-4o-mini-realtime-preview",
+    "gpt-realtime-whisper":   "gpt-realtime",
 }
 
 recording = False
@@ -1427,16 +1428,16 @@ def stop_recording() -> bool:
         except queue.Full:
             logging.warning("[stop_recording] realtime queue full — sender may have crashed")
 
-    # Stream teardown in its own thread so _teardown_thread only tracks the audio
-    # hardware release, not the transcription pipeline.  abort() stops the callback
-    # immediately; close() can hang on macOS — logged individually to diagnose which.
+    # Stream teardown: stop() drains any buffered audio through the callback before
+    # halting — abort() would discard it.  close() can hang on macOS so it stays in
+    # the thread; stop() itself is fast (< 100ms) and safe to do there too.
     if old_stream is not None:
         t_td = time.time()
         def _do_teardown():
             try:
-                logging.info("[stop_recording] stream.abort() starting...")
-                old_stream.abort()
-                logging.info("[stop_recording] stream.abort() done (%.3fs)", time.time() - t_td)
+                logging.info("[stop_recording] stream.stop() starting...")
+                old_stream.stop()
+                logging.info("[stop_recording] stream.stop() done (%.3fs)", time.time() - t_td)
                 old_stream.close()
                 logging.info("[stop_recording] stream.close() done, teardown complete (%.3fs)", time.time() - t_td)
             except Exception as e:
@@ -1597,6 +1598,11 @@ def _transcribe_and_paste(force_model: str | None = None) -> None:
         return
 
     pipeline_start = time.time()  # start timing from hotkey-stop → paste
+
+    # Wait for stream teardown so stop() has delivered all buffered audio to
+    # _audio_callback before we snapshot audio_frames.
+    if _teardown_thread is not None and _teardown_thread.is_alive():
+        _teardown_thread.join(timeout=1.0)
 
     if _should_skip_transcription():
         logging.info("[transcribe] Skipping — audio buffer is effectively empty")

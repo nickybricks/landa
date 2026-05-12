@@ -11,24 +11,91 @@
   <script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
-  <div class="logo-island liquid-glass">
-    <img src="/icon.png" class="logo-icon" alt="Landa icon">
-    <span class="logo-name">Landa</span>
-  </div>
-  <main>
-    <h1 data-hero></h1>
-    <p class="subtext" data-i18n="subtext"></p>
-<div class="buttons">
-      <a href="https://github.com/nickybricks/landa/releases/latest/download/Landa-arm64.dmg" class="btn btn-mac">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-        <span data-i18n="mac"></span>
-      </a>
-      <a href="https://github.com/nickybricks/landa/releases/latest/download/Landa-x64.exe" class="btn btn-win">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 12V5.35l9.5-1.6V12H11.5zm0 .5H21v7.75l-9.5-1.6V12.5z"/></svg>
-        <span data-i18n="win"></span>
-      </a>
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="logo-pill liquid-glass">
+        <img src="/icon.png" class="logo-icon" alt="Landa icon">
+        <span class="logo-name">Landa</span>
+      </div>
     </div>
+  </header>
+  <main class="hero">
+    <div class="hero-inner">
+      <h1 data-hero></h1>
+      <p class="subtext" data-i18n="subtext"></p>
+      <div class="buttons">
+        <a href="https://github.com/nickybricks/landa/releases/latest/download/Landa-arm64.dmg" class="btn btn-mac">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+          <span data-i18n="mac"></span>
+        </a>
+        <a href="https://github.com/nickybricks/landa/releases/latest/download/Landa-x64.exe" class="btn btn-win">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 12V5.35l9.5-1.6V12H11.5zm0 .5H21v7.75l-9.5-1.6V12.5z"/></svg>
+          <span data-i18n="win"></span>
+        </a>
+      </div>
+    </div>
+  </main>
 
+  <div class="hero-fade" aria-hidden="true"></div>
+
+  <section class="apps-section">
+    <div class="apps-inner">
+      <h2 class="apps-title" data-i18n="sectionTitle"></h2>
+      <nav class="apps-nav" aria-label="App examples">
+        <ul>
+          <li>
+            <a href="#app-mail" data-app-nav="mail">Mail</a>
+            <p class="apps-nav-desc" data-i18n="mailDesc"></p>
+          </li>
+          <li>
+            <a href="#app-whatsapp" data-app-nav="whatsapp">WhatsApp</a>
+            <p class="apps-nav-desc" data-i18n="whatsappDesc"></p>
+          </li>
+          <li>
+            <a href="#app-slack" data-app-nav="slack">Slack</a>
+            <p class="apps-nav-desc" data-i18n="slackDesc"></p>
+          </li>
+        </ul>
+      </nav>
+      <div class="apps-stage">
+        <article class="app-panel" id="app-mail">
+          <header class="app-panel-head">
+            <h3>Mail</h3>
+            <p data-i18n="mailDesc"></p>
+          </header>
+          <div class="video-placeholder">
+            <button class="play-btn" aria-label="Play Mail demo">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+          </div>
+        </article>
+        <article class="app-panel" id="app-whatsapp">
+          <header class="app-panel-head">
+            <h3>WhatsApp</h3>
+            <p data-i18n="whatsappDesc"></p>
+          </header>
+          <div class="video-placeholder">
+            <button class="play-btn" aria-label="Play WhatsApp demo">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+          </div>
+        </article>
+        <article class="app-panel" id="app-slack">
+          <header class="app-panel-head">
+            <h3>Slack</h3>
+            <p data-i18n="slackDesc"></p>
+          </header>
+          <div class="video-placeholder">
+            <button class="play-btn" aria-label="Play Slack demo">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <div class="demo-zone">
     <div class="try-row">
       <button class="try-btn" data-demo-try data-i18n="tryItOut"></button>
     </div>
@@ -74,12 +141,33 @@
         </div>
       </div>
     </div>
-  </main>
-  <footer class="site-footer liquid-glass">
-    <p>Made with love from Berlin</p>
-  </footer>
+  </div>
+  <div class="footer-bg">
+    <div class="footer-fade" aria-hidden="true"></div>
+    <footer class="site-footer liquid-glass">
+      <p>Made with love from Berlin</p>
+    </footer>
+  </div>
   <script src="i18n.js"></script>
   <script src="hero-typer.js"></script>
   <script src="demo.js"></script>
+  <script>
+    (() => {
+      const links = document.querySelectorAll('.apps-nav a');
+      const panels = document.querySelectorAll('.app-panel');
+      if (!('IntersectionObserver' in window) || !panels.length) return;
+      const setActive = (id) => {
+        links.forEach((l) => l.classList.toggle('is-active', l.getAttribute('href') === '#' + id));
+      };
+      const obs = new IntersectionObserver((entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        if (visible[0]) setActive(visible[0].target.id);
+      }, { rootMargin: '-45% 0px -45% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] });
+      panels.forEach((p) => obs.observe(p));
+      setActive(panels[0].id);
+    })();
+  </script>
 </body>
 </html>

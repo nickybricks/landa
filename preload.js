@@ -96,19 +96,12 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('recording-processing', (_event, processing) => callback(processing));
   },
 
-  // Update progress window
-  onUpdateVersion: (callback) => {
-    ipcRenderer.removeAllListeners('update-version');
-    ipcRenderer.on('update-version', (_event, version) => callback(version));
+  // Update notification (sidebar)
+  onUpdateReady: (callback) => {
+    ipcRenderer.removeAllListeners('update-ready');
+    ipcRenderer.on('update-ready', (_event, version) => callback(version));
   },
-  onUpdateProgress: (callback) => {
-    ipcRenderer.removeAllListeners('update-progress');
-    ipcRenderer.on('update-progress', (_event, payload) => callback(payload));
-  },
-  onUpdateInstalling: (callback) => {
-    ipcRenderer.removeAllListeners('update-installing');
-    ipcRenderer.on('update-installing', () => callback());
-  },
+  installUpdate: () => ipcRenderer.invoke('install-update'),
 
   // Feedback (Tally form)
   openFeedback: (lang) => ipcRenderer.invoke('open-feedback', lang),

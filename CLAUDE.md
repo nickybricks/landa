@@ -85,6 +85,14 @@ Project-specific verification:
 
 
 
+## Landing Page (`website/`)
+
+The marketing site at `website/index.html` is **mobile-first**. Every change must look correct on phone, tablet, and desktop — verify all three before shipping.
+
+For the "Works in every app you write in." section:
+- **Desktop (>820px)**: sticky left sidebar (Mail / WhatsApp / Slack) with scroll-spy, large video on the right; active nav item enlarges and shows its description.
+- **Mobile (≤820px)**: sidebar is hidden. Each app stacks vertically as `label + description → video`, in order Mail → WhatsApp → Slack. Do **not** collapse the mobile layout into a horizontal nav — keep the label+video pairing so the user always sees what they're looking at.
+
 ## Platform Support
 **This app targets both macOS and Windows.** Every feature, fix, and new capability must work on both platforms. When writing any OS-level code (file paths, hotkeys, tray icons, app scanning, permissions, etc.), always implement and test both the macOS and Windows paths. Never leave a `// TODO: Windows` stub — implement it properly or raise it explicitly.
 

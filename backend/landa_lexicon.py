@@ -36,9 +36,12 @@ from cryptography.hazmat.primitives.serialization import (
 # Trust root — public key embedded in app, used to verify .lex signatures
 # ---------------------------------------------------------------------------
 
-# Empty until we generate real keys for production lexicons. Tests and the
-# build helper supply their own keypair, so this can stay empty in dev.
-LANDA_LEXICON_PUBLIC_KEY_PEM: bytes = b""
+# Production trust root. Private key is held offline by the maintainer.
+# Tests supply their own keypair via load_lexicon(public_key=...).
+LANDA_LEXICON_PUBLIC_KEY_PEM: bytes = b"""-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAl9mD0JJxm53kiUPRsDfZKqMz7fjvd0UT1ZC5Qa8A9e8=
+-----END PUBLIC KEY-----
+"""
 
 
 def _load_trust_root() -> Ed25519PublicKey | None:
@@ -220,15 +223,35 @@ def load_lexicon(path: str | Path, public_key: Ed25519PublicKey | None = None) -
 # Correction pipeline
 # ---------------------------------------------------------------------------
 
-# Common German words we never try to correct. Tiny on purpose; expand as needed.
-_GERMAN_STOPWORDS = frozenset({
-    "der", "die", "das", "den", "dem", "des", "ein", "eine", "einer", "eines", "einem", "einen",
-    "und", "oder", "aber", "auch", "ist", "sind", "war", "waren", "sein", "haben", "hat", "hatte",
-    "ich", "du", "er", "sie", "es", "wir", "ihr", "mich", "mir", "dich", "dir",
-    "in", "im", "an", "am", "auf", "mit", "von", "zu", "zur", "zum", "für", "bei", "nach", "über",
-    "nicht", "nur", "noch", "schon", "sehr", "wie", "wenn", "dass", "was", "wer", "wo",
-    "ja", "nein", "doch", "mal", "kann", "könnte", "soll", "sollte", "wird", "werden",
-})
+# Common German words we never try to correct. Loaded from a top-N frequency
+# list at module import; everyday vocabulary gets a hard pass-through so a
+# noisy medical lexicon can't corrupt normal text.
+def _load_german_stopwords() -> frozenset[str]:
+    path = Path(__file__).parent / "data" / "german_top2000.txt"
+    if not path.exists():
+        return frozenset()
+    return frozenset(
+        line.strip().lower()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    )
+
+
+_GERMAN_STOPWORDS = _load_german_stopwords()
+
+
+def _threshold_for_length(n: int) -> float:
+    """Length-aware similarity threshold.
+
+    Short words have very few possible 1-edit neighbours that aren't false
+    positives, so we demand near-identity. Long medical Latinisms can tolerate
+    looser matches because Whisper typos are usually 1–2 chars in a long word.
+    """
+    if n <= 5:
+        return 0.95
+    if n <= 8:
+        return 0.85
+    return 0.75
 
 _WORD_RE = re.compile(r"[A-Za-zÄÖÜäöüß]+")
 
@@ -305,7 +328,13 @@ class LexiconSet:
             loaded.append(lex)
         return cls(lexicons=loaded)
 
-    def correct(self, text: str, *, max_edit_distance: int = 2, score_threshold: float = 0.55) -> str:
+    def correct(self, text: str, *, max_edit_distance: int = 2, score_threshold: float | None = None) -> str:
+        """Apply post-correction.
+
+        ``score_threshold`` overrides the length-aware default — pass a flat
+        value only for tests or experiments. In production, leave it None and
+        let _threshold_for_length() decide based on input word length.
+        """
         if not self.lexicons or not text:
             return text
 
@@ -318,6 +347,8 @@ class LexiconSet:
                 return word
             if lower in self._merged_surfaces:
                 return word  # Whisper already produced the canonical form
+
+            threshold = score_threshold if score_threshold is not None else _threshold_for_length(len(lower))
 
             key = koelner_phonetik(word)
             candidates: list[tuple[Lexicon, int]] = []
@@ -332,7 +363,8 @@ class LexiconSet:
             if not candidates:
                 return word
 
-            best_score = 0.0
+            best_similarity = 0.0
+            best_freq = 0.0
             best_surface: str | None = None
             seen: set[tuple[int, int]] = set()
             for lex, idx in candidates:
@@ -351,13 +383,17 @@ class LexiconSet:
                     continue
                 length = max(len(lower), len(surface))
                 similarity = 1.0 - (dist / length)
+                if similarity < threshold:
+                    continue
                 freq = float(term.get("freq", 0.5))
-                score = similarity * (0.5 + 0.5 * freq)
-                if score > best_score:
-                    best_score = score
+                # Threshold gates correctness; freq only breaks ties between
+                # equally-similar candidates.
+                if similarity > best_similarity or (similarity == best_similarity and freq > best_freq):
+                    best_similarity = similarity
+                    best_freq = freq
                     best_surface = surface
 
-            if best_surface and best_score >= score_threshold:
+            if best_surface:
                 return _preserve_case(word, best_surface)
             return word
 

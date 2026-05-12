@@ -62,7 +62,6 @@ let settingsWindow = null;
 let onboardingWindow = null;
 let recordingWindow = null;
 let recordingWindowStyle = 'mini'; // 'classic' | 'mini' | 'none'
-let updateWindow = null;
 let audioLevelTimer = null;
 let backendProcess = null;
 let pollTimer = null;
@@ -80,68 +79,38 @@ let currentHoldSound = null; // system sound name to play on hold
 let currentResumeSound = null; // system sound name to play on resume
 let lastHotkeyTime = 0;
 let hotkeyInFlight = false; // re-entrancy guard
+let appQuitting = false;
 let hotkeyCompletedAt = 0; // timestamp of last completed hotkey action
 let isCapturingHotkey = false;
-let updateDialogShown = false;
+let pendingUpdateVersion = null;
+let updateDownloadStarted = false;
 
 // ---------------------------------------------------------------------------
 // Auto-updater
 // ---------------------------------------------------------------------------
+
+function notifyUpdateReady(version) {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.webContents.send('update-ready', version);
+  }
+}
 
 function setupAutoUpdater() {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
 
   autoUpdater.on('update-available', (info) => {
-    if (updateDialogShown) return;
-    updateDialogShown = true;
-    dialog.showMessageBox({
-      type: 'info',
-      buttons: ['Install Now & Restart', 'Later'],
-      defaultId: 0,
-      cancelId: 1,
-      title: 'Update Available',
-      message: `Landa ${info.version} is available`,
-      detail: 'The update will download now and Landa will restart automatically when it\'s ready.',
-    }).then((result) => {
-      if (result.response === 0) {
-        showUpdateWindow(info.version);
-        autoUpdater.downloadUpdate().catch((err) => {
-          console.error('[updater] downloadUpdate failed:', err && err.message ? err.message : err);
-          destroyUpdateWindow();
-          dialog.showMessageBox({
-            type: 'error',
-            buttons: ['OK'],
-            title: 'Update Failed',
-            message: 'The update could not be downloaded.',
-            detail: err && err.message ? err.message : 'Unknown error. Please try again later.',
-          }).catch(() => {});
-          updateDialogShown = false;
-        });
-      } else {
-        updateDialogShown = false;
-      }
-    }).catch(() => { updateDialogShown = false; });
+    if (updateDownloadStarted) return;
+    updateDownloadStarted = true;
+    autoUpdater.downloadUpdate().catch((err) => {
+      console.error('[updater] downloadUpdate failed:', err && err.message ? err.message : err);
+      updateDownloadStarted = false;
+    });
   });
 
-  autoUpdater.on('download-progress', (progress) => {
-    if (updateWindow && !updateWindow.isDestroyed()) {
-      updateWindow.webContents.send('update-progress', {
-        percent: progress.percent || 0,
-        bytesPerSecond: progress.bytesPerSecond || 0,
-        transferred: progress.transferred || 0,
-        total: progress.total || 0,
-      });
-    }
-  });
-
-  autoUpdater.on('update-downloaded', () => {
-    if (updateWindow && !updateWindow.isDestroyed()) {
-      updateWindow.webContents.send('update-installing');
-    }
-    setTimeout(() => {
-      autoUpdater.quitAndInstall();
-    }, 600);
+  autoUpdater.on('update-downloaded', (info) => {
+    pendingUpdateVersion = (info && info.version) || pendingUpdateVersion || '';
+    notifyUpdateReady(pendingUpdateVersion);
   });
 
   autoUpdater.on('error', (err) => {
@@ -851,6 +820,9 @@ function openSettings() {
       settingsWindow.webContents.send('show-feedback-prompt');
       feedbackPromptSentThisSession = true;
     }
+    if (pendingUpdateVersion) {
+      notifyUpdateReady(pendingUpdateVersion);
+    }
   });
 
   // Prevent Cmd+R / Ctrl+R / F5 from reloading the settings window.
@@ -1018,56 +990,6 @@ function destroyRecordingWindow() {
     recordingWindow.close();
   }
   recordingWindow = null;
-}
-
-// ---------------------------------------------------------------------------
-// Update progress window
-// ---------------------------------------------------------------------------
-
-function showUpdateWindow(version) {
-  if (updateWindow && !updateWindow.isDestroyed()) {
-    updateWindow.show();
-    updateWindow.focus();
-    return;
-  }
-  updateWindow = new BrowserWindow({
-    width: 380,
-    height: 180,
-    frame: false,
-    resizable: false,
-    movable: true,
-    minimizable: false,
-    maximizable: false,
-    fullscreenable: false,
-    skipTaskbar: true,
-    alwaysOnTop: true,
-    show: false,
-    title: 'Landa Update',
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-  updateWindow.setAlwaysOnTop(true, 'floating');
-  updateWindow.loadFile(path.join(__dirname, 'renderer', 'update.html'));
-  updateWindow.webContents.on('did-finish-load', () => {
-    if (updateWindow && !updateWindow.isDestroyed()) {
-      updateWindow.webContents.send('update-version', version);
-    }
-  });
-  updateWindow.on('closed', () => { updateWindow = null; });
-  updateWindow.once('ready-to-show', () => {
-    if (updateWindow && !updateWindow.isDestroyed()) updateWindow.show();
-  });
-}
-
-function destroyUpdateWindow() {
-  if (updateWindow && !updateWindow.isDestroyed()) {
-    updateWindow.close();
-  }
-  updateWindow = null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1244,6 +1166,12 @@ function startBackend() {
   backendProcess.on('exit', (code) => {
     console.log(`[Landa] Backend exited with code ${code}`);
     backendProcess = null;
+    if (appQuitting) return;
+    // Backend crashed — reset any stuck state and restart
+    hotkeyInFlight = false;
+    setRecordingState(false);
+    console.log('[Landa] Backend crashed — restarting in 2s');
+    setTimeout(startBackend, 2000);
   });
 
   console.log(`[Landa] Backend started (pid=${backendProcess.pid})`);
@@ -1808,6 +1736,18 @@ function setupIpcHandlers() {
     app.setLoginItemSettings({ openAtLogin: enabled });
   });
 
+  ipcMain.handle('install-update', () => {
+    if (!pendingUpdateVersion) return false;
+    setImmediate(() => {
+      try {
+        autoUpdater.quitAndInstall();
+      } catch (err) {
+        console.error('[updater] quitAndInstall failed:', err && err.message ? err.message : err);
+      }
+    });
+    return true;
+  });
+
   ipcMain.handle('is-dev-mode', () => {
     if (process.env.LANDA_DEV === '1') return true;
     try {
@@ -1907,7 +1847,7 @@ function setupIpcHandlers() {
     // Write the marker first so the user is treated as onboarded even if the
     // backend patch fails or the app crashes between here and the next launch.
     writeOnboardedMarker();
-    const patch = { onboarding_completed: true, vocabulary: [] };
+    const patch = { onboarding_completed: true };
     if (language) patch.openai_language = language;
     try {
       const result = await api.patchConfig(patch);
@@ -1997,6 +1937,7 @@ app.whenReady().then(() => {
 });
 
 app.on('will-quit', () => {
+  appQuitting = true;
   globalShortcut.unregisterAll();
   if (pollTimer) clearInterval(pollTimer);
   destroyRecordingWindow();

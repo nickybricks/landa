@@ -151,8 +151,35 @@ body.platform-darwin .titlebar-lead {
   flex-direction: column;
 }
 
-.sidebar-feedback {
+.sidebar-bottom {
   margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar-update {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.sidebar-update > span:not(.sidebar-icon),
+.sidebar-update .sidebar-icon {
+  color: #ffffff;
+}
+
+.sidebar-update:hover {
+  filter: brightness(1.08);
+}
+
+.sidebar-update-label {
+  font-weight: 600;
+  white-space: normal;
+  line-height: 1.2;
+}
+
+.sidebar.collapsed .sidebar-update-label {
+  display: none;
 }
 
 .sidebar.collapsed {
