@@ -158,18 +158,27 @@ body.platform-darwin .titlebar-lead {
   gap: 4px;
 }
 
-.sidebar-update {
-  background: var(--primary);
-  color: #ffffff;
+.sidebar-item[hidden] {
+  display: none;
 }
 
-.sidebar-update > span:not(.sidebar-icon),
+.sidebar-update {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.sidebar-update > span:not(.sidebar-icon) {
+  color: var(--text);
+}
+
 .sidebar-update .sidebar-icon {
-  color: #ffffff;
+  color: var(--primary);
 }
 
 .sidebar-update:hover {
-  filter: brightness(1.08);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
 }
 
 .sidebar-update-label {
@@ -2485,5 +2494,48 @@ body:not(.dev-mode) .dev-only {
 
 .feedback-prompt-actions .btn-secondary:hover {
   background: var(--bg);
+}
+
+/* ---------------------------------------------------------------------------
+   macOS-only island redesign (Windows uses original chrome above)
+   --------------------------------------------------------------------------- */
+
+body.platform-darwin .titlebar {
+  display: none;
+}
+
+body.platform-darwin .layout-body {
+  background: #ebebed;
+  padding: 8px;
+  gap: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  body.platform-darwin .layout-body {
+    background: #141414;
+  }
+}
+
+body.platform-darwin .sidebar {
+  background: var(--bg-sidebar);
+  border-radius: var(--radius-card);
+  padding-top: 52px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    0 6px 20px rgba(0, 0, 0, 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  body.platform-darwin .sidebar {
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.4),
+      0 8px 24px rgba(0, 0, 0, 0.5);
+  }
+}
+
+body.platform-darwin .content {
+  background: var(--bg);
+  border: none;
+  border-radius: var(--radius-card);
 }
 
