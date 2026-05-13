@@ -1011,7 +1011,7 @@ function openFeedbackWindow(lang) {
   }
 
   const url = FEEDBACK_URLS[lang] || FEEDBACK_URLS.en;
-  const title = lang === 'de' ? 'Feedback geben' : 'Give Feedback';
+  const title = lang === 'de' ? 'Feedback' : 'Feedback';
 
   feedbackWindow = new BrowserWindow({
     width: 560,

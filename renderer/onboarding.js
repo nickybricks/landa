@@ -5,6 +5,7 @@
 const TRANSLATIONS = {
   de: {
     'common.continue': 'Weiter',
+    'common.back': 'Zurück',
     'welcome.title': 'Willkommen bei Landa.',
     'welcome.body': 'In 60 Sekunden tippst du nie wieder.',
     'welcome.cta': 'Los geht\'s',
@@ -20,12 +21,15 @@ const TRANSLATIONS = {
     'train.title': 'Probier\'s aus',
     'train.notesTab': 'Neue Notiz',
     'train.prompt': 'Kürzel drücken zum Starten',
+    'train.success': 'Super! Das hat geklappt.',
+    'train.continueHint': 'Klick auf Weiter, wenn du bereit bist.',
     'train.settingsNote': 'Das Tastenkürzel kannst du jederzeit in den Einstellungen ändern.',
-    'lang.title': 'Sprache',
-    'lang.body': 'Wie sprichst du meistens?',
+    'lang.title': 'Welche Sprache sprichst du mit Landa?',
+    'lang.body': 'Landa hört zu und tippt für dich. Welche Sprache sprichst du normalerweise?',
     'lang.de': 'Deutsch',
     'lang.en': 'Englisch',
     'lang.both': 'Beides',
+    'lang.recommended': 'Empfohlen',
     'lang.cta': 'Weiter',
     'lang.hint.de': 'Landa versteht dich nur auf Deutsch.',
     'lang.hint.en': 'Landa versteht dich nur auf Englisch.',
@@ -38,6 +42,7 @@ const TRANSLATIONS = {
   },
   en: {
     'common.continue': 'Continue',
+    'common.back': 'Back',
     'welcome.title': 'Welcome to Landa.',
     'welcome.body': 'In 60 seconds, you\'ll never type again.',
     'welcome.cta': 'Let\'s go',
@@ -53,12 +58,15 @@ const TRANSLATIONS = {
     'train.title': 'Try it',
     'train.notesTab': 'New Note',
     'train.prompt': 'Press the shortcut to start',
+    'train.success': 'Nice! That worked.',
+    'train.continueHint': 'Click Continue when you\'re ready.',
     'train.settingsNote': 'You can change the shortcut anytime in Settings.',
-    'lang.title': 'Language',
-    'lang.body': 'Which language do you speak most?',
+    'lang.title': 'Which language do you speak to Landa?',
+    'lang.body': 'Landa listens and types for you. What do you usually speak?',
     'lang.de': 'German',
     'lang.en': 'English',
     'lang.both': 'Both',
+    'lang.recommended': 'Recommended',
     'lang.cta': 'Continue',
     'lang.hint.de': 'Landa only understands you in German.',
     'lang.hint.en': 'Landa only understands you in English.',
@@ -140,11 +148,24 @@ function showStep(idx) {
     p.dataset.active = String(Number(p.dataset.step) === stepNum);
   });
   renderProgress();
+  updateBackBtn();
   onEnterStep(stepNum);
+}
+
+function updateBackBtn() {
+  const btn = document.getElementById('ob-back-btn');
+  if (!btn) return;
+  const isFirst = currentIdx === 0;
+  const isLast = currentIdx === steps.length - 1;
+  btn.hidden = isFirst || isLast;
 }
 
 function next() {
   if (currentIdx < steps.length - 1) showStep(currentIdx + 1);
+}
+
+function back() {
+  if (currentIdx > 0) showStep(currentIdx - 1);
 }
 
 function onEnterStep(stepNum) {
@@ -192,21 +213,17 @@ async function handleMicGrantClick() {
 // ---------------------------------------------------------------------------
 
 async function initAccStep() {
-  // Already granted on entry — pause long enough that the ✓ is readable.
   const trusted = await window.api.getAccessibilityStatus();
   if (trusted) {
     showAccGranted();
-    setTimeout(next, 1800);
     return;
   }
-  // Granted mid-screen — user just made the change, quicker feedback is fine.
   accPollTimer = setInterval(async () => {
     const ok = await window.api.getAccessibilityStatus();
     if (ok) {
       clearInterval(accPollTimer);
       accPollTimer = null;
       showAccGranted();
-      setTimeout(next, 900);
     }
   }, 800);
 }
@@ -214,7 +231,7 @@ async function initAccStep() {
 function showAccGranted() {
   const panel = document.querySelector('.ob-panel[data-step="3"]');
   panel.querySelector('#acc-status').hidden = false;
-  panel.querySelector('#acc-open-btn').disabled = true;
+  panel.querySelector('#acc-next-btn').disabled = false;
   // Register the hotkey now that Accessibility is granted, so the training
   // step (step 4) can receive the keypress.
   window.api.registerMainHotkey();
@@ -231,12 +248,17 @@ async function handleAccOpenClick() {
 function initTrainStep() {
   const content = document.getElementById('train-content');
   const cta = document.getElementById('train-cta');
+  const success = document.getElementById('train-success');
+  const hint = document.getElementById('train-hint');
   const dateEl = document.getElementById('train-date');
   const cont = document.querySelector('.ob-panel[data-step="4"] [data-action="next"]');
 
   content.textContent = '';
   cont.disabled = true;
+  cont.classList.remove('ob-btn-pulse');
   cta.hidden = false;
+  success.hidden = true;
+  hint.hidden = true;
 
   const locale = lang === 'de' ? 'de-DE' : 'en-US';
   dateEl.textContent = new Date().toLocaleString(locale, {
@@ -247,11 +269,25 @@ function initTrainStep() {
   // focus the content area so paste lands in the right place.
   window.api.focusOnboardingWindow().then(() => content.focus());
 
+  let succeeded = false;
   content.addEventListener('input', () => {
     const hasText = content.textContent.trim().length > 0;
     cont.disabled = !hasText;
-    if (hasText) cta.hidden = true;
+    if (hasText) {
+      cta.hidden = true;
+      if (!succeeded) {
+        succeeded = true;
+        success.hidden = false;
+        hint.hidden = false;
+        cont.classList.add('ob-btn-pulse');
+      }
+    }
   });
+
+  // Stop pulsing once the user actively notices the CTA.
+  const stopPulse = () => cont.classList.remove('ob-btn-pulse');
+  cont.addEventListener('mouseenter', stopPulse, { once: true });
+  cont.addEventListener('focus', stopPulse, { once: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -259,8 +295,14 @@ function initTrainStep() {
 // ---------------------------------------------------------------------------
 
 function initLangStep() {
-  document.getElementById('lang-next-btn').disabled = chosenLang === null;
-  updateLangHint();
+  // Default to 'auto' (Whisper detects the language) — prevents the mismatch
+  // case where the user picks a UI language but actually speaks something else.
+  if (chosenLang === null) {
+    handleLangSelect('auto');
+  } else {
+    document.getElementById('lang-next-btn').disabled = false;
+    updateLangHint();
+  }
 }
 
 function updateLangHint() {
@@ -274,7 +316,7 @@ function updateLangHint() {
 
 function handleLangSelect(value) {
   chosenLang = value;
-  document.querySelectorAll('.ob-pill').forEach((p) => {
+  document.querySelectorAll('.ob-panel[data-step="5"] .ob-pill').forEach((p) => {
     p.dataset.selected = String(p.dataset.lang === value);
   });
   document.getElementById('lang-next-btn').disabled = false;
@@ -345,6 +387,7 @@ function bindEvents() {
     p.addEventListener('click', () => handleLangSelect(p.dataset.lang));
   });
   document.getElementById('finish-btn').addEventListener('click', handleFinish);
+  document.getElementById('ob-back-btn').addEventListener('click', back);
 }
 
 init();

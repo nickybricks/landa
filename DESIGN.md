@@ -5,7 +5,7 @@ This document defines the core design principles and token values for Landa. All
 ## Theme Overview
 
 - **Color Mode**: Light (dark mode is a supported override, not the default)
-- **Roundedness**: Maximum — pill-shaped corners for a soft, friendly feel
+- **Roundedness**: Moderate — slightly rounded corners for a clean, approachable feel
 - **Spacing**: Normal — balanced layout with adequate breathing room
 
 ## Typography
@@ -53,7 +53,7 @@ Both fonts are loaded via Google Fonts. Fallback stack: `-apple-system, BlinkMac
 
 | Token              | Value   | Usage                              |
 |--------------------|---------|------------------------------------|
-| `--radius-pill`    | `100px` | Buttons, toggles, badges           |
+| `--radius-pill`    | `8px`   | Buttons, badges, interactive controls |
 | `--radius-card`    | `16px`  | Cards, panels, settings sections   |
 | `--radius-sidebar` | `12px`  | Sidebar icon containers            |
 
@@ -62,5 +62,5 @@ Both fonts are loaded via Google Fonts. Fallback stack: `-apple-system, BlinkMac
 - All design tokens are defined in `renderer/settings.css` under `:root`
 - Use CSS variables (e.g. `var(--primary)`) — never hard-code hex values
 - Use `var(--font-headline)` for headings, `var(--font-body)` for all other text
-- Prefer pill corners (`var(--radius-pill)`) for interactive controls; card corners (`var(--radius-card)`) for container surfaces
+- Use `var(--radius-pill)` for interactive controls (buttons, badges); card corners (`var(--radius-card)`) for container surfaces
 - Brand color tints for icon backgrounds: use `rgba(<brand-hex>, 0.15)` as background with the brand hex as foreground

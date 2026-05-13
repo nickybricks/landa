@@ -16,7 +16,7 @@
   --text: #1d1d1f;
   --text-secondary: #86868b;
 
-  --radius-pill: 100px;
+  --radius-pill: 8px;
   --radius-card: 16px;
   --radius-sidebar: 12px;
 
@@ -85,42 +85,27 @@ body {
   padding: 0 8px;
 }
 
-/* On macOS, indent past the traffic lights (red/yellow/green at x≈16–74) */
-body.platform-darwin .titlebar-lead {
-  padding-left: 80px;
-}
-
 /* Right zone: rest of header — pure drag region for now */
 .titlebar-trail {
   flex: 1;
 }
 
-/* Toggle button — lives in .titlebar-lead */
-.sidebar-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: none;
-  border-radius: 6px;
-  color: var(--text-secondary);
-  cursor: pointer;
+/* Invisible resize hit-target on the right edge of the sidebar (Mac only).
+   Must be no-drag so mouse events reach JS despite the sidebar's drag region. */
+#sidebar-resize-handle {
+  display: none;
+}
+
+body.platform-darwin #sidebar-resize-handle {
+  display: block;
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
   -webkit-app-region: no-drag;
-  transition: background 0.15s, color 0.15s;
-  flex-shrink: 0;
-}
-
-.sidebar-toggle:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: var(--text);
-}
-
-@media (prefers-color-scheme: dark) {
-  .sidebar-toggle:hover {
-    background: rgba(255, 255, 255, 0.08);
-  }
+  z-index: 20;
 }
 
 /* ---------------------------------------------------------------------------
@@ -149,6 +134,7 @@ body.platform-darwin .titlebar-lead {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 
 .sidebar-bottom {
@@ -225,7 +211,7 @@ body.platform-darwin .titlebar-lead {
 }
 
 .sidebar-item:hover {
-  background: #f0f0f2;
+  background: rgba(0, 0, 0, 0.06);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -870,6 +856,7 @@ select {
 
 .play-btn:hover {
   color: var(--primary);
+  background: rgba(0, 0, 0, 0.06);
 }
 
 /* ---------------------------------------------------------------------------
@@ -972,6 +959,7 @@ select {
 
 .shortcut-reset:hover {
   color: var(--text);
+  background: rgba(0, 0, 0, 0.06);
 }
 
 /* ---------------------------------------------------------------------------
@@ -1589,6 +1577,8 @@ body:not(.dev-mode) .dev-only {
 
 .popup-close:hover {
   color: var(--text);
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: var(--radius-pill);
 }
 
 .popup-section {
@@ -2517,6 +2507,7 @@ body.platform-darwin .layout-body {
 }
 
 body.platform-darwin .sidebar {
+  position: relative;
   background: var(--bg-sidebar);
   border-radius: var(--radius-card);
   padding-top: 52px;

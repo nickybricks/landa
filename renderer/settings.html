@@ -15,15 +15,8 @@
 
     <!-- ── Full-width titlebar ───────────────────────────────────────────── -->
     <header class="titlebar">
-      <!-- Left zone: mirrors the sidebar width; holds the toggle button -->
-      <div class="titlebar-lead">
-        <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle sidebar" aria-label="Toggle sidebar">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="1.5" y="1.5" width="13" height="13" rx="1.5"/>
-            <line x1="5.5" y1="1.5" x2="5.5" y2="14.5"/>
-          </svg>
-        </button>
-      </div>
+      <!-- Left zone: drag region only (toggle moved into sidebar) -->
+      <div class="titlebar-lead"></div>
       <!-- Right zone: content-area header (drag region, no controls yet) -->
       <div class="titlebar-trail"></div>
     </header>
@@ -103,6 +96,7 @@
             <span data-i18n="nav.feedback">Give Feedback</span>
           </div>
         </div>
+        <div id="sidebar-resize-handle"></div>
       </nav>
 
       <!-- Content -->

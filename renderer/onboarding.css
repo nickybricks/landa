@@ -247,23 +247,6 @@ html, body {
   position: relative;
 }
 
-.ob-traffic-lights {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.ob-tl {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  display: block;
-  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.15);
-}
-
-.ob-tl-red    { background: #ff5f57; }
-.ob-tl-yellow { background: #febc2e; }
-.ob-tl-green  { background: #28c840; }
 
 .ob-notes-tab {
   font-size: 0.78rem;
@@ -437,6 +420,117 @@ html, body {
 }
 
 .ob-hidden { display: none !important; }
+
+/* ---------------------------------------------------------------------------
+   Back button (global, top-left)
+   --------------------------------------------------------------------------- */
+
+.ob-back-btn {
+  position: fixed;
+  top: 22px;
+  left: 22px;
+  z-index: 3;
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ob-back-btn:hover {
+  background: var(--bg-sidebar);
+  color: var(--text);
+}
+
+.ob-back-btn[hidden] { display: none; }
+
+/* ---------------------------------------------------------------------------
+   Training screen — success state + continue hint + CTA pulse
+   --------------------------------------------------------------------------- */
+
+.ob-notes-success[hidden] { display: none; }
+
+.ob-notes-success {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+  color: #1f9d55;
+  font-size: 0.9rem;
+  font-weight: 600;
+  animation: ob-success-pop 0.45s ease-out;
+}
+
+.ob-check-big {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #1f9d55;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.ob-train-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: -10px 0 18px;
+}
+
+@keyframes ob-success-pop {
+  0%   { opacity: 0; transform: scale(0.7); }
+  60%  { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes ob-btn-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 136, 255, 0.5); }
+  50%      { box-shadow: 0 0 0 10px rgba(0, 136, 255, 0); }
+}
+
+.ob-btn-primary.ob-btn-pulse:not(:disabled) {
+  animation: ob-btn-pulse 1.6s ease-out infinite;
+}
+
+/* ---------------------------------------------------------------------------
+   "Recommended" pill (lang screen)
+   --------------------------------------------------------------------------- */
+
+.ob-pill-recommended {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ob-rec-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--secondary);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ob-pill-recommended[data-selected="true"] .ob-rec-badge {
+  background: rgba(255, 255, 255, 0.25);
+}
 
 /* ---------------------------------------------------------------------------
    Textarea (training screen)

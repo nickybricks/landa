@@ -60,7 +60,7 @@ const TRANSLATIONS = {
     'nav.settings': 'Settings',
     'nav.history': 'History',
     'nav.vocabulary': 'Vocabulary',
-    'nav.feedback': 'Give Feedback',
+    'nav.feedback': 'Feedback',
     'nav.updateReady': 'Update ready — restart',
     // Vocabulary tab
     'vocabulary.title': 'Vocabulary',
@@ -209,7 +209,7 @@ const TRANSLATIONS = {
     'nav.settings': 'Einstellungen',
     'nav.history': 'Verlauf',
     'nav.vocabulary': 'Vokabular',
-    'nav.feedback': 'Feedback geben',
+    'nav.feedback': 'Feedback',
     'nav.updateReady': 'Update bereit — neu starten',
     // Vocabulary tab
     'vocabulary.title': 'Vokabular',
@@ -523,7 +523,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   populateLlmModelSelect('openai');
   setupLanguagePicker();
   applyTranslations();
-  setupSidebarToggle();
+  setupSidebarResize();
   setupSidebarNav();
   setupShortcutCapture();
   setupOptionToggles();
@@ -595,14 +595,14 @@ function showFeedbackPrompt() {
     ? {
         title: 'Wie läuft es mit Landa?',
         body: 'Du nutzt Landa jetzt seit ein paar Tagen. Hast du eine Minute, um zu teilen, was funktioniert und was nicht? Es hilft uns enorm.',
-        give: 'Feedback geben',
+        give: 'Feedback',
         later: 'Später',
         never: 'Nicht mehr fragen',
       }
     : {
         title: 'How\'s Landa working out?',
         body: 'You\'ve been using Landa for a few days. Got a minute to share what\'s working and what\'s not? It really helps us improve.',
-        give: 'Give feedback',
+        give: 'Feedback',
         later: 'Maybe later',
         never: 'Don\'t ask again',
       };
@@ -654,17 +654,38 @@ function showFeedbackPrompt() {
 // Sidebar Toggle
 // ---------------------------------------------------------------------------
 
-function setupSidebarToggle() {
+function setupSidebarResize() {
+  if (platform !== 'darwin') return;
+
   const sidebar = document.getElementById('sidebar');
-  const btn = document.getElementById('sidebar-toggle');
+  const handle = document.getElementById('sidebar-resize-handle');
+  const MIN_WIDTH = 160;
+  const MAX_WIDTH = 300;
 
-  if (localStorage.getItem('sidebar-collapsed') === 'true') {
-    sidebar.classList.add('collapsed');
-  }
+  const saved = parseInt(localStorage.getItem('sidebar-width'), 10);
+  if (saved >= MIN_WIDTH && saved <= MAX_WIDTH) sidebar.style.width = saved + 'px';
 
-  btn.addEventListener('click', () => {
-    sidebar.classList.toggle('collapsed');
-    localStorage.setItem('sidebar-collapsed', sidebar.classList.contains('collapsed'));
+  handle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebar.getBoundingClientRect().width;
+    sidebar.style.transition = 'none';
+    document.body.style.cursor = 'col-resize';
+
+    const onMove = (e) => {
+      const width = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + e.clientX - startX));
+      sidebar.style.width = width + 'px';
+    };
+    const onUp = () => {
+      sidebar.style.transition = '';
+      document.body.style.cursor = '';
+      localStorage.setItem('sidebar-width', parseInt(sidebar.style.width, 10));
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
   });
 }
 
