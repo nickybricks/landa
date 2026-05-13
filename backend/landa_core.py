@@ -874,17 +874,47 @@ def paste_text(text: str) -> None:
             import ctypes
             import ctypes.wintypes
 
-            # Write text to clipboard via Win32 API
+            user32 = ctypes.windll.user32
+            kernel32 = ctypes.windll.kernel32
+
+            # Declare argtypes/restype so 64-bit handles are not truncated to 32-bit
+            kernel32.GlobalAlloc.restype = ctypes.c_void_p
+            kernel32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
+            kernel32.GlobalLock.restype = ctypes.c_void_p
+            kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+            kernel32.GlobalUnlock.restype = ctypes.c_bool
+            kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+            kernel32.GetLastError.restype = ctypes.c_ulong
+            kernel32.GetLastError.argtypes = []
+            user32.OpenClipboard.restype = ctypes.c_bool
+            user32.OpenClipboard.argtypes = [ctypes.c_void_p]
+            user32.EmptyClipboard.restype = ctypes.c_bool
+            user32.EmptyClipboard.argtypes = []
+            user32.SetClipboardData.restype = ctypes.c_void_p
+            user32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+            user32.CloseClipboard.restype = ctypes.c_bool
+            user32.CloseClipboard.argtypes = []
+
             CF_UNICODETEXT = 13
-            ctypes.windll.user32.OpenClipboard(0)
-            ctypes.windll.user32.EmptyClipboard()
             encoded = text.encode("utf-16-le") + b"\x00\x00"
-            hglob = ctypes.windll.kernel32.GlobalAlloc(0x0002, len(encoded))  # GMEM_MOVEABLE
-            ptr = ctypes.windll.kernel32.GlobalLock(hglob)
+
+            if not user32.OpenClipboard(None):
+                raise RuntimeError(f"OpenClipboard failed: {kernel32.GetLastError()}")
+            user32.EmptyClipboard()
+            hglob = kernel32.GlobalAlloc(0x0002, len(encoded))  # GMEM_MOVEABLE
+            if not hglob:
+                user32.CloseClipboard()
+                raise RuntimeError(f"GlobalAlloc failed: {kernel32.GetLastError()}")
+            ptr = kernel32.GlobalLock(hglob)
+            if not ptr:
+                user32.CloseClipboard()
+                raise RuntimeError(f"GlobalLock failed: {kernel32.GetLastError()}")
             ctypes.memmove(ptr, encoded, len(encoded))
-            ctypes.windll.kernel32.GlobalUnlock(hglob)
-            ctypes.windll.user32.SetClipboardData(CF_UNICODETEXT, hglob)
-            ctypes.windll.user32.CloseClipboard()
+            kernel32.GlobalUnlock(hglob)
+            result = user32.SetClipboardData(CF_UNICODETEXT, hglob)
+            user32.CloseClipboard()
+            if not result:
+                raise RuntimeError(f"SetClipboardData failed: {kernel32.GetLastError()}")
 
             time.sleep(0.05)
 
@@ -922,6 +952,9 @@ def paste_text(text: str) -> None:
                 _anonymous_ = ("_input",)
                 _fields_ = [("type", ctypes.wintypes.DWORD), ("_input", _INPUT)]
 
+            user32.SendInput.restype = ctypes.c_uint
+            user32.SendInput.argtypes = [ctypes.c_uint, ctypes.c_void_p, ctypes.c_int]
+
             def make_key(vk, flags=0):
                 i = INPUT()
                 i.type = INPUT_KEYBOARD
@@ -935,10 +968,10 @@ def paste_text(text: str) -> None:
                 make_key(VK_V, KEYEVENTF_KEYUP),
                 make_key(VK_CONTROL, KEYEVENTF_KEYUP),
             )
-            sent = ctypes.windll.user32.SendInput(4, inputs, ctypes.sizeof(INPUT))
+            sent = user32.SendInput(4, inputs, ctypes.sizeof(INPUT))
             if sent != 4:
-                err = ctypes.windll.kernel32.GetLastError()
-                logging.error("SendInput sent %d/4 events (GetLastError=%d, cbSize=%d)", sent, err, ctypes.sizeof(INPUT))
+                err = kernel32.GetLastError()
+                logging.error("SendInput sent %d/4 events (GetLastError=%d)", sent, err)
         except Exception as e:
             logging.error("Auto-paste failed on Windows: %s", e)
         finally:
