@@ -393,6 +393,14 @@ async function handleHotkeyPress() {
           } catch (err) {
             console.error('[Landa] Direct paste failed:', err.message);
           }
+        } else if (stopResponse && stopResponse.text && process.platform === 'win32') {
+          try {
+            clipboard.writeText(stopResponse.text);
+            await execAsync('powershell -command "(New-Object -COM WScript.Shell).SendKeys(\'^v\')"');
+            console.log(`[Landa] Direct paste triggered from /stop response (win32)`);
+          } catch (err) {
+            console.error('[Landa] Direct paste failed (win32):', err.message);
+          }
         }
       } else {
         const startResp = await api.startRecording();

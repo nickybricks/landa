@@ -870,6 +870,14 @@ def paste_text(text: str) -> None:
         _transcription_ready.set()  # unblocks api_stop if it's waiting
         _pending_paste = True  # fallback: poll-based paste if api_stop already returned
     elif sys.platform == "win32":
+        # Windows clipboard + Ctrl+V is handled by the Electron main process
+        # (clipboard.writeText + PowerShell SendKeys). The Python ctypes path
+        # below is kept as a fallback only if Electron does not paste directly
+        # (e.g. when /stop is called without main-process involvement).
+        _transcription_text = text
+        _transcription_ready.set()
+        _pending_paste = True
+        return
         try:
             import ctypes
             import ctypes.wintypes
