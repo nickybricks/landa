@@ -1,6 +1,6 @@
 {
   "name": "landa",
-  "version": "0.24.2",
+  "version": "0.24.3",
   "description": "Talk into any app. Landa types it for you — formatted, polished, and private.",
   "main": "main.js",
   "scripts": {
@@ -45,6 +45,12 @@
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "allowToChangeInstallationDirectory": false,
+      "deleteAppDataOnUninstall": false,
+      "installerLanguages": ["en_US"],
+      "perMachine": false
     },
     "files": [
       "main.js",
