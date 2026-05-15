@@ -1183,11 +1183,22 @@ function startBackend() {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
+  const backendLogPath = process.platform === 'win32'
+    ? path.join(app.getPath('desktop'), 'landa-backend.log')
+    : null;
+  const writeBackendLog = (chunk) => {
+    if (!backendLogPath) return;
+    try { fs.appendFileSync(backendLogPath, chunk); } catch {}
+  };
   backendProcess.stdout.on('data', (data) => {
-    console.log(`[backend] ${data.toString().trim()}`);
+    const str = data.toString();
+    console.log(`[backend] ${str.trim()}`);
+    writeBackendLog(str);
   });
   backendProcess.stderr.on('data', (data) => {
-    console.log(`[backend] ${data.toString().trim()}`);
+    const str = data.toString();
+    console.log(`[backend] ${str.trim()}`);
+    writeBackendLog(str);
   });
 
   backendProcess.on('error', (err) => {
