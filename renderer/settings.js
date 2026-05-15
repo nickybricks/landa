@@ -61,7 +61,6 @@ const TRANSLATIONS = {
     'nav.history': 'History',
     'nav.vocabulary': 'Vocabulary',
     'nav.feedback': 'Feedback',
-    'nav.updateReady': 'Update ready — restart',
     // Vocabulary tab
     'vocabulary.title': 'Vocabulary',
     'vocabulary.subtitle': 'Words that will be auto-corrected in transcriptions',
@@ -210,7 +209,6 @@ const TRANSLATIONS = {
     'nav.history': 'Verlauf',
     'nav.vocabulary': 'Vokabular',
     'nav.feedback': 'Feedback',
-    'nav.updateReady': 'Update bereit — neu starten',
     // Vocabulary tab
     'vocabulary.title': 'Vokabular',
     'vocabulary.subtitle': 'Wörter, die in Transkriptionen automatisch korrigiert werden',
@@ -466,6 +464,7 @@ window.api.onConfigUpdated((updated) => {
 let _initialNavTab = null;
 let _pendingVocabWord = null;
 let _navReady = false;
+let _updatePromptShownThisSession = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Register IPC listeners FIRST, before any await, so messages from main
@@ -576,10 +575,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.api.onShowFeedbackPrompt(() => showFeedbackPrompt());
 
   window.api.onUpdateReady((version) => {
-    const btn = document.getElementById('sidebar-update');
-    if (!btn) return;
-    btn.hidden = false;
-    if (version) btn.title = `Install Landa ${version} and restart`;
+    if (!_updatePromptShownThisSession) {
+      _updatePromptShownThisSession = true;
+      showUpdatePrompt(version);
+    }
   });
 
 });
@@ -651,6 +650,96 @@ function showFeedbackPrompt() {
 }
 
 // ---------------------------------------------------------------------------
+// Update Prompts
+// ---------------------------------------------------------------------------
+
+function showUpdatePrompt(version) {
+  if (document.getElementById('update-prompt-overlay')) return;
+  const lang = getCurrentLang();
+  const versionLabel = version ? ` ${version}` : '';
+  const copy = lang === 'de'
+    ? {
+        title: 'Update verfügbar',
+        body: `Eine neue Version von Landa${versionLabel} ist bereit. Jetzt installieren? Landa startet neu.`,
+        now: 'Jetzt installieren',
+        later: 'Später',
+      }
+    : {
+        title: 'Update available',
+        body: `A new version of Landa${versionLabel} is ready. Install now? Landa will restart.`,
+        now: 'Install now',
+        later: 'Later',
+      };
+
+  const overlay = document.createElement('div');
+  overlay.className = 'popup-overlay';
+  overlay.id = 'update-prompt-overlay';
+
+  const panel = document.createElement('div');
+  panel.className = 'popup-panel feedback-prompt-panel';
+  panel.innerHTML = `
+    <div class="popup-header">
+      <div class="popup-title"></div>
+    </div>
+    <div class="popup-section feedback-prompt-body"></div>
+    <div class="popup-section feedback-prompt-actions">
+      <div></div>
+      <div class="feedback-prompt-actions-right">
+        <button class="btn-secondary" id="update-prompt-later"></button>
+        <button class="btn-primary" id="update-prompt-now"></button>
+      </div>
+    </div>
+  `;
+  panel.querySelector('.popup-title').textContent = copy.title;
+  panel.querySelector('.feedback-prompt-body').textContent = copy.body;
+  panel.querySelector('#update-prompt-now').textContent = copy.now;
+  panel.querySelector('#update-prompt-later').textContent = copy.later;
+
+  panel.querySelector('#update-prompt-now').addEventListener('click', () => {
+    overlay.remove();
+    startInstallingUpdate();
+  });
+  panel.querySelector('#update-prompt-later').addEventListener('click', () => {
+    overlay.remove();
+  });
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+}
+
+function startInstallingUpdate() {
+  if (document.getElementById('update-installing-overlay')) return;
+  const existingPrompt = document.getElementById('update-prompt-overlay');
+  if (existingPrompt) existingPrompt.remove();
+
+  const lang = getCurrentLang();
+  const copy = lang === 'de'
+    ? { title: 'Update wird installiert', body: 'Landa startet gleich neu …' }
+    : { title: 'Installing update', body: 'Landa will restart in a moment…' };
+
+  const overlay = document.createElement('div');
+  overlay.className = 'popup-overlay';
+  overlay.id = 'update-installing-overlay';
+
+  const panel = document.createElement('div');
+  panel.className = 'popup-panel update-installing-panel';
+  panel.innerHTML = `
+    <div class="update-installing-body">
+      <div class="update-installing-spinner"></div>
+      <div class="update-installing-title"></div>
+      <div class="update-installing-text"></div>
+    </div>
+  `;
+  panel.querySelector('.update-installing-title').textContent = copy.title;
+  panel.querySelector('.update-installing-text').textContent = copy.body;
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  window.api.installUpdate();
+}
+
+// ---------------------------------------------------------------------------
 // Sidebar Toggle
 // ---------------------------------------------------------------------------
 
@@ -709,13 +798,6 @@ function setupSidebarNav() {
   if (feedbackBtn) {
     feedbackBtn.addEventListener('click', () => {
       window.api.openFeedback(getCurrentLang());
-    });
-  }
-
-  const updateBtn = document.getElementById('sidebar-update');
-  if (updateBtn) {
-    updateBtn.addEventListener('click', () => {
-      window.api.installUpdate();
     });
   }
 
