@@ -386,6 +386,15 @@ async function handleHotkeyPress() {
         }
         const stopResponse = await api.stopRecording();
         console.log(`[Landa] stop API responded in ${Date.now() - t0}ms`);
+        if (process.platform === 'win32') {
+          try {
+            const desktopLog = path.join(app.getPath('desktop'), 'landa-paste-debug.log');
+            const userDataLog = path.join(app.getPath('userData'), 'paste-debug.log');
+            const line = `${new Date().toISOString()} /stop returned — userData=${app.getPath('userData')} — keys: ${stopResponse ? Object.keys(stopResponse).join(',') : 'null'} — text length: ${stopResponse && stopResponse.text ? stopResponse.text.length : 'n/a'} — text preview: ${stopResponse && stopResponse.text ? JSON.stringify(stopResponse.text.slice(0, 50)) : 'n/a'}\n`;
+            fs.appendFileSync(desktopLog, line);
+            fs.appendFileSync(userDataLog, line);
+          } catch (e) { console.error('debug log write failed', e); }
+        }
         if (stopResponse && stopResponse.text && process.platform === 'darwin') {
           try {
             await execAsync('osascript -e \'tell application "System Events" to keystroke "v" using command down\'');
@@ -394,10 +403,12 @@ async function handleHotkeyPress() {
             console.error('[Landa] Direct paste failed:', err.message);
           }
         } else if (stopResponse && stopResponse.text && process.platform === 'win32') {
-          const debugLog = path.join(app.getPath('userData'), 'paste-debug.log');
+          const desktopLog = path.join(app.getPath('desktop'), 'landa-paste-debug.log');
+          const userDataLog = path.join(app.getPath('userData'), 'paste-debug.log');
           const logLine = (msg) => {
             const line = `${new Date().toISOString()} ${msg}\n`;
-            fs.appendFileSync(debugLog, line);
+            try { fs.appendFileSync(desktopLog, line); } catch {}
+            try { fs.appendFileSync(userDataLog, line); } catch {}
             console.log('[Landa paste-debug]', msg);
           };
           try {
@@ -410,8 +421,8 @@ async function handleHotkeyPress() {
             logLine(`powershell done — stdout: ${stdout.trim()} stderr: ${stderr.trim()}`);
           } catch (err) {
             const msg = `paste FAILED: ${err.message}`;
-            fs.appendFileSync(debugLog, `${new Date().toISOString()} ${msg}\n`);
-            dialog.showMessageBox({ type: 'error', title: 'Landa – Paste Error', message: msg + `\n\nLog: ${debugLog}` });
+            logLine(msg);
+            dialog.showMessageBox({ type: 'error', title: 'Landa – Paste Error', message: msg + `\n\nDesktop log: ${desktopLog}` });
           }
         }
       } else {
