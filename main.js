@@ -394,12 +394,24 @@ async function handleHotkeyPress() {
             console.error('[Landa] Direct paste failed:', err.message);
           }
         } else if (stopResponse && stopResponse.text && process.platform === 'win32') {
+          const debugLog = path.join(app.getPath('userData'), 'paste-debug.log');
+          const logLine = (msg) => {
+            const line = `${new Date().toISOString()} ${msg}\n`;
+            fs.appendFileSync(debugLog, line);
+            console.log('[Landa paste-debug]', msg);
+          };
           try {
+            logLine(`paste_start — text length: ${stopResponse.text.length}`);
             clipboard.writeText(stopResponse.text);
-            await execAsync('powershell -command "(New-Object -COM WScript.Shell).SendKeys(\'^v\')"');
-            console.log(`[Landa] Direct paste triggered from /stop response (win32)`);
+            const verify = clipboard.readText();
+            logLine(`clipboard_write done — verify match: ${verify === stopResponse.text} — clipboard length: ${verify.length}`);
+            logLine('sending Ctrl+V via PowerShell...');
+            const { stdout, stderr } = await execAsync('powershell -command "(New-Object -COM WScript.Shell).SendKeys(\'^v\')"');
+            logLine(`powershell done — stdout: ${stdout.trim()} stderr: ${stderr.trim()}`);
           } catch (err) {
-            console.error('[Landa] Direct paste failed (win32):', err.message);
+            const msg = `paste FAILED: ${err.message}`;
+            fs.appendFileSync(debugLog, `${new Date().toISOString()} ${msg}\n`);
+            dialog.showMessageBox({ type: 'error', title: 'Landa – Paste Error', message: msg + `\n\nLog: ${debugLog}` });
           }
         }
       } else {
