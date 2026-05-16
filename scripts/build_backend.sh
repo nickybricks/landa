@@ -24,6 +24,7 @@ pyinstaller \
   --workpath build \
   --specpath . \
   --add-data "models/landa-base.bin:models" \
+  --collect-data faster_whisper \
   landa_core.py
 
 deactivate
