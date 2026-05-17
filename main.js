@@ -92,12 +92,37 @@ let updateDownloadStarted = false;
 function notifyUpdateReady(version) {
   if (settingsWindow && !settingsWindow.isDestroyed()) {
     settingsWindow.webContents.send('update-ready', version);
+    return;
+  }
+  // Settings window closed (the normal case — Landa runs in the tray).
+  // Without this, the downloaded update sits unused until the user happens
+  // to open Settings, so they stay on the old version indefinitely. Show a
+  // native blocking dialog instead.
+  const choice = dialog.showMessageBoxSync({
+    type: 'info',
+    buttons: ['Jetzt neu starten', 'Später'],
+    defaultId: 0,
+    cancelId: 1,
+    title: 'Landa Update',
+    message: `Landa ${version} ist bereit zur Installation.`,
+    detail: 'Landa startet neu, um das Update anzuwenden.',
+  });
+  if (choice === 0) {
+    setImmediate(() => {
+      try {
+        autoUpdater.quitAndInstall();
+      } catch (err) {
+        console.error('[updater] quitAndInstall failed:', err && err.message ? err.message : err);
+      }
+    });
   }
 }
 
 function setupAutoUpdater() {
   autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = false;
+  // Safety net: if the user dismisses the update dialog, still apply the
+  // downloaded update the next time Landa quits/restarts.
+  autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on('update-available', (info) => {
     if (updateDownloadStarted) return;
