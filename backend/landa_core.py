@@ -7,8 +7,10 @@ local HTTP API on localhost:7890 for the Electron frontend.
 
 import base64
 import datetime
+import faulthandler
 import json
 import logging
+import logging.handlers
 import os
 import queue
 import re
@@ -31,7 +33,35 @@ from landa_streamer import LandaStreamer
 from landa_constants import LANDA_APP_SECRET, LANDA_PROXY_URL
 from landa_lexicon import LexiconSet, load_lexicon
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+_LOG_DIR = Path.home() / ".landa" / "logs"
+_LOG_DIR.mkdir(parents=True, exist_ok=True)
+_LOG_PATH = _LOG_DIR / "backend.log"
+
+_log_formatter = logging.Formatter(
+    "%(asctime)s.%(msecs)03d %(levelname)s [%(threadName)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+_root_logger = logging.getLogger()
+_root_logger.setLevel(logging.INFO)
+_console_handler = logging.StreamHandler()
+_console_handler.setFormatter(_log_formatter)
+_root_logger.addHandler(_console_handler)
+_file_handler = logging.handlers.RotatingFileHandler(
+    _LOG_PATH, maxBytes=2_000_000, backupCount=3, encoding="utf-8"
+)
+_file_handler.setFormatter(_log_formatter)
+_root_logger.addHandler(_file_handler)
+
+# faulthandler lets the teardown watchdog dump every thread's native+Python
+# stack when stop()/close() wedges inside PortAudio — the only way to see
+# *where* it's stuck rather than just *that* it's stuck.
+faulthandler.enable()
+try:
+    _fault_log = open(_LOG_DIR / "backend-fault.log", "a", encoding="utf-8")
+except OSError:
+    _fault_log = sys.stderr
+
+logging.info("[startup] logging to %s", _LOG_PATH)
 
 # ---------------------------------------------------------------------------
 # Config
@@ -146,10 +176,12 @@ DEFAULT_CONFIG: dict = {
         "enabled": {
             "personal-message": False,
             "email": False,
+            "notes": False,
         },
         "selections": {
             "personal-message": "formal",
             "email": "formal",
+            "notes": "smart",
         },
         "categories": {
             "email": {
@@ -159,6 +191,10 @@ DEFAULT_CONFIG: dict = {
             "personal-message": {
                 "linkedApps": ["Slack", "Discord", "WhatsApp"],
                 "linkedUrls": [],
+            },
+            "notes": {
+                "linkedApps": ["Notes", "Notepad", "Notion"],
+                "linkedUrls": ["notion.so"],
             },
         },
         "toggles": {
@@ -171,6 +207,9 @@ DEFAULT_CONFIG: dict = {
                 "formal": {"use_emoji": False},
                 "casual": {"use_emoji": False},
                 "excited": {"use_emoji": False},
+            },
+            "notes": {
+                "smart": {},
             },
         },
     },
@@ -219,7 +258,7 @@ def _migrate(cfg: dict) -> tuple[dict, bool]:
 
     # ensure modes config exists
     if "modes" not in cfg:
-        cfg["modes"] = {"selections": {"personal-message": "formal", "email": "formal"}}
+        cfg["modes"] = {"selections": {"personal-message": "formal", "email": "formal", "notes": "smart"}}
         changed = True
     elif "selections" not in cfg["modes"]:
         cfg["modes"]["selections"] = {"personal-message": "formal", "email": "formal"}
@@ -231,6 +270,9 @@ def _migrate(cfg: dict) -> tuple[dict, bool]:
             changed = True
         if "email" not in sels:
             sels["email"] = "formal"
+            changed = True
+        if "notes" not in sels:
+            sels["notes"] = "smart"
             changed = True
 
     # ensure categories config exists with defaults
@@ -245,6 +287,10 @@ def _migrate(cfg: dict) -> tuple[dict, bool]:
                 "linkedApps": ["Slack", "Discord", "WhatsApp", "Telegram", "Signal"],
                 "linkedUrls": [],
             },
+            "notes": {
+                "linkedApps": ["Notes", "Notepad", "Notion"],
+                "linkedUrls": ["notion.so"],
+            },
         }
         changed = True
     else:
@@ -255,6 +301,26 @@ def _migrate(cfg: dict) -> tuple[dict, bool]:
         if "personal-message" not in cats:
             cats["personal-message"] = {"linkedApps": ["Slack", "Discord", "WhatsApp", "Telegram", "Signal"], "linkedUrls": []}
             changed = True
+        if "notes" not in cats:
+            cats["notes"] = {"linkedApps": ["Notes", "Notepad", "Notion"], "linkedUrls": ["notion.so"]}
+            changed = True
+        else:
+            # Enrich pre-existing notes config with Notion (added after notes shipped).
+            nc = cats["notes"]
+            if "Notion" not in nc.get("linkedApps", []):
+                nc.setdefault("linkedApps", []).append("Notion")
+                changed = True
+            if "notion.so" not in nc.get("linkedUrls", []):
+                nc.setdefault("linkedUrls", []).append("notion.so")
+                changed = True
+
+    # Notes profile defaults OFF for existing users. Existing configs replace the
+    # whole "modes" dict on merge, so is_category_enabled would fall back to True
+    # for the new "notes" key — pin it to False explicitly unless the user set it.
+    enabled = modes.setdefault("enabled", {})
+    if "notes" not in enabled:
+        enabled["notes"] = False
+        changed = True
 
     # ensure llm fields exist
     if "llm_provider" not in cfg:
@@ -380,6 +446,18 @@ _EMAIL_GUARDRAILS = (
     "Return only the email body."
 )
 
+_NOTES_GUARDRAILS = (
+    "CRITICAL anti-invention rule: Unless the speaker explicitly asks you to generate "
+    "content (see the request rule above), only output items, words, and facts that were "
+    "actually spoken. Never invent, guess, or suggest list entries, examples, names, dates, "
+    "or numbers of your own — not even typical or plausible ones. "
+    "Merely announcing or stating intent is NOT a request: if the speaker says something like "
+    "'I still need to buy the following for the party' but names no concrete items, do NOT "
+    "create any list items — keep only the sentence that was said (you still add a title). "
+    "Do not translate or change the language. "
+    "Return only the note text (title + body), with no explanation and no echo of any instruction."
+)
+
 MODE_SYSTEM_PROMPTS: dict[str, dict[str, str]] = {
     "personal-message": {
         "formal": (
@@ -435,7 +513,63 @@ MODE_SYSTEM_PROMPTS: dict[str, dict[str, str]] = {
             + _EMAIL_GUARDRAILS
         ),
     },
+    "notes": {
+        "smart": "",  # filled below by _NOTES_SMART_PLAIN (kept generic for fallback)
+    },
 }
+
+# Shared behavioural core for the Notes "smart" mode. The list/heading markers are
+# left as "the list marker (see FORMAT)" so the plain-text and Notion variants can
+# stay behaviourally identical while differing only in output formatting.
+_NOTES_SMART_CORE = (
+    "Turn the following dictated speech into a clean, well-structured note, like a "
+    "smart assistant would. Decide yourself which structure fits best — do not force a "
+    "fixed template, and let it vary with the content.\n"
+    "TITLE: Add a short title on the first line (then a blank line, then the body) "
+    "ONLY when the dictation has a clear topic or context that a title genuinely "
+    "clarifies (e.g. 'Einkauf für die Party', 'Spicy Margarita'). Do NOT add a title "
+    "when the speaker just lists items or thoughts with no stated context — in that "
+    "case start directly with the list or text, no invented heading.\n"
+    "STRUCTURE:\n"
+    "- If concrete items, tasks, or things to buy/do were named, put each named item on "
+    "its own line using the list marker (see FORMAT), one short item per line.\n"
+    "- If it is connected thoughts, write clean prose in short paragraphs.\n"
+    "- If it covers several groups, add short sub-headings (see FORMAT) and group related "
+    "points under them, with list-marker lines for sub-lists.\n"
+    "REQUEST RULE (act like an agent): If the speaker explicitly asks you to produce "
+    "known content — e.g. 'add the ingredients for a Spicy Margarita', 'make me a packing "
+    "list for a ski weekend', 'what do I need for X' — then fully and accurately generate "
+    "that content under a fitting heading. Do not echo the instruction itself; output only "
+    "the requested result. This is the ONLY case where you may add knowledge of your own.\n"
+)
+
+_NOTES_SMART_TAIL = (
+    "Fix grammar, spelling, and punctuation, remove filler words and false starts, "
+    "and keep it concise. " + _NOTES_GUARDRAILS
+)
+
+# Plain text — for Apple Notes / Notepad, which do NOT render Markdown on paste.
+_NOTES_SMART_PLAIN = (
+    _NOTES_SMART_CORE
+    + "FORMAT: Output plain text only — no Markdown: never use '#', '*', '_', or "
+    "backticks. The list marker is '- '. A title or sub-heading is just a short line "
+    "on its own (there is no large or bold text — it is pasted as plain text). "
+    + _NOTES_SMART_TAIL
+)
+
+# Notion-flavoured Markdown — Notion converts this into real blocks on paste.
+_NOTES_SMART_NOTION = (
+    _NOTES_SMART_CORE
+    + "FORMAT: This note is pasted into Notion, which turns Markdown into real blocks. "
+    "Use Markdown: the title is '# Title' and sub-headings are '## Subheading'. "
+    "For tasks or things to buy/do, start each line with '[] ' (Notion's own to-do "
+    "syntax — it becomes a real checkbox; do NOT use a leading '-' for these). "
+    "For purely informational lists use '- item'. Separate paragraphs with a blank line. "
+    "Do not wrap the note in code fences or backticks. "
+    + _NOTES_SMART_TAIL
+)
+
+MODE_SYSTEM_PROMPTS["notes"]["smart"] = _NOTES_SMART_PLAIN
 
 # Per-style greeting / sign-off instructions, applied conditionally via toggles in get_mode_prompt.
 _EMAIL_GREETINGS: dict[str, str] = {
@@ -490,11 +624,61 @@ REFORMAT_PROMPTS: dict[str, str] = {
 }
 
 
+def _detect_active_app_windows() -> str:
+    """Return the foreground window's process name (without .exe) on Windows.
+
+    Uses ctypes only (no extra deps). Browser URL detection is not attempted on
+    Windows — profiles match on the app name. Returns "" on any failure.
+    """
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+
+        user32.GetForegroundWindow.restype = wintypes.HWND
+        hwnd = user32.GetForegroundWindow()
+        if not hwnd:
+            return ""
+
+        pid = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if not pid.value:
+            return ""
+
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
+        if not handle:
+            return ""
+        try:
+            buf = ctypes.create_unicode_buffer(260)
+            size = wintypes.DWORD(260)
+            kernel32.QueryFullProcessImageNameW.argtypes = [
+                wintypes.HANDLE, wintypes.DWORD,
+                ctypes.c_wchar_p, ctypes.POINTER(wintypes.DWORD),
+            ]
+            if not kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+                return ""
+            name = os.path.basename(buf.value)
+            if name.lower().endswith(".exe"):
+                name = name[:-4]
+            return name
+        finally:
+            kernel32.CloseHandle(handle)
+    except Exception:
+        return ""
+
+
 def detect_active_app() -> tuple[str, str]:
     """Return (app_name, url) of the frontmost app via AppleScript (macOS only).
 
     For browsers, also retrieves the URL of the active tab.
     """
+    if sys.platform == "win32":
+        return (_detect_active_app_windows(), "")
     if sys.platform != "darwin":
         return ("", "")
     app_name = ""
@@ -606,6 +790,16 @@ def get_active_category() -> str | None:
     return None
 
 
+def _is_notion_target() -> bool:
+    """True if the frontmost app is the Notion desktop app or a Notion web page.
+    Reads the same cached active-app value get_active_category() already consumed."""
+    app_name, url = _consume_active_app()
+    if "notion" in app_name.lower():
+        return True
+    url_lower = url.lower()
+    return "notion.so" in url_lower or "notion.site" in url_lower
+
+
 def get_mode_prompt() -> str | None:
     """Get the system prompt for the current active app + selected style.
     Returns None if the active category is disabled (raw transcription)."""
@@ -613,10 +807,10 @@ def get_mode_prompt() -> str | None:
     if category is None:
         return None
     selections = config.get("modes", {}).get("selections", {})
-    style = selections.get(category, "formal")
-    prompt = MODE_SYSTEM_PROMPTS.get(category, MODE_SYSTEM_PROMPTS["personal-message"]).get(
-        style, MODE_SYSTEM_PROMPTS["personal-message"]["formal"]
-    )
+    cat_prompts = MODE_SYSTEM_PROMPTS.get(category, MODE_SYSTEM_PROMPTS["personal-message"])
+    default_style = "smart" if category == "notes" else "formal"
+    style = selections.get(category, default_style)
+    prompt = cat_prompts.get(style) or cat_prompts.get(default_style) or MODE_SYSTEM_PROMPTS["personal-message"]["formal"]
     toggles = config.get("modes", {}).get("toggles", {}).get(category, {}).get(style, {})
     if category == "email":
         if toggles.get("include_greeting", True):
@@ -634,6 +828,11 @@ def get_mode_prompt() -> str | None:
                 "Do not decorate every sentence. Many messages should have no emoji at all — only use one when it clearly enhances the meaning or tone. "
                 "Place it inline where it feels organic, never as decoration at the start or end."
             )
+    elif category == "notes":
+        # Notion renders Markdown on paste (real checkboxes/headings); Apple Notes
+        # and Notepad do not, so they get the plain-text variant.
+        if _is_notion_target():
+            prompt = _NOTES_SMART_NOTION
     return prompt
 
 
@@ -822,6 +1021,9 @@ _pending_paste = False  # set True when clipboard is ready; Electron main proces
 _transcription_ready = threading.Event()  # set by paste_text when transcription result is in clipboard
 _transcription_text: str | None = None    # the transcribed text, readable by api_stop
 audio_frames: list[np.ndarray] = []
+_callback_count: int = 0          # audio callbacks since last start (teardown forensics)
+_last_callback_ts: float = 0.0    # time.time() of most recent audio callback
+_start_device_desc: str = ""      # device snapshot taken at start_recording
 _audio_sum_sq: float = 0.0      # incremental sum-of-squares for fast silence check
 _audio_peak: float = 0.0        # incremental peak abs value
 _audio_total_samples: int = 0   # total samples captured
@@ -1309,8 +1511,25 @@ def _realtime_sender_thread() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _device_snapshot() -> str:
+    """One-line description of the current default input device + host API.
+    Used to correlate teardown hangs with mid-session device changes."""
+    try:
+        idx = sd.default.device[0]
+        info = sd.query_devices(idx, "input") if idx is not None else sd.query_devices(kind="input")
+        hostapi = sd.query_hostapis(info["hostapi"])["name"]
+        return f"name={info['name']!r} idx={info.get('index', idx)} hostapi={hostapi!r} sr={info.get('default_samplerate')}"
+    except Exception as e:
+        return f"<device query failed: {e}>"
+
+
 def _audio_callback(indata: np.ndarray, frames: int, time_info, status) -> None:
     global _audio_sum_sq, _audio_peak, _audio_total_samples, _current_level
+    global _callback_count, _last_callback_ts
+    _callback_count += 1
+    _last_callback_ts = time.time()
+    if status:
+        logging.warning("[audio_callback] PortAudio status flags: %s", status)
     if _is_on_hold:
         return
     audio_frames.append(indata.copy())
@@ -1331,8 +1550,10 @@ def _audio_callback(indata: np.ndarray, frames: int, time_info, status) -> None:
 def start_recording() -> bool:
     global recording, stream, audio_frames, _teardown_thread, _rt_queue, _rt_thread, _rt_transcript, _rt_error
     global _audio_sum_sq, _audio_peak, _audio_total_samples
+    global _callback_count, _last_callback_ts, _start_device_desc
     t0 = time.time()
-    logging.info("[start_recording] called")
+    _start_device_desc = _device_snapshot()
+    logging.info("[start_recording] called — device: %s", _start_device_desc)
     # Kick off active-app detection in parallel — its osascript calls are slow on macOS,
     # and we want the result cached by the time /stop runs the post-process pipeline.
     kickoff_active_app_detection()
@@ -1355,6 +1576,8 @@ def start_recording() -> bool:
             logging.info("[start_recording] already recording, returning False")
             return False
         audio_frames = []
+        _callback_count = 0
+        _last_callback_ts = 0.0
         _audio_sum_sq = 0.0
         _audio_peak = 0.0
         _audio_total_samples = 0
@@ -1450,7 +1673,14 @@ def start_recording() -> bool:
 def stop_recording() -> bool:
     global recording, _is_on_hold, stream, _teardown_thread
     t0 = time.time()
-    logging.info("[stop_recording] called")
+    _stop_device_desc = _device_snapshot()
+    _cb_age = (time.time() - _last_callback_ts) if _last_callback_ts else -1.0
+    logging.info(
+        "[stop_recording] called — callbacks=%d last_callback=%.3fs ago device=%s%s",
+        _callback_count, _cb_age, _stop_device_desc,
+        "" if _stop_device_desc == _start_device_desc
+        else f" (CHANGED from start: {_start_device_desc})",
+    )
     old_stream = None
     with lock:
         if not recording:
@@ -1474,6 +1704,7 @@ def stop_recording() -> bool:
     # the thread; stop() itself is fast (< 100ms) and safe to do there too.
     if old_stream is not None:
         t_td = time.time()
+        _td_done = threading.Event()
         def _do_teardown():
             try:
                 logging.info("[stop_recording] stream.stop() starting...")
@@ -1483,8 +1714,27 @@ def stop_recording() -> bool:
                 logging.info("[stop_recording] stream.close() done, teardown complete (%.3fs)", time.time() - t_td)
             except Exception as e:
                 logging.error("[stop_recording] stream teardown error: %s", e)
-        td = threading.Thread(target=_do_teardown, daemon=True)
+            finally:
+                _td_done.set()
+        def _teardown_watchdog():
+            # Instrumentation only: if teardown wedges, dump every thread's
+            # stack so we can see exactly where PortAudio is stuck.
+            if not _td_done.wait(timeout=3.0):
+                logging.error(
+                    "[teardown_watchdog] teardown still running after 3s "
+                    "(callbacks=%d last_callback=%.3fs ago) — dumping all stacks",
+                    _callback_count,
+                    (time.time() - _last_callback_ts) if _last_callback_ts else -1.0,
+                )
+                faulthandler.dump_traceback(file=_fault_log, all_threads=True)
+                _fault_log.flush()
+                if not _td_done.wait(timeout=7.0):
+                    logging.error("[teardown_watchdog] still hung after 10s total — dumping again")
+                    faulthandler.dump_traceback(file=_fault_log, all_threads=True)
+                    _fault_log.flush()
+        td = threading.Thread(target=_do_teardown, daemon=True, name="stream-teardown")
         td.start()
+        threading.Thread(target=_teardown_watchdog, daemon=True, name="teardown-watchdog").start()
         _teardown_thread = td
 
     # Transcription runs concurrently — it only needs audio_frames, not the stream.

@@ -129,6 +129,7 @@ const TRANSLATIONS = {
     'modes.banner.empty': 'Click + to link apps or URLs to this profile',
     'modes.category.personal': 'Personal Message',
     'modes.category.email': 'Email',
+    'modes.category.notes': 'Notes',
     // Modes styles
     'modes.style.formal': 'Formal.',
     'modes.style.formal.sub': 'Caps + Punctuation',
@@ -136,6 +137,8 @@ const TRANSLATIONS = {
     'modes.style.casual.sub': 'Caps + Less punctuation',
     'modes.style.excited': 'Excited!',
     'modes.style.excited.sub': 'More exclamations',
+    'modes.style.smart': 'Smart',
+    'modes.style.smart.sub': 'Auto-formatted',
     // Modes card toggles
     'modes.toggle.include_greeting': 'Include greeting',
     'modes.toggle.include_sign_off': 'Include sign-off',
@@ -200,6 +203,7 @@ const TRANSLATIONS = {
     'modes.preview.email.formal': 'Hi Oscar,\n\nI wanted to follow up regarding our conversation earlier today. It was a pleasure discussing the project details with you.\n\nPlease don\'t hesitate to reach out if you have any further questions.\n\nBest regards,\nLotti',
     'modes.preview.email.casual': 'Hi Oscar,\n\ngreat talking with you today. Looking forward to catching up again soon\n\nBest,\nLotti',
     'modes.preview.email.excited': 'Hi Oscar,\n\nIt was great talking with you today! Really looking forward to our next chat!\n\nBest,\nLotti',
+    'modes.preview.notes.smart': 'Groceries\n- Tomatoes\n- Eggs\n- Milk\n- Bread',
   },
   de: {
     // Sidebar
@@ -277,6 +281,7 @@ const TRANSLATIONS = {
     'modes.banner.empty': 'Klicke auf +, um Apps oder URLs zu verknüpfen',
     'modes.category.personal': 'Persönliche Nachricht',
     'modes.category.email': 'E-Mail',
+    'modes.category.notes': 'Notizen',
     // Modes styles
     'modes.style.formal': 'Formell.',
     'modes.style.formal.sub': 'Großschreibung + Satzzeichen',
@@ -284,6 +289,8 @@ const TRANSLATIONS = {
     'modes.style.casual.sub': 'Großschreibung + weniger Satzzeichen',
     'modes.style.excited': 'Begeistert!',
     'modes.style.excited.sub': 'Mehr Ausrufezeichen',
+    'modes.style.smart': 'Smart',
+    'modes.style.smart.sub': 'Automatisch formatiert',
     // Modes card toggles
     'modes.toggle.include_greeting': 'Begrüßung einschließen',
     'modes.toggle.include_sign_off': 'Abschlussformel einschließen',
@@ -348,6 +355,7 @@ const TRANSLATIONS = {
     'modes.preview.email.formal': 'Hallo Oscar,\n\nich wollte mich bezüglich unseres heutigen Gesprächs nochmals melden. Es war mir eine Freude, die Projektdetails mit dir zu besprechen.\n\nBei weiteren Fragen stehe ich gerne zur Verfügung.\n\nMit freundlichen Grüßen\nLotti',
     'modes.preview.email.casual': 'Hi Oscar,\n\ntolles Gespräch heute. Freue mich schon auf unser nächstes Treffen.\n\nBeste Grüße\nLotti',
     'modes.preview.email.excited': 'Hi Oscar,\n\nes war wirklich toll, heute mit dir zu sprechen! Ich freue mich sehr auf unser nächstes Gespräch!\n\nBeste Grüße\nLotti',
+    'modes.preview.notes.smart': 'Einkauf\n- Tomaten\n- Eier\n- Milch\n- Brot',
   },
 };
 
@@ -1988,6 +1996,10 @@ const MODES_CATEGORIES = {
     name: 'Email',
     icon: '📧',
   },
+  'notes': {
+    name: 'Notes',
+    icon: '📝',
+  },
 };
 
 // Known app icons — label + background color for recognizable apps
@@ -2018,6 +2030,10 @@ const DEFAULT_CATEGORIES = {
     linkedApps: [],
     linkedUrls: [],
   },
+  'notes': {
+    linkedApps: [],
+    linkedUrls: [],
+  },
 };
 
 const MODES_STYLES = {
@@ -2025,6 +2041,19 @@ const MODES_STYLES = {
   casual: { name: 'Casual', subtitle: 'Caps + Less punctuation' },
   excited: { name: 'Excited!', subtitle: 'More exclamations' },
 };
+
+// Notes has a single Smart mode — the model decides the structure itself.
+const NOTES_STYLES = {
+  smart: { name: 'Smart', subtitle: 'Auto-formatted' },
+};
+
+function stylesForCategory(categoryId) {
+  return categoryId === 'notes' ? NOTES_STYLES : MODES_STYLES;
+}
+
+function defaultStyleFor(categoryId) {
+  return categoryId === 'notes' ? 'smart' : 'formal';
+}
 
 const CATEGORY_TOGGLES = {
   'email': [
@@ -2508,11 +2537,11 @@ function renderCategoryToggles() {
 function renderStyleCards(categoryId) {
   const container = document.getElementById('modes-cards');
   const selections = (config && config.modes && config.modes.selections) || {};
-  const currentStyle = selections[categoryId] || 'formal';
+  const currentStyle = selections[categoryId] || defaultStyleFor(categoryId);
 
   container.innerHTML = '';
 
-  for (const [styleId, style] of Object.entries(MODES_STYLES)) {
+  for (const [styleId, style] of Object.entries(stylesForCategory(categoryId))) {
     const preview = t(`modes.preview.${categoryId}.${styleId}`);
     const isSelected = styleId === currentStyle;
 
@@ -2525,6 +2554,8 @@ function renderStyleCards(categoryId) {
           <div class="mode-card-message-text">${preview.replace(/\n/g, '<br>')}</div>
           <div class="mode-card-message-time">${t('modes.card.just_now')}</div>
         </div>`
+      : categoryId === 'notes'
+      ? `<div class="mode-card-preview mode-card-note">${preview.replace(/\n/g, '<br>')}</div>`
       : `<div class="mode-card-to">${t('modes.card.to')}</div>
          <div class="mode-card-preview">${preview}</div>`;
 
@@ -2596,8 +2627,9 @@ function selectStyle(categoryId, styleId) {
 function updateCategorySubtitles() {
   const selections = (config && config.modes && config.modes.selections) || {};
   for (const [catId] of Object.entries(MODES_CATEGORIES)) {
-    const styleId = selections[catId] || 'formal';
-    const styleName = MODES_STYLES[styleId] ? t('modes.style.' + styleId).replace(/[.!]$/, '') : t('modes.style.formal').replace(/[.!]$/, '');
+    const styleId = selections[catId] || defaultStyleFor(catId);
+    const styles = stylesForCategory(catId);
+    const styleName = styles[styleId] ? t('modes.style.' + styleId).replace(/[.!]$/, '') : t('modes.style.' + defaultStyleFor(catId)).replace(/[.!]$/, '');
     const el = document.getElementById(`cat-style-${catId}`);
     if (el) el.textContent = styleName;
   }
