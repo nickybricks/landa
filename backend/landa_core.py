@@ -367,7 +367,21 @@ def load_config() -> dict:
         try:
             with open(CONFIG_PATH) as f:
                 saved = json.load(f)
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError) as e:
+            # Config is unreadable (e.g. truncated by a save interrupted during
+            # an app update). Never silently overwrite it — that permanently
+            # destroys the user's vocabulary and settings. Preserve the file
+            # for recovery, then fall back to defaults.
+            ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+            backup = CONFIG_PATH.with_name(f"config.corrupt-{ts}.json")
+            try:
+                os.replace(CONFIG_PATH, backup)
+                logging.error(
+                    "[config] Unreadable config (%s); backed up to %s, "
+                    "falling back to defaults", e, backup,
+                )
+            except OSError as be:
+                logging.error("[config] Could not back up corrupt config: %s", be)
             save_config(DEFAULT_CONFIG)
             return dict(DEFAULT_CONFIG)
         saved, changed = _migrate(saved)
@@ -381,9 +395,26 @@ def load_config() -> dict:
 
 def save_config(cfg: dict) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(CONFIG_PATH, "w") as f:
-        json.dump(cfg, f, indent=2)
-    os.chmod(CONFIG_PATH, 0o600)
+    # Atomic write: a save interrupted mid-flight (e.g. the app being killed
+    # during an update) must never leave a truncated config.json behind.
+    # Write to a temp file in the same dir, flush to disk, then atomically
+    # swap it into place so config.json is always a complete file.
+    fd, tmp_path = tempfile.mkstemp(
+        dir=CONFIG_DIR, prefix=".config-", suffix=".tmp"
+    )
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(cfg, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(tmp_path, 0o600)
+        os.replace(tmp_path, CONFIG_PATH)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 config = load_config()
