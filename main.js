@@ -26,6 +26,41 @@ const ONBOARDED_MARKER_PATH = path.join(CONFIG_DIR, '.onboarded');
 const FIRST_LAUNCH_PATH = path.join(CONFIG_DIR, '.first-launch-at');
 const FEEDBACK_PROMPTED_PATH = path.join(CONFIG_DIR, '.feedback-prompted');
 const FEEDBACK_PROMPT_DELAY_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
+
+// ---------------------------------------------------------------------------
+// Diagnostic logging
+//
+// Persists backend output, backend crashes, and uncaught main-process errors
+// to ~/Library/Logs/Landa (macOS) / %APPDATA%\Landa\logs (Windows) so support
+// can diagnose crashes and "dictation stopped working" reports. Each file is
+// capped and rotated once to bound disk usage.
+// ---------------------------------------------------------------------------
+
+const LOG_MAX_BYTES = 2 * 1024 * 1024; // 2 MB before rotating to .old
+
+function logDir() {
+  const dir = app.getPath('logs');
+  try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+  return dir;
+}
+
+function appendLog(fileName, text) {
+  try {
+    const file = path.join(logDir(), fileName);
+    try {
+      if (fs.statSync(file).size > LOG_MAX_BYTES) {
+        fs.renameSync(file, file + '.old');
+      }
+    } catch {} // file may not exist yet
+    fs.appendFileSync(file, text.endsWith('\n') ? text : text + '\n');
+  } catch {}
+}
+
+function logEvent(msg) {
+  const line = `${new Date().toISOString()} ${msg}`;
+  console.log(line);
+  appendLog('main.log', line);
+}
 const POLL_INTERVAL = 1000; // 1 second
 
 // In dev (unpackaged), load <repo>/.env so LANDA_PROXY_URL / LANDA_APP_SECRET
@@ -781,6 +816,10 @@ function updateTray() {
       label: 'Settings…',
       click: openSettings,
     },
+    {
+      label: 'Open Logs Folder',
+      click: () => shell.openPath(logDir()),
+    },
     { type: 'separator' },
     {
       label: 'Quit Landa',
@@ -1186,24 +1225,28 @@ function startBackend() {
   });
 
   backendProcess.stdout.on('data', (data) => {
-    console.log(`[backend] ${data.toString().trim()}`);
+    const str = data.toString();
+    console.log(`[backend] ${str.trim()}`);
+    appendLog('backend.log', str);
   });
   backendProcess.stderr.on('data', (data) => {
-    console.log(`[backend] ${data.toString().trim()}`);
+    const str = data.toString();
+    console.log(`[backend] ${str.trim()}`);
+    appendLog('backend.log', str);
   });
 
   backendProcess.on('error', (err) => {
-    console.error(`[Landa] Failed to start backend: ${err.message}`);
+    logEvent(`[Landa] Failed to start backend: ${err.message}`);
   });
 
   backendProcess.on('exit', (code) => {
-    console.log(`[Landa] Backend exited with code ${code}`);
+    logEvent(`[Landa] Backend exited with code ${code}`);
     backendProcess = null;
     if (appQuitting) return;
     // Backend crashed — reset any stuck state and restart
     hotkeyInFlight = false;
     setRecordingState(false);
-    console.log('[Landa] Backend crashed — restarting in 2s');
+    logEvent('[Landa] Backend crashed — restarting in 2s');
     setTimeout(startBackend, 2000);
   });
 
@@ -1919,6 +1962,13 @@ if (!gotLock) {
 
 app.on('second-instance', () => {
   if (settingsWindow) settingsWindow.focus();
+});
+
+process.on('uncaughtException', (err) => {
+  logEvent(`[Landa] Uncaught exception: ${err && err.stack ? err.stack : err}`);
+});
+process.on('unhandledRejection', (reason) => {
+  logEvent(`[Landa] Unhandled rejection: ${reason && reason.stack ? reason.stack : reason}`);
 });
 
 app.whenReady().then(() => {
