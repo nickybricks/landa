@@ -215,8 +215,8 @@
             <p class="apps-nav-desc" data-i18n="whatsappDesc"></p>
           </li>
           <li>
-            <a href="#app-slack" data-app-nav="slack">Slack</a>
-            <p class="apps-nav-desc" data-i18n="slackDesc"></p>
+            <a href="#app-chatgpt" data-app-nav="chatgpt">ChatGPT</a>
+            <p class="apps-nav-desc" data-i18n="chatgptDesc"></p>
           </li>
         </ul>
       </nav>
@@ -251,15 +251,19 @@
             </div>
           </div>
         </article>
-        <article class="app-panel" id="app-slack">
+        <article class="app-panel" id="app-chatgpt">
           <header class="app-panel-head">
-            <h3>Slack</h3>
-            <p data-i18n="slackDesc"></p>
+            <h3>ChatGPT</h3>
+            <p data-i18n="chatgptDesc"></p>
           </header>
-          <div class="video-placeholder">
-            <button class="play-btn" aria-label="Play Slack demo">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-            </button>
+          <div class="video-placeholder video-gif">
+            <video class="app-video" autoplay muted loop playsinline
+                   disablePictureInPicture oncontextmenu="return false"
+                   poster="landa-demo_chatgpt-poster.jpg"
+                   src="landa-demo_chatgpt.mp4"></video>
+            <div class="gif-pause-hint" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+            </div>
           </div>
         </article>
       </div>
