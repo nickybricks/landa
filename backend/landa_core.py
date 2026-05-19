@@ -1730,17 +1730,22 @@ def stop_recording() -> bool:
         except queue.Full:
             logging.warning("[stop_recording] realtime queue full — sender may have crashed")
 
-    # Stream teardown: stop() drains any buffered audio through the callback before
-    # halting — abort() would discard it.  close() can hang on macOS so it stays in
-    # the thread; stop() itself is fast (< 100ms) and safe to do there too.
+    # Stream teardown: use abort() not stop(). stop() blocks until PortAudio
+    # drains buffered audio, and on macOS/CoreAudio that call deadlocks and
+    # never returns — the zombie thread keeps holding the input device, so
+    # every subsequent InputStream creation times out and the mic stays dead
+    # until the backend restarts. By /stop time the callback has already
+    # accumulated all audio into audio_frames (transcription needs nothing
+    # from the stream), so the few buffered ms abort() discards are
+    # irrelevant for dictation.
     if old_stream is not None:
         t_td = time.time()
         _td_done = threading.Event()
         def _do_teardown():
             try:
-                logging.info("[stop_recording] stream.stop() starting...")
-                old_stream.stop()
-                logging.info("[stop_recording] stream.stop() done (%.3fs)", time.time() - t_td)
+                logging.info("[stop_recording] stream.abort() starting...")
+                old_stream.abort()
+                logging.info("[stop_recording] stream.abort() done (%.3fs)", time.time() - t_td)
                 old_stream.close()
                 logging.info("[stop_recording] stream.close() done, teardown complete (%.3fs)", time.time() - t_td)
             except Exception as e:
