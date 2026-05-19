@@ -12,13 +12,24 @@
 </head>
 <body>
   <header class="site-header">
-    <div class="header-inner">
-      <div class="logo-pill liquid-glass">
-        <img src="/icon.png" class="logo-icon" alt="Landa icon">
+    <div class="header-inner liquid-glass">
+      <a href="#top" class="logo-pill" aria-label="Landa — back to top">
+        <img src="/icon.png" class="logo-icon" alt="">
         <span class="logo-name">Landa</span>
-      </div>
+      </a>
+      <nav class="header-nav" aria-label="Primary">
+        <a href="#highlights" data-i18n="navHighlights"></a>
+        <a href="#faq" data-i18n="navFaq"></a>
+      </nav>
+      <a href="#download" class="header-cta">
+        <span data-i18n="navDownload"></span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 4v12m0 0l-5-5m5 5l5-5"/>
+        </svg>
+      </a>
     </div>
   </header>
+  <span id="top" aria-hidden="true"></span>
   <main class="hero">
     <div class="hero-inner">
       <h1 data-hero></h1>
@@ -37,6 +48,158 @@
   </main>
 
   <div class="hero-fade" aria-hidden="true"></div>
+
+  <section class="hl-section" id="highlights">
+    <div class="hl-head">
+      <h2 class="hl-title reveal" data-i18n="hlTitle"></h2>
+      <div class="hl-nav" aria-hidden="true">
+        <button class="hl-arrow" data-hl-prev aria-label="Previous">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+        </button>
+        <button class="hl-arrow" data-hl-next aria-label="Next">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="hl-track" data-hl-track tabindex="0" aria-label="Feature highlights, scrollable">
+
+      <span class="hl-spacer" aria-hidden="true"></span>
+
+      <!-- RECORDING -->
+      <article class="hl-card hl-card--scene hl-bg-indigo reveal">
+        <div class="hl-scene">
+          <div class="hl-scene-glow" aria-hidden="true"></div>
+          <div class="rec-overlay" aria-hidden="true">
+            <div class="glow glow-bloom"></div>
+            <div class="glow glow-flicker"></div>
+            <div class="pill">
+              <div class="dot"></div>
+              <div class="bars" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span><span></span>
+              </div>
+            </div>
+          </div>
+          <div class="hl-keys" aria-hidden="true">
+            <span class="hl-key">⌥</span>
+            <span class="hl-key">Space</span>
+          </div>
+        </div>
+        <div class="hl-copy">
+          <span class="hl-kicker" data-i18n="hlRecKicker"></span>
+          <h3 data-i18n="hlRecTitle"></h3>
+          <p data-i18n="hlRecBody"></p>
+        </div>
+      </article>
+
+      <!-- LANGUAGES -->
+      <article class="hl-card hl-card--scene hl-bg-teal reveal">
+        <div class="hl-scene hl-scene--lang">
+          <div class="hl-scene-glow" aria-hidden="true"></div>
+          <div class="hl-lang-panel" aria-hidden="true">
+            <div class="hl-lang-head">
+              <span class="hl-lang-dot"></span>
+              <span data-i18n="hlLangAuto"></span>
+            </div>
+            <ul class="hl-lang-list">
+              <li>English</li>
+              <li class="is-on">Deutsch
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+              </li>
+              <li>Español</li>
+              <li>日本語</li>
+            </ul>
+          </div>
+          <div class="hl-lang-caption">„…und schon ist es getippt.“</div>
+        </div>
+        <div class="hl-copy">
+          <span class="hl-kicker" data-i18n="hlLangKicker"></span>
+          <h3 data-i18n="hlLangTitle"></h3>
+          <p data-i18n="hlLangBody"></p>
+        </div>
+      </article>
+
+      <!-- PROFILES -->
+      <article class="hl-card hl-card--scene hl-bg-violet reveal">
+        <div class="hl-scene hl-scene--profiles">
+          <div class="hl-scene-glow" aria-hidden="true"></div>
+          <div class="hl-prof-tabs" aria-hidden="true">
+            <span class="hl-tab" data-i18n="hlProfTabRaw"></span>
+            <span class="hl-tab is-on" data-i18n="hlProfTabEmail"></span>
+            <span class="hl-tab" data-i18n="hlProfTabMsg"></span>
+            <span class="hl-tab" data-i18n="hlProfTabNotes"></span>
+          </div>
+          <div class="hl-prof-panel" aria-hidden="true">
+            <span class="hl-prof-line" data-i18n="hlProfL1"></span>
+            <span class="hl-prof-line" data-i18n="hlProfL2"></span>
+            <span class="hl-prof-line" data-i18n="hlProfL3"></span>
+            <span class="hl-prof-line hl-prof-line--soft" data-i18n="hlProfL4"></span>
+          </div>
+        </div>
+        <div class="hl-copy">
+          <span class="hl-kicker" data-i18n="hlProfKicker"></span>
+          <h3 data-i18n="hlProfTitle"></h3>
+          <p data-i18n="hlProfBody"></p>
+        </div>
+      </article>
+
+      <!-- CUSTOM VOCABULARY -->
+      <article class="hl-card hl-card--scene hl-bg-amber reveal">
+        <div class="hl-scene hl-scene--vocab">
+          <div class="hl-scene-glow" aria-hidden="true"></div>
+          <div class="hl-vocab-fix" aria-hidden="true">
+            <span class="hl-vocab-wrong">“Sarah Kaan”</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            <span class="hl-vocab-right">Sara Khan</span>
+          </div>
+          <div class="hl-vocab-panel" aria-hidden="true">
+            <div class="hl-vocab-chips">
+              <span class="hl-chip">Sara Khan</span>
+              <span class="hl-chip">ACME Corp</span>
+              <span class="hl-chip">São Paulo</span>
+              <span class="hl-chip">Landa</span>
+              <span class="hl-chip">Q4 OKRs</span>
+              <span class="hl-chip">Aaliyah</span>
+              <span class="hl-chip">Zürich</span>
+              <span class="hl-chip hl-chip--new">Niklas<i>+</i></span>
+            </div>
+          </div>
+        </div>
+        <div class="hl-copy">
+          <span class="hl-kicker" data-i18n="hlVocabKicker"></span>
+          <h3 data-i18n="hlVocabTitle"></h3>
+          <p data-i18n="hlVocabBody"></p>
+        </div>
+      </article>
+
+      <!-- WORKS ANYWHERE -->
+      <article class="hl-card hl-card--scene hl-bg-blue reveal">
+        <div class="hl-scene hl-scene--apps">
+          <div class="hl-scene-glow" aria-hidden="true"></div>
+          <div class="hl-apps-grid" aria-hidden="true">
+            <span class="hl-app"><img src="/logos/apple-mail.png" alt=""></span>
+            <span class="hl-app"><img src="/logos/slack.png" alt=""></span>
+            <span class="hl-app"><img src="/logos/whatsapp.png" alt=""></span>
+            <span class="hl-app"><img src="/logos/apple-notes.png" alt=""></span>
+            <span class="hl-app hl-app--center"><span class="hl-caret"></span></span>
+            <span class="hl-app"><img src="/logos/chatgpt.png" alt=""></span>
+            <span class="hl-app"><img src="/logos/claude.png" alt=""></span>
+            <span class="hl-app"><img src="/logos/gmail.svg" alt=""></span>
+            <span class="hl-app"><img src="/logos/apple-mail.png" alt=""></span>
+          </div>
+        </div>
+        <div class="hl-copy">
+          <span class="hl-kicker" data-i18n="hlAppsKicker"></span>
+          <h3 data-i18n="hlAppsTitle"></h3>
+          <p data-i18n="hlAppsBody"></p>
+        </div>
+      </article>
+
+      <span class="hl-spacer" aria-hidden="true"></span>
+
+    </div>
+  </section>
 
   <section class="apps-section">
     <div class="apps-inner">
@@ -63,10 +226,14 @@
             <h3>Mail</h3>
             <p data-i18n="mailDesc"></p>
           </header>
-          <div class="video-placeholder">
-            <button class="play-btn" aria-label="Play Mail demo">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-            </button>
+          <div class="video-placeholder video-gif">
+            <video class="app-video" autoplay muted loop playsinline
+                   disablePictureInPicture oncontextmenu="return false"
+                   poster="landa-demo_mail-poster.jpg"
+                   src="landa-demo_mail.mp4"></video>
+            <div class="gif-pause-hint" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+            </div>
           </div>
         </article>
         <article class="app-panel" id="app-whatsapp">
@@ -74,10 +241,14 @@
             <h3>WhatsApp</h3>
             <p data-i18n="whatsappDesc"></p>
           </header>
-          <div class="video-placeholder">
-            <button class="play-btn" aria-label="Play WhatsApp demo">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-            </button>
+          <div class="video-placeholder video-gif">
+            <video class="app-video" autoplay muted loop playsinline
+                   disablePictureInPicture oncontextmenu="return false"
+                   poster="landa-demo_whatsapp-poster.jpg"
+                   src="landa-demo_whatsapp.mp4"></video>
+            <div class="gif-pause-hint" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+            </div>
           </div>
         </article>
         <article class="app-panel" id="app-slack">
@@ -94,6 +265,7 @@
       </div>
     </div>
   </section>
+
 
   <div class="demo-zone">
     <div class="try-row">
@@ -142,10 +314,85 @@
       </div>
     </div>
   </div>
+  <section class="faq-section" id="faq">
+    <div class="faq-inner">
+      <h2 class="reveal" data-i18n="faqTitle"></h2>
+      <div class="faq-grid">
+        <div class="faq-card reveal">
+          <h3 data-i18n="faq1Q"></h3>
+          <p data-i18n="faq1A"></p>
+        </div>
+        <div class="faq-card reveal">
+          <h3 data-i18n="faq2Q"></h3>
+          <p data-i18n="faq2A"></p>
+        </div>
+        <div class="faq-card reveal">
+          <h3 data-i18n="faq3Q"></h3>
+          <p data-i18n="faq3A"></p>
+        </div>
+        <div class="faq-card reveal">
+          <h3 data-i18n="faq4Q"></h3>
+          <p data-i18n="faq4A"></p>
+        </div>
+        <div class="faq-card reveal">
+          <h3 data-i18n="faq5Q"></h3>
+          <p data-i18n="faq5A"></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <div class="footer-bg">
     <div class="footer-fade" aria-hidden="true"></div>
-    <footer class="site-footer liquid-glass">
-      <p>Made with love from Berlin</p>
+    <section class="cta-card liquid-glass reveal" id="download">
+      <h2 data-i18n="ctaHeadline"></h2>
+      <p data-i18n="ctaSubtext"></p>
+      <div class="buttons">
+        <a href="https://github.com/nickybricks/landa/releases/latest/download/Landa-arm64.dmg" class="btn btn-mac">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+          <span data-i18n="mac"></span>
+        </a>
+        <a href="https://github.com/nickybricks/landa/releases/latest/download/Landa-x64.exe" class="btn btn-win">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 12V5.35l9.5-1.6V12H11.5zm0 .5H21v7.75l-9.5-1.6V12.5z"/></svg>
+          <span data-i18n="win"></span>
+        </a>
+      </div>
+    </section>
+    <footer class="site-footer">
+      <div class="footer-grid">
+        <div class="footer-col footer-brand">
+          <div class="footer-logo">
+            <img src="/icon.png" alt="">
+            <span>Landa</span>
+          </div>
+          <p class="footer-tagline" data-i18n="footerTagline"></p>
+          <div class="footer-downloads">
+            <a href="https://github.com/nickybricks/landa/releases/latest/download/Landa-arm64.dmg" class="footer-dl">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+              <span>Mac</span>
+            </a>
+            <a href="https://github.com/nickybricks/landa/releases/latest/download/Landa-x64.exe" class="footer-dl">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 12V5.35l9.5-1.6V12H11.5zm0 .5H21v7.75l-9.5-1.6V12.5z"/></svg>
+              <span>Windows</span>
+            </a>
+          </div>
+        </div>
+        <nav class="footer-col" aria-label="Product">
+          <h4 data-i18n="footerProduct"></h4>
+          <a href="#highlights" data-i18n="navHighlights"></a>
+          <a href="#faq" data-i18n="navFaq"></a>
+          <a href="https://github.com/nickybricks/landa/releases" target="_blank" rel="noopener" data-i18n="footerChangelog"></a>
+        </nav>
+        <nav class="footer-col" aria-label="Company">
+          <h4 data-i18n="footerLegal"></h4>
+          <a href="/privacy.html" data-i18n="footerPrivacy"></a>
+          <a href="mailto:nick@algner.de" data-i18n="footerContact"></a>
+        </nav>
+      </div>
+      <div class="footer-base">
+        <span data-i18n="footerMadeWith"></span>
+        <span class="footer-copy" data-i18n="footerCopyright"></span>
+      </div>
     </footer>
   </div>
   <script src="i18n.js"></script>
@@ -167,6 +414,93 @@
       }, { rootMargin: '-45% 0px -45% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] });
       panels.forEach((p) => obs.observe(p));
       setActive(panels[0].id);
+    })();
+
+    (() => {
+      const PAUSE_ICON = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+      const PLAY_ICON  = '<path d="M8 5v14l11-7z"/>';
+
+      document.querySelectorAll('.video-gif').forEach((wrap) => {
+        const video = wrap.querySelector('.app-video');
+        const hint  = wrap.querySelector('.gif-pause-hint svg');
+
+        const setIcon = (paused) => {
+          hint.innerHTML = paused ? PLAY_ICON : PAUSE_ICON;
+          wrap.classList.toggle('is-paused', paused);
+        };
+
+        wrap.addEventListener('click', () => {
+          video.paused ? video.play() : video.pause();
+          setIcon(video.paused);
+        });
+
+        const obs = new IntersectionObserver((entries) => {
+          entries.forEach((e) => {
+            if (e.isIntersecting) { video.play(); setIcon(false); }
+            else video.pause();
+          });
+        }, { threshold: 0.3 });
+        obs.observe(wrap);
+      });
+    })();
+
+    (() => {
+      const header = document.querySelector('.site-header');
+      if (!header) return;
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          header.classList.toggle('is-scrolled', window.scrollY > 24);
+          ticking = false;
+        });
+      };
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+    })();
+
+    (() => {
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const revealEls = document.querySelectorAll('.reveal');
+      if (reduce || !('IntersectionObserver' in window)) {
+        revealEls.forEach((el) => el.classList.add('is-in'));
+        return;
+      }
+      const ro = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-in');
+            ro.unobserve(entry.target);
+          }
+        });
+      }, { rootMargin: '0px 0px -12% 0px', threshold: 0.15 });
+      revealEls.forEach((el) => ro.observe(el));
+    })();
+
+    (() => {
+      const track = document.querySelector('[data-hl-track]');
+      const prev = document.querySelector('[data-hl-prev]');
+      const next = document.querySelector('[data-hl-next]');
+      if (!track || !prev || !next) return;
+
+      const step = () => {
+        const card = track.querySelector('.hl-card');
+        const gap = parseFloat(getComputedStyle(track).columnGap) || 20;
+        return card ? card.offsetWidth + gap : track.clientWidth * 0.8;
+      };
+
+      const sync = () => {
+        const max = track.scrollWidth - track.clientWidth - 1;
+        prev.disabled = track.scrollLeft <= 1;
+        next.disabled = track.scrollLeft >= max;
+      };
+
+      prev.addEventListener('click', () => track.scrollBy({ left: -step(), behavior: 'smooth' }));
+      next.addEventListener('click', () => track.scrollBy({ left: step(), behavior: 'smooth' }));
+      track.addEventListener('scroll', () => requestAnimationFrame(sync), { passive: true });
+      window.addEventListener('resize', sync);
+      sync();
     })();
   </script>
 </body>

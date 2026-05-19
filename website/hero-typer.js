@@ -8,7 +8,7 @@
 
   const apps = [
     { name: 'Slack',       logo: 'logos/slack.png' },
-    { name: 'Apple Notes', logo: 'logos/apple-notes.png' },
+    { name: 'Notes',       logo: 'logos/apple-notes.png' },
     { name: 'Claude',      logo: 'logos/claude.png' },
     { name: 'Apple Mail',  logo: 'logos/apple-mail.png' },
     { name: 'WhatsApp',    logo: 'logos/whatsapp.png' },
