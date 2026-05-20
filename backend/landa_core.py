@@ -1594,10 +1594,17 @@ def start_recording() -> bool:
         logging.info("[start_recording] waiting for previous stream teardown...")
         _teardown_thread.join(timeout=5.0)
         if _teardown_thread.is_alive():
-            # close() is still hung on macOS PortAudio — detach the zombie thread
-            # and try to open a new stream anyway.  If the device is truly stuck,
-            # InputStream creation will fail within its own 8s timeout below.
-            logging.error("[start_recording] previous teardown still hung after 5s — forcing past stuck teardown and retrying")
+            # PortAudio's abort()/close() can deadlock inside CoreAudio on macOS,
+            # especially after very short recordings. The zombie thread holds the
+            # input device, so a plain new InputStream would just time out.
+            # Hard-reset PortAudio to force CoreAudio to release the device.
+            logging.error("[start_recording] previous teardown still hung after 5s — resetting PortAudio")
+            try:
+                sd._terminate()
+                sd._initialize()
+                logging.info("[start_recording] PortAudio reinitialized")
+            except Exception as e:
+                logging.error("[start_recording] PortAudio reset failed: %s", e)
             _teardown_thread = None
         else:
             logging.info("[start_recording] previous teardown finished")
