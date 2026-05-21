@@ -620,28 +620,13 @@ h1 {
   padding: 0 24px 80px;
 }
 
-/* faq grey fades into the sky photo; the CTA glass card floats on it and
-   the blue footer sits below as a rounded island on the landscape. */
-.footer-fade {
-  width: 100%;
-  height: 140px;
-  background: linear-gradient(to bottom, #f5f5f7 0%, rgba(245, 245, 247, 0) 100%);
-  pointer-events: none;
-  position: relative;
-  z-index: 1;
-  flex-shrink: 0;
-}
-
 .footer-bg {
   margin-top: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-bottom: clamp(20px, 3vw, 44px);
-  background-image: url('/home-bg-sky.jpg');
-  background-size: cover;
-  background-position: center bottom;
-  background-repeat: no-repeat;
+  padding-bottom: 0;
+  background: var(--bg);
 }
 
 .site-footer {
@@ -649,11 +634,8 @@ h1 {
   max-width: 1280px;
   margin: clamp(48px, 7vw, 96px) auto 0;
   padding: 56px clamp(28px, 5vw, 64px) 48px;
-  border-radius: clamp(20px, 2.4vw, 32px);
   font-family: var(--font-body);
-  color: rgba(255, 255, 255, 0.72);
-  background: var(--primary);
-  box-shadow: 0 24px 60px -24px rgba(0, 60, 130, 0.45);
+  color: var(--text-secondary);
 }
 
 .footer-grid {
@@ -681,7 +663,7 @@ h1 {
   font-family: var(--font-headline);
   font-weight: 700;
   font-size: 1rem;
-  color: #ffffff;
+  color: var(--text);
 }
 
 .footer-tagline {
@@ -689,7 +671,7 @@ h1 {
   line-height: 1.5;
   max-width: 26ch;
   margin-bottom: 20px;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--text-secondary);
 }
 
 .footer-downloads {
@@ -704,18 +686,19 @@ h1 {
   gap: 6px;
   padding: 7px 14px;
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  color: #ffffff;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: var(--text);
   font-size: 0.82rem;
   font-weight: 500;
   text-decoration: none;
-  transition: transform 0.2s ease, background 0.2s ease;
+  transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
 }
 
 .footer-dl:hover {
   transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.26);
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.2);
 }
 
 .footer-dl:active { transform: translateY(0); }
@@ -726,14 +709,14 @@ h1 {
   font-size: 0.8rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #ffffff;
+  color: var(--text);
   margin-bottom: 16px;
 }
 
 .footer-col > a {
   display: block;
   font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-secondary);
   text-decoration: none;
   padding: 6px 0;
   width: fit-content;
@@ -741,7 +724,7 @@ h1 {
 }
 
 .footer-col > a:hover {
-  color: #ffffff;
+  color: var(--text);
   transform: translateX(2px);
 }
 
@@ -754,9 +737,21 @@ h1 {
   max-width: 1024px;
   margin: 44px auto 0;
   padding-top: 24px;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
   font-size: 0.82rem;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-secondary);
+}
+
+.footer-wordmark {
+  width: 100%;
+  padding: clamp(8px, 1.5vw, 20px) clamp(20px, 4vw, 48px) clamp(24px, 3vw, 40px);
+  line-height: 0;
+}
+
+.footer-wordmark svg {
+  width: 100%;
+  height: auto;
+  display: block;
 }
 
 .site-header :focus-visible {
@@ -767,7 +762,7 @@ h1 {
 
 .footer-col a:focus-visible,
 .footer-dl:focus-visible {
-  outline: 2px solid #ffffff;
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
   border-radius: var(--radius-pill);
 }
@@ -1585,12 +1580,22 @@ h1 {
   .hl-nav { display: none; }
   .hl-track { padding: 32px 0 72px; overflow-clip-margin: 84px; }
 
+  /* On mobile the highlight cards live in a horizontal scroller; the
+     rise-up reveal hides adjacent cards offscreen so users can't tell
+     they're swipeable. Keep them visible from the start. */
+  .hl-card.reveal { opacity: 1; transform: none; transition: none; }
+
   /* Stack scene + copy so nothing overlaps or gets squeezed */
   .hl-card {
     width: min(82vw, 360px);
     aspect-ratio: auto;
     display: flex;
     flex-direction: column;
+    /* Softer shadow so its tail stays inside the track's clip margin
+       and doesn't get sliced into a hard horizontal line. */
+    box-shadow:
+      0 14px 36px -18px rgba(0, 0, 0, 0.22),
+      0 4px 12px -6px rgba(0, 0, 0, 0.10);
   }
   .hl-scene,
   .hl-scene--profiles,
