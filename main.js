@@ -1392,17 +1392,29 @@ async function getInstalledAppsMac() {
 
   // Process all apps in parallel — async icon conversion instead of sequential execSync
   const apps = await Promise.all(appEntries.map(async ({ name, appPath }) => {
+    const safeName = name.replace(/[^a-zA-Z0-9]/g, '_');
+    const tmpPng = path.join(os.tmpdir(), `fmv-icon-${safeName}.png`);
     let iconDataUrl = null;
     try {
       const icnsPath = await getAppIconFileMac(appPath);
       if (icnsPath) {
-        const tmpPng = path.join(os.tmpdir(), `fmv-icon-${name.replace(/[^a-zA-Z0-9]/g, '_')}.png`);
+        // Fast path: convert .icns directly with sips
         await execAsync(`sips -s format png "${icnsPath}" --out "${tmpPng}" --resampleWidth 256 -z 256 256 2>/dev/null`, { timeout: 3000 });
         const ni = nativeImage.createFromPath(tmpPng);
         if (!ni.isEmpty()) iconDataUrl = ni.toDataURL();
-        try { fs.unlinkSync(tmpPng); } catch { /* ignore */ }
+      } else {
+        // Fallback for apps with no .icns (Assets.car, e.g. Photo Booth and most
+        // modern system apps): use QuickLook to render the bundle's icon.
+        await execAsync(`qlmanage -t -s 256 -o "${os.tmpdir()}" "${appPath}" >/dev/null 2>&1`, { timeout: 5000 });
+        const qlOutput = path.join(os.tmpdir(), `${path.basename(appPath)}.png`);
+        if (fs.existsSync(qlOutput)) {
+          const ni = nativeImage.createFromPath(qlOutput);
+          if (!ni.isEmpty()) iconDataUrl = ni.toDataURL();
+          try { fs.unlinkSync(qlOutput); } catch { /* ignore */ }
+        }
       }
     } catch { /* ignore */ }
+    try { fs.unlinkSync(tmpPng); } catch { /* ignore */ }
     return { name, appPath, icon: iconDataUrl };
   }));
 
@@ -1422,7 +1434,6 @@ async function getAppIconFileMac(appPath) {
     const isBinary = buf[0] === 0x62 && buf[1] === 0x70; // 'bp' = bplist
 
     if (isBinary) {
-      // Use plutil to convert binary plist to XML on the fly
       const { stdout: xml } = await execAsync(`plutil -convert xml1 -o - "${plistPath}"`, { timeout: 2000 });
       const match = xml.match(/<key>CFBundleIconFile<\/key>\s*<string>([^<]+)<\/string>/);
       if (match) iconFileName = match[1];

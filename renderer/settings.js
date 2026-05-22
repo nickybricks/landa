@@ -2070,15 +2070,31 @@ let selectedCategory = 'personal-message';
 // Cache for installed apps list (in-memory only, re-scanned after 5 min)
 let installedAppsCache = null;
 let installedAppsCacheTime = 0;
+let installedAppsInFlight = null;
 const APPS_CACHE_TTL = 5 * 60 * 1000;
 
-async function preloadInstalledApps() {
+async function fetchInstalledApps() {
   const now = Date.now();
-  if (!installedAppsCache || now - installedAppsCacheTime > APPS_CACHE_TTL) {
-    installedAppsCache = await window.api.getInstalledApps();
-    installedAppsCacheTime = Date.now();
-    renderBanner(selectedCategory);
+  if (installedAppsCache && now - installedAppsCacheTime <= APPS_CACHE_TTL) {
+    return installedAppsCache;
   }
+  if (!installedAppsInFlight) {
+    installedAppsInFlight = window.api.getInstalledApps().then((apps) => {
+      installedAppsCache = apps;
+      installedAppsCacheTime = Date.now();
+      installedAppsInFlight = null;
+      return apps;
+    }).catch((err) => {
+      installedAppsInFlight = null;
+      throw err;
+    });
+  }
+  return installedAppsInFlight;
+}
+
+async function preloadInstalledApps() {
+  await fetchInstalledApps();
+  renderBanner(selectedCategory);
 }
 
 function setupModesTab() {
@@ -2216,7 +2232,7 @@ function renderBanner(categoryId) {
   `;
 
   banner.style.cursor = 'pointer';
-  banner.addEventListener('click', () => openLinkedAppsPopup(categoryId));
+  banner.onclick = () => openLinkedAppsPopup(categoryId);
 }
 
 // ---------------------------------------------------------------------------
@@ -2481,11 +2497,7 @@ function openLinkedAppsPopup(categoryId) {
   }
 
   async function loadAndRenderApps() {
-    const now = Date.now();
-    if (!installedAppsCache || now - installedAppsCacheTime > APPS_CACHE_TTL) {
-      installedAppsCache = await window.api.getInstalledApps();
-      installedAppsCacheTime = Date.now();
-    }
+    await fetchInstalledApps();
     const scroll = popup.querySelector('#app-grid-scroll');
     if (!scroll) return; // popup was closed during load
     const filter = popup.querySelector('#popup-search')?.value || '';
