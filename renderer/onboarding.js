@@ -99,10 +99,10 @@ function applyTranslations() {
 }
 
 function getHotkeyLabels() {
-  // Default toggle hotkey: ⌥+Space (Mac), Ctrl+⊞+Alt+Space (Windows).
+  // Default toggle hotkey: ⌥+Space (Mac), Ctrl+Alt+Space (Windows).
   if (platform === 'win32') {
     const ctrl = lang === 'de' ? 'Strg' : 'Ctrl';
-    return [ctrl, '⊞', 'Alt', 'Space'];
+    return [ctrl, 'Alt', 'Space'];
   }
   return ['⌥', 'Space'];
 }
@@ -252,6 +252,11 @@ function initTrainStep() {
   const hint = document.getElementById('train-hint');
   const dateEl = document.getElementById('train-date');
   const cont = document.querySelector('.ob-panel[data-step="4"] [data-action="next"]');
+
+  // Ensure the global hotkey is live. On macOS this already happened after the
+  // Accessibility step, but Windows skips that step — so register here so the
+  // training keypress is actually caught. registerHotkey is idempotent.
+  window.api.registerMainHotkey();
 
   content.textContent = '';
   cont.disabled = true;

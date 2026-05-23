@@ -97,6 +97,13 @@ let settingsWindow = null;
 let onboardingWindow = null;
 let recordingWindow = null;
 let recordingWindowStyle = 'mini'; // 'classic' | 'mini' | 'none'
+let recordingWindowAlwaysShow = true; // when true, pill lives on screen at rest
+// Pill placement as a fraction of the active display's work area: fx = pill-center-x,
+// fy = pill-bottom-y. Stored relative so the spot is preserved when the pill follows
+// the cursor to another monitor. null → default (bottom-center, hugging the Dock).
+let recordingWindowPosition = null;
+let recordingWindowActiveDisplayId = null; // display the pill currently sits on
+let lastCursorDisplayId = null;            // cursor's display on the previous poll (settle filter)
 let audioLevelTimer = null;
 let backendProcess = null;
 let pollTimer = null;
@@ -109,9 +116,7 @@ let currentShortcut = null; // Electron accelerator string
 let currentCancelShortcut = null; // Electron accelerator for cancel_recording
 let currentHoldShortcut = null; // Electron accelerator for hold_recording
 let currentVocabShortcut = null; // Electron accelerator for add_to_vocabulary
-let currentCancelSound = null; // system sound name to play on cancel
-let currentHoldSound = null; // system sound name to play on hold
-let currentResumeSound = null; // system sound name to play on resume
+let soundsMuted = false; // when true, skip all recording feedback sounds
 let lastHotkeyTime = 0;
 let hotkeyInFlight = false; // re-entrancy guard
 let appQuitting = false;
@@ -401,12 +406,28 @@ function setRecordingState(recording) {
   if (recording) {
     activateCancelHotkey();
     activateHoldHotkey();
-    if (changed) showRecordingWindow();
+    if (changed) {
+      if (recordingWindowStyle !== 'none') {
+        if (recordingWindowAlwaysShow) {
+          // Already on screen at rest — just ensure it exists (don't re-show, which
+          // would reassert the macOS activation policy and risk dock-icon flicker).
+          if (!recordingWindow || recordingWindow.isDestroyed()) showRecordingWindow();
+        } else {
+          // On-demand: bring it on screen for this recording.
+          showRecordingWindow();
+        }
+      }
+      setPillRecordingActive(true);
+    }
   } else {
     deactivateCancelHotkey();
     deactivateHoldHotkey();
     isOnHold = false;
-    if (changed) hideRecordingWindow();
+    if (changed) {
+      // Always-show: stay on screen, animate back to resting. On-demand: hide.
+      if (recordingWindowAlwaysShow) setPillRecordingActive(false);
+      else hideRecordingWindow();
+    }
     // Recording just ended — history likely has a new entry (ignore cancels, which go through handleCancelPress).
     if (wasRecording && settingsWindow && !settingsWindow.isDestroyed()) {
       settingsWindow.webContents.send('history-updated');
@@ -435,6 +456,9 @@ async function handleHotkeyPress() {
   hotkeyInFlight = true;
 
   const action = isRecording ? 'stop' : 'start';
+  // Fire feedback sound instantly on keypress — before the backend round-trip —
+  // so the click feels real-time. Backend no longer plays start/stop sounds.
+  playSound(action === 'start' ? 'start' : 'stop');
   const t0 = Date.now();
   console.log(`[Landa] Hotkey pressed — action: ${action}`);
   try {
@@ -492,6 +516,7 @@ async function handleHotkeyPress() {
 /** Force-stop: fire-and-forget, no guards. Used as escape hatch. */
 async function forceStopRecording() {
   const t0 = Date.now();
+  playSound('stop');
   console.log(`[Landa] Force stop — sending /stop`);
   try {
     await api.stopRecording();
@@ -510,7 +535,7 @@ async function handleCancelPress() {
   if (!isRecording) return; // nothing to cancel
   const t0 = Date.now();
   console.log(`[Landa] Cancel hotkey pressed — discarding recording`);
-  playSound(currentCancelSound);
+  playSound('cancel');
   try {
     await api.cancelRecording();
     console.log(`[Landa] Cancel API responded in ${Date.now() - t0}ms`);
@@ -602,7 +627,7 @@ async function handleHoldPress() {
   const t0 = Date.now();
   if (isOnHold) {
     console.log(`[Landa] Hold hotkey pressed — resuming recording`);
-    playSound(currentResumeSound);
+    playSound('resume');
     try {
       await api.resumeRecording();
       console.log(`[Landa] /resume responded in ${Date.now() - t0}ms`);
@@ -611,7 +636,7 @@ async function handleHoldPress() {
     }
   } else {
     console.log(`[Landa] Hold hotkey pressed — pausing recording`);
-    playSound(currentHoldSound);
+    playSound('hold');
     try {
       await api.holdRecording();
       console.log(`[Landa] /hold responded in ${Date.now() - t0}ms`);
@@ -957,6 +982,20 @@ const RECORDING_SIZES = {
   mini:    { width: 180, height: 90 },
 };
 
+// The window stays at the recording size at all times; only the pill inside it morphs
+// between its resting and recording looks (CSS). A fixed window never resizes or
+// repositions on start/stop, which avoids the one-frame jump where the compositor moves
+// the window before the renderer repaints the new size. The pill anchors to the screen
+// edge it's docked against and grows AWAY from it (up from the Dock, down from the menu
+// bar), so the docked edge stays planted and the pill never moves into the edge.
+const RESTING_PILL_HEIGHT = 10; // mirrors recording.css
+const RECORDING_DOCK_GAP = 2;   // px the resting pill floats above the Dock/taskbar
+const PILL_EDGE_MARGIN = 4;     // window edge → pill edge gap; matches --pill-edge-margin in CSS
+
+function currentRecordingWindowSize() {
+  return RECORDING_SIZES[recordingWindowStyle] || RECORDING_SIZES.mini;
+}
+
 function createRecordingWindow() {
   const size = RECORDING_SIZES[recordingWindowStyle] || RECORDING_SIZES.mini;
   recordingWindow = new BrowserWindow({
@@ -986,7 +1025,10 @@ function createRecordingWindow() {
     },
   });
 
-  recordingWindow.setAlwaysOnTop(true, 'screen-saver');
+  // 'floating' sits above normal app windows (stays visible while dictating) but BELOW
+  // the macOS Dock, so the pill can rest just above the Dock yet never draw on top of it.
+  // 'screen-saver' would put it above the Dock and let it cover the Dock icons.
+  recordingWindow.setAlwaysOnTop(true, 'floating');
   recordingWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   // setVisibleOnAllWorkspaces transforms the macOS process type
   // (ForegroundApplication ↔ UIElementApplication) to apply the all-spaces
@@ -996,7 +1038,8 @@ function createRecordingWindow() {
     app.setActivationPolicy('regular');
     reassertDockIcon();
   }
-  // Ignore mouse — never steal clicks from the app the user is dictating into.
+  // Ignore mouse — the resting pill is purely visual; never steal clicks from the
+  // app the user is dictating into.
   recordingWindow.setIgnoreMouseEvents(true);
 
   recordingWindow.loadFile(path.join(__dirname, 'renderer', 'recording.html'));
@@ -1006,6 +1049,7 @@ function createRecordingWindow() {
       recordingWindow.webContents.send('recording-style', recordingWindowStyle);
       recordingWindow.webContents.send('recording-paused', isOnHold);
       recordingWindow.webContents.send('recording-processing', false);
+      recordingWindow.webContents.send('recording-active', isRecording);
     }
   });
 
@@ -1014,15 +1058,113 @@ function createRecordingWindow() {
   });
 }
 
-function positionRecordingWindow() {
+/**
+ * Height the Dock reserves at the bottom of its display, in DIP. macOS reports this only
+ * for the display the Dock is pinned to (bounds.bottom − workArea.bottom); every other
+ * display reads 0. We take the max across displays so a multi-monitor setup still gets the
+ * real Dock height, then apply it everywhere — the pinned Dock is summoned bottom-center
+ * onto whichever display the cursor visits, so the pill must clear it on all of them.
+ * Returns 0 when the Dock is left/right-mounted or auto-hidden (nothing to clear at bottom).
+ */
+function dockBottomReserve() {
+  return screen.getAllDisplays().reduce((max, d) => {
+    const reserve = (d.bounds.y + d.bounds.height) - (d.workArea.y + d.workArea.height);
+    return Math.max(max, reserve);
+  }, 0);
+}
+
+/**
+ * Size the window for the current state and position it so the (centered) pill's
+ * bottom edge lands on the saved anchor — a { x: pill-center, y: pill-bottom } point.
+ * Falls back to bottom-center hugging the Dock/taskbar. Resizing keeps the pill's
+ * bottom edge fixed, so it grows upward into the recording state and never dips into
+ * the Dock.
+ */
+function layoutRecordingWindow() {
   if (!recordingWindow || recordingWindow.isDestroyed()) return;
-  const cursor = screen.getCursorScreenPoint();
-  const display = screen.getDisplayNearestPoint(cursor);
+  const size = currentRecordingWindowSize();
+
+  // Place the window on the display the user is currently on (follows the cursor across
+  // monitors). The saved placement is a fraction of the work area, so it lands in the
+  // same relative spot on any screen; absent → bottom-center hugging the Dock.
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  recordingWindowActiveDisplayId = display.id;
   const { x, y, width, height } = display.workArea;
-  const [winW, winH] = recordingWindow.getSize();
-  const targetX = Math.round(x + (width - winW) / 2);
-  const targetY = Math.round(y + height - winH - 80);
-  recordingWindow.setPosition(targetX, targetY, false);
+  const edge = (recordingWindowPosition && recordingWindowPosition.edge) || 'bottom';
+  let pillCenterX, edgeY;
+  if (recordingWindowPosition) {
+    pillCenterX = x + recordingWindowPosition.fx * width;
+    edgeY = y + recordingWindowPosition.fy * height;
+  } else {
+    pillCenterX = x + width / 2;
+    // Rest just above the Dock. macOS only reserves bottom space in the work area of the
+    // display the Dock is pinned to — but the pinned Dock gets *summoned* onto whichever
+    // display the cursor visits, landing bottom-center where the pill lives. So anchor off
+    // the full screen bottom minus the Dock's measured height, applied on every display, so
+    // the pill clears the Dock wherever it appears (0 if the Dock is side-mounted/hidden →
+    // hugs the bottom as before).
+    edgeY = (display.bounds.y + display.bounds.height) - dockBottomReserve() - RECORDING_DOCK_GAP;
+  }
+
+  // Anchor the docked edge of the pill (window edge ± margin) and grow away from it,
+  // so the pill stays planted on its edge and the window grows in the free direction.
+  // setBounds applies size + position atomically: a separate setSize/setPosition pair
+  // leaves one frame where the resized window still sits at its old origin, which slides
+  // the centered pill sideways and snaps it back — the visible flick on start/stop.
+  recordingWindow.webContents.send('recording-dock-edge', edge);
+  recordingWindow.setBounds({
+    x: Math.round(pillCenterX - size.width / 2),
+    y: edge === 'top'
+      ? Math.round(edgeY - PILL_EDGE_MARGIN)
+      : Math.round(edgeY + PILL_EDGE_MARGIN - size.height),
+    width: size.width,
+    height: size.height,
+  }, false);
+}
+
+/**
+ * Switch the pill between its calm resting look and the active recording look,
+ * and drive audio-level polling (only meaningful while recording). Works in both
+ * always-show and on-demand modes.
+ */
+function setPillRecordingActive(active) {
+  if (!recordingWindow || recordingWindow.isDestroyed()) return;
+  if (active) {
+    // Set the dock edge / active display before the pill grows. The window is already at
+    // the recording size, so this doesn't resize it — the pill just expands away from the
+    // docked edge in place.
+    layoutRecordingWindow();
+    recordingWindow.webContents.send('recording-active', true);
+    recordingWindow.webContents.send('recording-processing', false);
+    startAudioLevelPolling();
+  } else {
+    // The window stays put; the pill simply morphs back to its resting look in place.
+    recordingWindow.webContents.send('recording-active', false);
+    recordingWindow.webContents.send('recording-processing', false);
+    stopAudioLevelPolling();
+  }
+}
+
+/**
+ * Create/destroy/show the pill to match the current style + "always show" setting.
+ * Called from applyConfig on any config change. Avoids recreating the window on a
+ * mini↔classic switch (recreating re-triggers setVisibleOnAllWorkspaces, which can
+ * flip the macOS activation policy and drop the dock icon).
+ */
+function syncRecordingWindowLifecycle() {
+  if (recordingWindowStyle === 'none') {
+    destroyRecordingWindow();
+    return;
+  }
+  if (recordingWindowAlwaysShow) {
+    if (!recordingWindow || recordingWindow.isDestroyed()) {
+      showRecordingWindow();
+    }
+    setPillRecordingActive(isRecording);
+  } else if (!isRecording) {
+    // On-demand mode: the pill should only appear while recording.
+    hideRecordingWindow();
+  }
 }
 
 function showRecordingWindow() {
@@ -1030,14 +1172,11 @@ function showRecordingWindow() {
   if (!recordingWindow || recordingWindow.isDestroyed()) {
     createRecordingWindow();
   } else {
-    // Make sure size matches current style (in case style changed since creation).
-    const size = RECORDING_SIZES[recordingWindowStyle] || RECORDING_SIZES.mini;
-    recordingWindow.setSize(size.width, size.height, false);
     recordingWindow.webContents.send('recording-style', recordingWindowStyle);
     recordingWindow.webContents.send('recording-paused', isOnHold);
     recordingWindow.webContents.send('recording-processing', false);
   }
-  positionRecordingWindow();
+  layoutRecordingWindow();
   recordingWindow.showInactive();
   // Re-assert regular activation policy on every show: setVisibleOnAllWorkspaces
   // can briefly demote the app to accessory mode, which hides the dock icon and
@@ -1046,7 +1185,6 @@ function showRecordingWindow() {
     app.setActivationPolicy('regular');
     reassertDockIcon();
   }
-  startAudioLevelPolling();
 }
 
 function hideRecordingWindow() {
@@ -1146,10 +1284,12 @@ function stopAudioLevelPolling() {
 function findBackendRoot() {
   const script = path.join('backend', 'landa_core.py');
 
-  // Packaged app: prefer the bundled resources copy.
+  // Packaged app: only the compiled binary ships (the Python source is not
+  // bundled), so detect the backend by the binary, not landa_core.py.
   if (app.isPackaged) {
     const resourcePath = process.resourcesPath;
-    if (fs.existsSync(path.join(resourcePath, script))) {
+    const binaryName = process.platform === 'win32' ? 'landa_backend.exe' : 'landa_backend';
+    if (fs.existsSync(path.join(resourcePath, 'backend', 'landa_backend', binaryName))) {
       console.log('[Landa] Found backend in app resources');
       return resourcePath;
     }
@@ -1290,9 +1430,7 @@ function applyConfig(config) {
     registerCancelHotkey(cancelCombo);
   }
 
-  currentCancelSound = config.sound_cancel || getDefaultSound('cancel');
-  currentHoldSound = config.sound_hold || getDefaultSound('hold');
-  currentResumeSound = config.sound_resume || getDefaultSound('resume');
+  soundsMuted = config.sound_muted || false;
 
   const holdCombo = config.hold_recording;
   const newHoldAccelerator = hotkeyToAccelerator(holdCombo);
@@ -1315,12 +1453,21 @@ function applyConfig(config) {
   reformatMode = config.reformat_mode || 'default';
 
   const newStyle = config.recording_window_style || 'mini';
-  if (newStyle !== recordingWindowStyle) {
-    recordingWindowStyle = newStyle;
-    // Don't destroy — showRecordingWindow already resizes on next show. Destroying
-    // here re-triggers setVisibleOnAllWorkspaces on next create, which flips the
-    // macOS activation policy and causes the dock icon to vanish.
+  const styleChanged = newStyle !== recordingWindowStyle;
+  recordingWindowStyle = newStyle;
+  recordingWindowAlwaysShow = config.recording_window_always_show !== false;
+  // The pill is fixed at bottom-center hugging the Dock (not draggable). Force the
+  // anchor to null so layoutRecordingWindow always re-centers, ignoring any position
+  // a previous build may have persisted.
+  recordingWindowPosition = null;
+
+  // mini↔classic: relayout the live window in place rather than recreating it
+  // (recreating flips the macOS activation policy and drops the dock icon).
+  if (styleChanged && newStyle !== 'none' && recordingWindow && !recordingWindow.isDestroyed()) {
+    recordingWindow.webContents.send('recording-style', newStyle);
+    layoutRecordingWindow();
   }
+  syncRecordingWindowLifecycle();
 
   const newModes = config.modes || modesConfig;
   const modesChanged = JSON.stringify(newModes) !== JSON.stringify(modesConfig);
@@ -1339,6 +1486,18 @@ function applyConfig(config) {
 
 function startStatusPolling() {
   pollTimer = setInterval(async () => {
+    // Follow the active monitor: if the cursor has moved to another display, relocate
+    // the resting pill there. Skipped while recording so it stays put.
+    // Only relocate once the cursor has stayed on the new display across two consecutive
+    // samples (~1s), so a quick pass-through doesn't dart the pill over and back.
+    if (recordingWindow && !recordingWindow.isDestroyed() && !isRecording) {
+      const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+      if (display.id !== recordingWindowActiveDisplayId && display.id === lastCursorDisplayId) {
+        layoutRecordingWindow();
+      }
+      lastCursorDisplayId = display.id;
+    }
+
     // Don't overwrite state while a hotkey action is in-flight or within one
     // poll interval of it completing (backend may still be transitioning).
     if (!hotkeyInFlight && Date.now() - hotkeyCompletedAt >= POLL_INTERVAL) {
@@ -1517,58 +1676,27 @@ async function getInstalledAppsWin() {
   return apps;
 }
 
-const WIN_MEDIA_DIR = 'C:\\Windows\\Media';
-
-// Platform-aware default sound names. Mac defaults reference /System/Library/Sounds.
-// Windows defaults reference .wav files in C:\Windows\Media.
-const DEFAULT_SOUNDS = {
-  darwin: { start: 'Tink', stop: 'Pop', cancel: 'Funk', hold: 'Tink', resume: 'Pop' },
-  win32: {
-    start: 'Windows Notify',
-    stop: 'tada',
-    cancel: 'Windows Critical Stop',
-    hold: 'Windows Ding',
-    resume: 'chimes',
-  },
-};
-
-function getDefaultSound(kind) {
-  const defaults = DEFAULT_SOUNDS[process.platform] || DEFAULT_SOUNDS.darwin;
-  return defaults[kind];
+// Recording feedback sounds are bundled WAVs (assets/sounds), identical on every
+// platform. They're shipped via extraResources (unpacked) so the external players
+// — afplay on macOS, PowerShell's SoundPlayer on Windows — can read a real path;
+// files inside app.asar are not reachable by those external processes.
+function soundFilePath(kind) {
+  const dir = app.isPackaged
+    ? path.join(process.resourcesPath, 'sounds')
+    : path.join(__dirname, 'assets', 'sounds');
+  return path.join(dir, `${kind}.wav`);
 }
 
-function listSystemSounds() {
+// kind: 'start' | 'stop' | 'cancel' | 'hold' | 'resume'
+function playSound(kind) {
+  if (soundsMuted || !kind) return;
+  const soundPath = soundFilePath(kind);
+  if (!fs.existsSync(soundPath)) return;
   if (process.platform === 'darwin') {
-    try {
-      return fs.readdirSync('/System/Library/Sounds')
-        .filter((f) => f.endsWith('.aiff'))
-        .map((f) => f.replace('.aiff', ''))
-        .sort();
-    } catch { return []; }
-  }
-  if (process.platform === 'win32') {
-    try {
-      return fs.readdirSync(WIN_MEDIA_DIR)
-        .filter((f) => f.toLowerCase().endsWith('.wav'))
-        .map((f) => f.replace(/\.wav$/i, ''))
-        .sort();
-    } catch { return []; }
-  }
-  return [];
-}
-
-function playSound(name) {
-  if (!name) return;
-  if (process.platform === 'darwin') {
-    const soundPath = `/System/Library/Sounds/${name}.aiff`;
-    if (fs.existsSync(soundPath)) {
-      spawn('afplay', [soundPath], { stdio: 'ignore' });
-    }
+    spawn('afplay', [soundPath], { stdio: 'ignore' });
     return;
   }
   if (process.platform === 'win32') {
-    const soundPath = path.join(WIN_MEDIA_DIR, `${name}.wav`);
-    if (!fs.existsSync(soundPath)) return;
     // Single-quote-escape the path for PowerShell, then play asynchronously.
     const psPath = soundPath.replace(/'/g, "''");
     spawn(
@@ -1640,6 +1768,13 @@ function setupIpcHandlers() {
     } catch {
       event.returnValue = false;
     }
+  });
+
+  // Mute is applied directly and immediately so it never lags behind a debounced
+  // config save or a stale backend round-trip. The toggle also persists to config
+  // (so it survives restart); applyConfig restores soundsMuted on the next launch.
+  ipcMain.on('set-sound-muted', (_event, muted) => {
+    soundsMuted = !!muted;
   });
 
   ipcMain.on('debug-log', (_event, msg) => {
@@ -1806,12 +1941,6 @@ function setupIpcHandlers() {
     catch (err) { return { error: err.message }; }
   });
 
-  ipcMain.handle('get-system-sounds', () => listSystemSounds());
-
-  ipcMain.handle('get-default-sounds', () => DEFAULT_SOUNDS[process.platform] || DEFAULT_SOUNDS.darwin);
-
-  ipcMain.handle('play-sound', (_event, name) => playSound(name));
-
   ipcMain.handle('get-platform', () => process.platform);
   ipcMain.handle('get-app-version', () => app.getVersion());
 
@@ -1846,8 +1975,10 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle('get-history', async () => {
+    // Return null (not []) on failure so the renderer can distinguish "backend
+    // not ready yet" from "history is genuinely empty" and retry accordingly.
     try { return await api.fetchHistory(); }
-    catch { return []; }
+    catch { return null; }
   });
 
   ipcMain.handle('clear-history', async () => {

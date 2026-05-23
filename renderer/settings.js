@@ -4,8 +4,6 @@
 
 let config = null;
 let platform = 'darwin';
-let systemSounds = [];
-let defaultSounds = { start: 'Tink', stop: 'Pop', cancel: 'Funk', hold: 'Tink', resume: 'Pop' };
 let recordingAction = null; // which shortcut is being recorded
 let _setupDone = false; // true once UI is populated & first applyConfig has run
 
@@ -94,6 +92,7 @@ const TRANSLATIONS = {
     'settings.shortcuts.hold.sub': 'Temporarily pauses active recording',
     'settings.shortcuts.record': 'Record shortcut',
     'settings.shortcuts.recording': 'Press shortcut…',
+    'settings.shortcuts.hint': 'Add a regular key (e.g. Ctrl+Space)',
     'settings.shortcuts.vocab': 'Add to Vocabulary',
     'settings.shortcuts.vocab.sub': 'Adds the selected word to vocabulary replacements',
     // Settings tab — application
@@ -104,11 +103,6 @@ const TRANSLATIONS = {
     // Settings tab — sounds
     'settings.sounds.section': 'Recording Sounds',
     'settings.sounds.mute': 'Mute all sounds',
-    'settings.sounds.start': 'Start sound',
-    'settings.sounds.stop': 'Stop sound',
-    'settings.sounds.cancel': 'Cancel sound',
-    'settings.sounds.hold': 'Hold sound',
-    'settings.sounds.resume': 'Resume sound',
     // Modes tab
     'modes.llm.btn': 'LLM Settings',
     'modes.llm.title': 'LLM Settings',
@@ -172,7 +166,10 @@ const TRANSLATIONS = {
     'history.clear': 'Clear All',
     'history.empty.title': 'No transcriptions yet',
     'history.empty.sub': 'Your transcription history will appear here.',
+    'history.today': 'Today',
     'history.yesterday': 'Yesterday',
+    'history.previous7': 'Previous 7 Days',
+    'history.previous30': 'Previous 30 Days',
     'history.copy': 'Copy',
     'history.delete': 'Delete',
     // Home stats
@@ -246,6 +243,7 @@ const TRANSLATIONS = {
     'settings.shortcuts.hold.sub': 'Pausiert die aktive Aufnahme vorübergehend',
     'settings.shortcuts.record': 'Kürzel aufzeichnen',
     'settings.shortcuts.recording': 'Kürzel drücken…',
+    'settings.shortcuts.hint': 'Normale Taste hinzufügen (z. B. Strg+Leertaste)',
     'settings.shortcuts.vocab': 'Zum Vokabular hinzufügen',
     'settings.shortcuts.vocab.sub': 'Fügt das markierte Wort/Wörter zu den Vokabularersetzungen hinzu',
     // Settings tab — application
@@ -256,11 +254,6 @@ const TRANSLATIONS = {
     // Settings tab — sounds
     'settings.sounds.section': 'Aufnahmetöne',
     'settings.sounds.mute': 'Alle Töne stummschalten',
-    'settings.sounds.start': 'Starton',
-    'settings.sounds.stop': 'Stopton',
-    'settings.sounds.cancel': 'Abbrechen-Ton',
-    'settings.sounds.hold': 'Pausieren-Ton',
-    'settings.sounds.resume': 'Fortsetzen-Ton',
     // Modes tab
     'modes.llm.btn': 'KI-Einstellungen',
     'modes.llm.title': 'KI-Einstellungen',
@@ -324,7 +317,10 @@ const TRANSLATIONS = {
     'history.clear': 'Alles löschen',
     'history.empty.title': 'Noch keine Transkriptionen',
     'history.empty.sub': 'Dein Transkriptionsverlauf erscheint hier.',
+    'history.today': 'Heute',
     'history.yesterday': 'Gestern',
+    'history.previous7': 'Letzte 7 Tage',
+    'history.previous30': 'Letzte 30 Tage',
     'history.copy': 'Kopieren',
     'history.delete': 'Löschen',
     // Home stats
@@ -496,11 +492,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   platform = await window.api.getPlatform();
   document.body.classList.add('platform-' + platform);
   if (platform === 'win32') {
-    DEFAULTS.toggle_recording = { key: 'space', key_code: 49, modifiers: ['control', 'super', 'option'] };
+    DEFAULTS.toggle_recording = { key: 'space', key_code: 49, modifiers: ['control', 'option'] };
   }
   if (await window.api.isDevMode()) document.body.classList.add('dev-mode');
-  systemSounds = await window.api.getSystemSounds();
-  defaultSounds = await window.api.getDefaultSounds();
 
   const version = await window.api.getAppVersion();
   document.getElementById('app-version-label').textContent = `Version ${version}`;
@@ -524,7 +518,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // opens the linked-apps popup (no await — runs in background).
   preloadInstalledApps();
 
-  populateSoundSelects();
   populateLanguageSelect();
   initLogoSelect('sel-openaiModel', WHISPER_MODELS);
   populateLlmModelSelect('openai');
@@ -534,7 +527,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupSidebarNav();
   setupShortcutCapture();
   setupOptionToggles();
-  setupSoundControls();
   setupApiKeyInput();
   setupLlmSettings();
   setupModesTab();
@@ -838,12 +830,6 @@ function applyConfig(cfg, { fromPoll = false } = {}) {
 
   // Sounds
   document.getElementById('opt-soundMuted').checked = cfg.sound_muted || false;
-  setLogoSelect('sel-soundStart', cfg.sound_start || defaultSounds.start);
-  setLogoSelect('sel-soundStop', cfg.sound_stop || defaultSounds.stop);
-  setLogoSelect('sel-soundCancel', cfg.sound_cancel || defaultSounds.cancel);
-  setLogoSelect('sel-soundHold', cfg.sound_hold || defaultSounds.hold);
-  setLogoSelect('sel-soundResume', cfg.sound_resume || defaultSounds.resume);
-  updateSoundRowsDisabled(cfg.sound_muted || false);
 
   // Transcription model
   const apiKeyInput = document.getElementById('inp-apiKey');
@@ -969,6 +955,16 @@ function renderShortcutBadges(action, combo) {
   });
 }
 
+/** While recording, replace the "Press shortcut…" label with a hint. Persists
+ *  until the next keypress re-renders the badges or recording stops. */
+function showRecordingHint(action) {
+  if (recordingAction !== action) return;
+  const container = document.getElementById(`badge-${action}`);
+  if (!container) return;
+  const label = container.querySelector('.recording-label');
+  if (label) label.textContent = t('settings.shortcuts.hint');
+}
+
 function updateResetButton(action, combo, defaultCombo) {
   const btn = document.querySelector(`.shortcut-reset[data-action="${action}"]`);
   if (!btn) return;
@@ -1034,8 +1030,12 @@ function handleKeyCapture(e) {
     return;
   }
 
-  // Don't capture bare modifier keys
-  if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+  // Don't capture bare modifier keys — a shortcut needs a regular key too.
+  // Show a hint so it doesn't feel like nothing happened.
+  if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
+    showRecordingHint(recordingAction);
+    return;
+  }
 
   const combo = keyEventToCombo(e);
 
@@ -1063,7 +1063,9 @@ function keyEventToCombo(e) {
   if (e.ctrlKey) modifiers.push('control');
   if (e.altKey) modifiers.push('option');
   if (e.shiftKey) modifiers.push('shift');
-  if (e.metaKey) modifiers.push('command');
+  // The Windows key (⊞) maps to the Super modifier on Windows so it's bindable as
+  // the actual Windows key; on macOS the same physical key is Command.
+  if (e.metaKey) modifiers.push(platform === 'win32' ? 'super' : 'command');
 
   // Map key name
   let key = '';
@@ -1127,9 +1129,9 @@ function setupOptionToggles() {
     document.getElementById(id).addEventListener('change', (e) => {
       if (!config) return;
       config[key] = e.target.checked;
-      if (key === 'sound_muted') {
-        updateSoundRowsDisabled(e.target.checked);
-      }
+      // Apply mute to the main process immediately — don't wait for the debounced
+      // save to round-trip, or the next hotkey can still play the old state.
+      if (key === 'sound_muted') window.api.setSoundMuted(e.target.checked);
       saveConfig();
     });
   }
@@ -1138,75 +1140,6 @@ function setupOptionToggles() {
     window.api.setLoginItemEnabled(e.target.checked);
   });
 }
-
-function updateSoundRowsDisabled(muted) {
-  document.getElementById('sound-start-row').classList.toggle('disabled', muted);
-  document.getElementById('sound-stop-row').classList.toggle('disabled', muted);
-  document.getElementById('sound-cancel-row').classList.toggle('disabled', muted);
-  document.getElementById('sound-hold-row').classList.toggle('disabled', muted);
-  document.getElementById('sound-resume-row').classList.toggle('disabled', muted);
-}
-
-// ---------------------------------------------------------------------------
-// Sound Controls
-// ---------------------------------------------------------------------------
-
-function populateSoundSelects() {
-  const soundOptions = systemSounds.map((s) => ({ value: s, label: s }));
-  for (const id of ['sel-soundStart', 'sel-soundStop', 'sel-soundCancel', 'sel-soundHold', 'sel-soundResume']) {
-    initLogoSelect(id, soundOptions);
-  }
-}
-
-function setupSoundControls() {
-  document.getElementById('sel-soundStart').addEventListener('logo-select-change', (e) => {
-    if (!config) return;
-    config.sound_start = e.detail.value;
-    window.api.playSound(e.detail.value);
-    saveConfig();
-  });
-
-  document.getElementById('sel-soundStop').addEventListener('logo-select-change', (e) => {
-    if (!config) return;
-    config.sound_stop = e.detail.value;
-    window.api.playSound(e.detail.value);
-    saveConfig();
-  });
-
-  document.getElementById('sel-soundCancel').addEventListener('logo-select-change', (e) => {
-    if (!config) return;
-    config.sound_cancel = e.detail.value;
-    window.api.playSound(e.detail.value);
-    saveConfig();
-  });
-
-  document.getElementById('sel-soundHold').addEventListener('logo-select-change', (e) => {
-    if (!config) return;
-    config.sound_hold = e.detail.value;
-    window.api.playSound(e.detail.value);
-    saveConfig();
-  });
-
-  document.getElementById('sel-soundResume').addEventListener('logo-select-change', (e) => {
-    if (!config) return;
-    config.sound_resume = e.detail.value;
-    window.api.playSound(e.detail.value);
-    saveConfig();
-  });
-
-  document.querySelectorAll('.play-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const which = btn.dataset.sound;
-      const selId = which === 'start'  ? 'sel-soundStart'
-                  : which === 'stop'   ? 'sel-soundStop'
-                  : which === 'hold'   ? 'sel-soundHold'
-                  : which === 'resume' ? 'sel-soundResume'
-                  : 'sel-soundCancel';
-      window.api.playSound(document.getElementById(selId).dataset.value);
-    });
-  });
-}
-
 
 // ---------------------------------------------------------------------------
 // API Key Input
@@ -2706,6 +2639,38 @@ function saveConfigNow() {
 
 let historyCache = null;
 let historyRenderedCache = null;
+let historyRetryTimer = null;
+// Group keys the user has collapsed in the History tab (kept for the session so
+// collapse state survives re-renders, e.g. after a new transcription lands).
+const collapsedHistoryGroups = new Set();
+
+// Fetch history into the cache. Returns the entries array, or null if the backend
+// isn't responding yet (e.g. still booting on cold start). A null result is NOT
+// cached — instead a retry is scheduled so the History/Home views populate on
+// their own once the backend is up, without the user having to record first.
+async function fetchHistoryCache() {
+  if (historyCache !== null) return historyCache;
+  const entries = await window.api.getHistory();
+  if (!Array.isArray(entries)) {
+    scheduleHistoryRetry();
+    return null;
+  }
+  historyCache = entries;
+  return entries;
+}
+
+function scheduleHistoryRetry() {
+  if (historyRetryTimer) return;
+  historyRetryTimer = setTimeout(async () => {
+    historyRetryTimer = null;
+    if (historyCache !== null) return;
+    const entries = await fetchHistoryCache();
+    if (entries === null) return; // still down — fetchHistoryCache rescheduled
+    // Backend is up now — refresh whichever view is on screen.
+    if (document.getElementById('tab-history').classList.contains('active')) renderHistory(entries);
+    if (document.getElementById('tab-home').classList.contains('active')) renderHomeStats(entries);
+  }, 1000);
+}
 
 function setupHistoryTab() {
   // Load history when the tab becomes active
@@ -2730,9 +2695,8 @@ async function loadHistory() {
     if (historyRenderedCache !== historyCache) renderHistory(historyCache);
     return;
   }
-  const entries = await window.api.getHistory() || [];
-  historyCache = entries;
-  renderHistory(entries);
+  const entries = await fetchHistoryCache();
+  renderHistory(entries || []);
 }
 
 function renderHistory(entries) {
@@ -2742,8 +2706,8 @@ function renderHistory(entries) {
 
   historyRenderedCache = entries;
 
-  // Remove all entries but keep the empty placeholder
-  list.querySelectorAll('.history-entry').forEach((el) => el.remove());
+  // Remove all sections but keep the empty placeholder
+  list.querySelectorAll('.history-section').forEach((el) => el.remove());
 
   if (!entries.length) {
     empty.style.display = '';
@@ -2754,7 +2718,18 @@ function renderHistory(entries) {
   empty.style.display = 'none';
   clearBtn.style.display = '';
 
+  const now = new Date();
+  let lastGroupKey = null;
+  let sectionBody = null;
+
   for (const entry of entries) {
+    const date = new Date(entry.timestamp);
+    const group = getHistoryGroup(date, now);
+    if (group.key !== lastGroupKey) {
+      sectionBody = createHistorySection(list, group);
+      lastGroupKey = group.key;
+    }
+
     const el = document.createElement('div');
     el.className = 'history-entry';
 
@@ -2763,7 +2738,7 @@ function renderHistory(entries) {
     el.innerHTML = `
       <div class="history-entry-text">${escapeHtml(entry.text)}</div>
       <div class="history-entry-meta">
-        <span class="history-entry-time">${formatTimestamp(entry.timestamp)}</span>
+        <span class="history-entry-time">${formatEntryTime(date, group.key)}</span>
         <div class="history-entry-actions">
           <button class="history-action-btn copy" title="Copy to clipboard">${t('history.copy')}</button>
           <button class="history-action-btn delete" title="Delete">${t('history.delete')}</button>
@@ -2805,8 +2780,38 @@ function renderHistory(entries) {
       });
     }
 
-    list.appendChild(el);
+    sectionBody.appendChild(el);
   }
+}
+
+// Build a collapsible <section> for a date group, append it to the list, and
+// return its body element (where the group's entries get appended).
+function createHistorySection(list, group) {
+  const section = document.createElement('div');
+  section.className = 'history-section';
+  if (collapsedHistoryGroups.has(group.key)) section.classList.add('collapsed');
+
+  const header = document.createElement('button');
+  header.type = 'button';
+  header.className = 'history-section-header';
+  header.innerHTML = `
+    <svg class="history-section-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>
+    <span>${escapeHtml(group.label)}</span>`;
+  header.addEventListener('click', () => {
+    const collapsed = section.classList.toggle('collapsed');
+    if (collapsed) collapsedHistoryGroups.add(group.key);
+    else collapsedHistoryGroups.delete(group.key);
+  });
+
+  const body = document.createElement('div');
+  body.className = 'history-section-body';
+
+  section.appendChild(header);
+  section.appendChild(body);
+  list.appendChild(section);
+  return body;
 }
 
 let _usageTooltipEl = null;
@@ -2897,10 +2902,10 @@ function setupVocabularyTab() {
 
   document.getElementById('btn-add-vocab').addEventListener('click', () => {
     if (!config.vocabulary) config.vocabulary = [];
-    config.vocabulary.push({ from: '', to: '' });
+    config.vocabulary.unshift({ from: '', to: '' });
     renderVocabList();
     const inputs = document.querySelectorAll('.vocab-entry .vocab-from');
-    if (inputs.length) inputs[inputs.length - 1].focus();
+    if (inputs.length) inputs[0].focus();
   });
 }
 
@@ -2910,12 +2915,12 @@ function addWordToVocabulary(word) {
   if (vocabTab) vocabTab.click();
 
   if (!config.vocabulary) config.vocabulary = [];
-  config.vocabulary.push({ from: word || '', to: '' });
+  config.vocabulary.unshift({ from: word || '', to: '' });
   renderVocabList();
 
-  // Focus the "to" (replacement) field of the new entry
+  // Focus the "to" (replacement) field of the new entry (now the top row)
   const toInputs = document.querySelectorAll('.vocab-entry .vocab-to');
-  if (toInputs.length) toInputs[toInputs.length - 1].focus();
+  if (toInputs.length) toInputs[0].focus();
 }
 
 function renderVocabList() {
@@ -2960,6 +2965,16 @@ function renderVocabList() {
       saveConfigNow();
     };
 
+    // Keep config in sync on every keystroke so a new replacement isn't lost
+    // if the window closes before blur (beforeunload flushes the live config).
+    const syncEntry = () => {
+      if (!config.vocabulary) return;
+      config.vocabulary[idx] = { from: fromInput.value.trim(), to: toInput.value.trim() };
+      saveConfig();
+    };
+    fromInput.addEventListener('input', syncEntry);
+    toInput.addEventListener('input', syncEntry);
+
     fromInput.addEventListener('blur', (e) => {
       if (row.contains(e.relatedTarget)) return;
       saveEntry();
@@ -2979,24 +2994,33 @@ function renderVocabList() {
   });
 }
 
-function formatTimestamp(iso) {
-  const date = new Date(iso);
-  const now = new Date();
-  const diff = now - date;
+// Apple-style date grouping: Today, Yesterday, Previous 7 Days, Previous 30 Days,
+// then by month (with year when not the current year). Returns a stable key (used
+// to detect group boundaries) and a localized header label.
+function getHistoryGroup(date, now) {
+  const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const dayDiff = Math.round((startOfDay(now) - startOfDay(date)) / 86400000);
 
-  // Today: show time only
-  if (diff < 86400000 && date.getDate() === now.getDate()) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  // Yesterday
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth()) {
-    return t('history.yesterday') + ', ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  // Older
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
-    ', ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (dayDiff <= 0) return { key: 'today', label: t('history.today') };
+  if (dayDiff === 1) return { key: 'yesterday', label: t('history.yesterday') };
+  if (dayDiff <= 7) return { key: 'prev7', label: t('history.previous7') };
+  if (dayDiff <= 30) return { key: 'prev30', label: t('history.previous30') };
+
+  const lang = getCurrentLang();
+  const sameYear = date.getFullYear() === now.getFullYear();
+  const label = date.toLocaleDateString(lang, sameYear ? { month: 'long' } : { month: 'long', year: 'numeric' });
+  return {
+    key: 'm' + date.getFullYear() + '-' + date.getMonth(),
+    label: label.charAt(0).toUpperCase() + label.slice(1),
+  };
+}
+
+// The section header carries the day context, so entries only need the time of
+// day — except in the multi-day groups, where the date is still useful.
+function formatEntryTime(date, groupKey) {
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (groupKey === 'today' || groupKey === 'yesterday') return time;
+  return date.toLocaleDateString(getCurrentLang(), { month: 'short', day: 'numeric' }) + ', ' + time;
 }
 
 // ---------------------------------------------------------------------------
@@ -3020,9 +3044,8 @@ async function loadHomeStats() {
     renderHomeStats(historyCache);
     return;
   }
-  const entries = await window.api.getHistory() || [];
-  historyCache = entries;
-  renderHomeStats(entries);
+  const entries = await fetchHistoryCache();
+  renderHomeStats(entries || []);
 }
 
 function computeStats(entries) {

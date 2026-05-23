@@ -5,6 +5,8 @@
   --text: #1d1d1f;
   --text-secondary: #86868b;
   --radius-pill: 100px;
+  /* Resting pill: a calm translucent "glass" lozenge in both color schemes. */
+  --pill-rest-bg: rgba(30, 30, 32, 0.52);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -30,9 +32,9 @@ html, body {
 
 .pill {
   position: absolute;
-  top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  bottom: var(--pill-edge-margin);
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -41,53 +43,43 @@ html, body {
   color: var(--text);
   border-radius: var(--radius-pill);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  transition: opacity 180ms ease, background 180ms ease, border-color 180ms ease;
+  transition: opacity 180ms ease, background 180ms ease, border-color 180ms ease,
+              width 240ms cubic-bezier(0.22, 1, 0.36, 1),
+              height 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* When docked at the top (under the menu bar/notch), anchor the top edge so the pill
+   grows downward instead of into the menu bar. */
+body.dock-top .pill { top: var(--pill-edge-margin); bottom: auto; }
+
+body {
+  /* Gap from the window's docked edge to the pill's matching edge. The pill anchors to
+     the edge it's docked against (bottom by default; top when body.dock-top) and grows
+     AWAY from it, so the docked edge stays planted. Matches PILL_EDGE_MARGIN in main.js. */
+  --pill-edge-margin: 4px;
 }
 
-/* ----- Apple-Intelligence-style halo (rendered behind pill in DOM order) ---
-   Two stroke-only rings (mask-composite excludes the inner content box).
-   Each ring uses a conic-gradient with a multi-color palette so the halo
-   wraps the whole pill perimeter; the gradient angle slowly rotates so the
-   colors drift. Audio amplitude smoothly modulates thickness, blur and
-   opacity — no jitter. */
-
+/* ----- Apple-Intelligence rainbow border (recording only) -----
+   The colored ring is the pill's OWN border, not a separate layer: a conic-gradient
+   fills the pill and is masked down to a thin ring sitting exactly where the border is,
+   with the gradient angle slowly rotating so the colors drift. Because it's part of the
+   pill it grows and moves with it — there's no separate glow to drift out of sync and no
+   outward bloom. Shown only while recording; rest/processing/paused keep a plain border. */
 @property --halo-a {
   syntax: '<angle>';
   initial-value: 0deg;
   inherits: false;
 }
-@property --halo-b {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
-}
-body {
-  /* Pill dimensions, mirrored on glow layers. Set per style below. */
-  --pill-w: 118px;
-  --pill-h: 32px;
 
-  /* Smoothed by JS from audio level. */
-  --flicker-w: 3px;
-  --flicker-blur: 2px;
-  --flicker-opacity: 0.65;
-  --bloom-w: 4px;
-  --bloom-blur: 8px;
-  --bloom-opacity: 0;
-}
-
-body.style-mini    { --pill-w: 118px; --pill-h: 32px; }
-body.style-classic { --pill-w: 258px; --pill-h: 48px; }
-
-.glow {
+.pill::before {
+  content: '';
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  border-radius: var(--radius-pill);
-  box-sizing: content-box;
-  width: var(--pill-w);
-  height: var(--pill-h);
+  inset: -1.5px;                 /* span the border box so the ring replaces the border */
+  border-radius: inherit;
+  padding: 1.5px;                /* ring thickness = pill border width */
+  background: conic-gradient(
+    from var(--halo-a),
+    #a855f7, #3b82f6, #06b6d4, #ec4899, #a855f7
+  );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -96,40 +88,19 @@ body.style-classic { --pill-w: 258px; --pill-h: 48px; }
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
           mask-composite: exclude;
+  opacity: 0;                    /* hidden unless recording */
+  transition: opacity 180ms ease;
+  pointer-events: none;
 }
 
-.glow-flicker {
-  padding: var(--flicker-w);
-  background: conic-gradient(
-    from var(--halo-a),
-    #a855f7,
-    #3b82f6,
-    #06b6d4,
-    #ec4899,
-    #a855f7
-  );
-  filter: blur(var(--flicker-blur));
-  opacity: var(--flicker-opacity);
+/* Recording: hide the solid blue border and reveal the rotating rainbow ring. */
+body.is-recording .pill { border-color: transparent; }
+body.is-recording .pill::before {
+  opacity: 1;
   animation: halo-spin-a 9s linear infinite;
 }
 
-.glow-bloom {
-  padding: var(--bloom-w);
-  background: conic-gradient(
-    from var(--halo-b),
-    #ec4899,
-    #a855f7,
-    #3b82f6,
-    #06b6d4,
-    #ec4899
-  );
-  filter: blur(var(--bloom-blur));
-  opacity: var(--bloom-opacity);
-  animation: halo-spin-b 14s linear infinite reverse;
-}
-
 @keyframes halo-spin-a { to { --halo-a: 360deg; } }
-@keyframes halo-spin-b { to { --halo-b: 360deg; } }
 
 .dot {
   width: 8px;
@@ -174,15 +145,15 @@ body.style-classic { --pill-w: 258px; --pill-h: 48px; }
 
 /* ----- Mini ----- */
 body.style-mini .pill {
-  width: 118px;
-  height: 32px;
-  padding: 0 12px;
-  gap: 8px;
+  width: 94px;
+  height: 28px;
+  padding: 0 10px;
+  gap: 7px;
 }
 body.style-mini .bars {
-  height: 16px;
+  height: 14px;
 }
-body.style-mini .bars span:nth-child(n+10) { display: none; }
+body.style-mini .bars span:nth-child(n+8) { display: none; }
 
 /* ----- Classic ----- */
 body.style-classic .pill {
@@ -228,7 +199,6 @@ body.is-processing .pill {
   border-color: var(--text-secondary);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
 }
-body.is-processing .glow { display: none; }
 
 /* ----- Paused state ----- */
 body.is-paused .bars { display: none; }
@@ -243,4 +213,25 @@ body.is-paused .pill {
   border-color: var(--text-secondary);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
 }
-body.is-paused .glow { display: none; }
+/* Paused keeps is-recording, so hide the rainbow ring for the calm held look. */
+body.is-paused .pill::before { opacity: 0; }
+
+/* ----- Resting state (the always-on default) -----
+   Absence of `is-recording` = a tiny translucent "glass" lozenge that hugs the Dock:
+   present but unobtrusive ("seen but not seen"). No bars, dot or halo. */
+body:not(.is-recording) .pill {
+  width: 44px;
+  height: 10px;
+  padding: 0;
+  background: var(--pill-rest-bg);
+  border: 0.5px solid rgba(255, 255, 255, 0.16);
+  box-shadow: none;
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  backdrop-filter: blur(14px) saturate(160%);
+}
+body:not(.is-recording) .bars,
+body:not(.is-recording) .dot,
+body:not(.is-recording) .spinner,
+body:not(.is-recording) .paused-icon {
+  display: none;
+}

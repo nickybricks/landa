@@ -1,0 +1,5 @@
+{
+  "start":  {"pitchHi":-14,"pitchLo":-16,"cutoff":8000,"blob":1,"attack":0.03,"length":0.37,"volume":0.38},
+  "stop":   {"pitchHi":-18,"pitchLo":-16,"cutoff":8000,"blob":1,"attack":0.03,"length":0.37,"volume":0.38},
+  "cancel": {"pitchHi":-24,"pitchLo":-16,"cutoff":8000,"blob":1,"attack":0.03,"length":0.37,"volume":0.38}
+}

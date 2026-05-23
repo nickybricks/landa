@@ -37,6 +37,7 @@ Both fonts are loaded via Google Fonts. Fallback stack: `-apple-system, BlinkMac
 | `--border`       | `rgba(0,0,0,0.08)` |
 | `--text`         | `#1d1d1f`          |
 | `--text-secondary` | `#86868b`        |
+| `--pill-rest-bg` | `rgba(30,30,32,0.52)` | recording-window resting pill (translucent glass lozenge); scheme-independent |
 
 ### Surface Colors (Dark override)
 

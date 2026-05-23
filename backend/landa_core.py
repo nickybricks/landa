@@ -142,8 +142,8 @@ def _calc_cost(model: str, input_tokens: int = 0, output_tokens: int = 0, durati
 DEFAULT_CONFIG: dict = {
     "api_key": "",
     "api_provider": "openai",
-    "openai_model": "whisper-small",
-    "openai_language": "de",
+    "openai_model": "landa-base",
+    "openai_language": "auto",
     "nemo_language": "auto",
     "sound_start": "Windows Notify" if sys.platform == "win32" else "Tink",
     "sound_stop": "tada" if sys.platform == "win32" else "Pop",
@@ -151,7 +151,7 @@ DEFAULT_CONFIG: dict = {
     "auto_capitalize": True,
     "auto_punctuate": True,
     "toggle_recording": (
-        {"key": "space", "key_code": 49, "modifiers": ["control", "super", "option"]}
+        {"key": "space", "key_code": 49, "modifiers": ["control", "option"]}
         if sys.platform == "win32"
         else {"key": "space", "key_code": 49, "modifiers": ["option"]}
     ),
@@ -171,6 +171,8 @@ DEFAULT_CONFIG: dict = {
     "active_lexicons": [],
     "add_to_vocabulary": {"key": "f7", "key_code": 98, "modifiers": []},
     "recording_window_style": "mini",
+    "recording_window_always_show": True,
+    "recording_window_docked": False,
     "onboarding_completed": False,
     "modes": {
         "enabled": {
@@ -231,6 +233,19 @@ def _migrate(cfg: dict) -> tuple[dict, bool]:
             allowed = {"whisper-1", "whisper-base", "whisper-small", "whisper-medium", "whisper-large-v3", "whisper-large-v3-turbo", "landa-de-small", "gpt-4o-transcribe", "gpt-4o-mini-transcribe", "gpt-realtime-whisper"}
             cfg["openai_model"] = old_model if old_model in allowed else "whisper-1"
         changed = True
+
+    # Fresh installs used to default to "whisper-small", which silently
+    # re-downloads the ~490 MB ggml model the app already bundles. Flip those to
+    # the bundled "landa-base" (identical weights, zero download). Only flip when
+    # the small model was never downloaded — a user who downloaded it chose it.
+    if cfg.get("openai_model") == "whisper-small":
+        if sys.platform == "darwin":
+            small_path = CONFIG_DIR / "models" / "whisper" / "ggml-small.bin"
+        else:
+            small_path = CONFIG_DIR / "models" / "whisper" / "whisper-small" / "model.bin"
+        if not small_path.exists():
+            cfg["openai_model"] = "landa-base"
+            changed = True
 
     # old "language" → "openai_language"
     if "language" in cfg:
@@ -1074,24 +1089,6 @@ _rt_error: bool = False
 # ---------------------------------------------------------------------------
 
 
-def play_sound(name: str) -> None:
-    """Play a system sound by name (non-blocking)."""
-    if not name:
-        return
-    if sys.platform == "darwin":
-        path = f"/System/Library/Sounds/{name}.aiff"
-        if os.path.exists(path):
-            subprocess.Popen(["afplay", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    elif sys.platform == "win32":
-        try:
-            import winsound
-            path = os.path.join(r"C:\Windows\Media", f"{name}.wav")
-            if os.path.exists(path):
-                winsound.PlaySound(path, winsound.SND_FILENAME | winsound.SND_ASYNC)
-        except Exception:
-            pass
-
-
 def paste_text(text: str) -> None:
     """Copy *text* to the clipboard. On macOS, signals the Electron main process to send Cmd+V."""
     global _pending_paste, _transcription_text
@@ -1594,18 +1591,19 @@ def start_recording() -> bool:
         logging.info("[start_recording] waiting for previous stream teardown...")
         _teardown_thread.join(timeout=5.0)
         if _teardown_thread.is_alive():
-            # PortAudio's abort()/close() can deadlock inside CoreAudio on macOS,
-            # especially after very short recordings. The zombie thread holds the
-            # input device, so a plain new InputStream would just time out.
-            # Hard-reset PortAudio to force CoreAudio to release the device.
-            logging.error("[start_recording] previous teardown still hung after 5s — resetting PortAudio")
-            try:
-                sd._terminate()
-                sd._initialize()
-                logging.info("[start_recording] PortAudio reinitialized")
-            except Exception as e:
-                logging.error("[start_recording] PortAudio reset failed: %s", e)
+            # PortAudio's abort()/close() is wedged inside CoreAudio (native code).
+            # We can't recover in-process: sd._terminate() needs PortAudio's
+            # internal mutex which the zombie thread still holds, so calling it
+            # from here also blocks indefinitely (observed in v0.25.4).
+            # Exit so Electron respawns the backend with a fresh PortAudio state.
+            logging.error("[start_recording] previous teardown still hung after 5s — exiting so Electron restarts backend")
+            def _delayed_exit():
+                time.sleep(0.5)  # let the /start False response flush to Electron
+                os._exit(2)
+            threading.Thread(target=_delayed_exit, daemon=True).start()
             _teardown_thread = None
+            logging.info("[/start] responding in %.3fs, started=False (backend exiting)", time.time() - t0)
+            return False
         else:
             logging.info("[start_recording] previous teardown finished")
             _teardown_thread = None
@@ -1655,28 +1653,49 @@ def start_recording() -> bool:
     create_error = None
     timed_out = threading.Event()
 
+    def _open_stream():
+        s = sd.InputStream(
+            samplerate=SAMPLE_RATE,
+            channels=1,
+            dtype="float32",
+            callback=_audio_callback,
+        )
+        s.start()
+        return s
+
     def _create_stream():
         nonlocal new_stream, create_error
         try:
-            s = sd.InputStream(
-                samplerate=SAMPLE_RATE,
-                channels=1,
-                dtype="float32",
-                callback=_audio_callback,
-            )
-            s.start()
-            if timed_out.is_set():
-                # Caller already gave up — release the mic immediately so the
-                # next start attempt isn't blocked by this orphaned stream.
-                try:
-                    s.abort()
-                    s.close()
-                except Exception:
-                    pass
+            s = _open_stream()
+        except sd.PortAudioError as e:
+            # PortAudio enumerates devices once at init and never notices when
+            # the default input device changes mid-session (e.g. switching
+            # between AirPods and the built-in mic). The stale device list makes
+            # CoreAudio reject the open with -10851 (Invalid Property Value),
+            # surfacing as PortAudio -9986. Rebuild the device list by
+            # reinitializing PortAudio, then retry the open once. Safe here: the
+            # previous stream's teardown has already completed and none is active.
+            logging.warning("[start_recording] InputStream open failed (%s) — reinitializing PortAudio and retrying", e)
+            try:
+                sd._terminate()
+                sd._initialize()
+                s = _open_stream()
+            except Exception as e2:
+                create_error = e2
                 return
-            new_stream = s
         except Exception as e:
             create_error = e
+            return
+        if timed_out.is_set():
+            # Caller already gave up — release the mic immediately so the
+            # next start attempt isn't blocked by this orphaned stream.
+            try:
+                s.abort()
+                s.close()
+            except Exception:
+                pass
+            return
+        new_stream = s
 
     creator = threading.Thread(target=_create_stream, daemon=True)
     creator.start()
@@ -1695,6 +1714,9 @@ def start_recording() -> bool:
     with lock:
         stream = new_stream
         recording = True
+    # Clock the GPU up now (overlaps with the user speaking) so the first
+    # transcription after an idle period isn't slowed by a cold GPU.
+    _warmup_gpu_if_loaded()
     # Start realtime WebSocket streaming if a realtime model is selected
     if _is_realtime_model():
         _rt_queue = queue.Queue(maxsize=1000)
@@ -1703,7 +1725,8 @@ def start_recording() -> bool:
         _rt_thread = threading.Thread(target=_realtime_sender_thread, daemon=True)
         _rt_thread.start()
         logging.info("[start_recording] realtime WebSocket sender started")
-    play_sound(config.get("sound_start", DEFAULT_CONFIG["sound_start"]))
+    # Start sound is played by the Electron main process on keypress (instant
+    # feedback) — not here, where it would lag behind stream creation.
     logging.info("[start_recording] done in %.3fs total", time.time() - t0)
     return True
 
@@ -1729,7 +1752,8 @@ def stop_recording() -> bool:
         recording = False
         _is_on_hold = False
     logging.info("[stop_recording] state updated in %.3fs", time.time() - t0)
-    play_sound(config.get("sound_stop", DEFAULT_CONFIG["sound_stop"]))
+    # Stop sound is played by the Electron main process on keypress (instant
+    # feedback) — not here, behind the HTTP round-trip.
     # Signal realtime sender to commit and finalize
     if _rt_queue is not None:
         try:
@@ -1927,6 +1951,25 @@ def _finalize_transcription() -> None:
     _transcribe_and_paste()
 
 
+def _debug_save_audio(audio: np.ndarray) -> str | None:
+    """Dev-only: when LANDA_DEBUG_AUDIO=1, save the raw recording so a
+    hallucination can be replayed offline against parameter changes. Off by
+    default — nothing is written on user machines."""
+    if os.environ.get("LANDA_DEBUG_AUDIO") != "1":
+        return None
+    try:
+        ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        out_dir = CONFIG_DIR / "debug-audio"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        path = out_dir / f"rec-{ts}.wav"
+        wavfile.write(str(path), SAMPLE_RATE, np.int16(np.clip(audio, -1.0, 1.0) * 32767))
+        logging.info("[debug-audio] saved %s (%.2fs)", path, len(audio) / SAMPLE_RATE)
+        return ts
+    except Exception as e:
+        logging.warning("[debug-audio] save failed: %s", e)
+        return None
+
+
 def _transcribe_and_paste(force_model: str | None = None) -> None:
     if not audio_frames:
         return
@@ -1945,6 +1988,7 @@ def _transcribe_and_paste(force_model: str | None = None) -> None:
     t_concat = time.time()
     audio = np.concatenate(audio_frames, axis=0).flatten().astype(np.float32)
     logging.info("[pipeline] concat audio: %.3fs", time.time() - t_concat)
+    debug_ts = _debug_save_audio(audio)
 
     # Route: macOS local whisper.cpp accepts numpy directly — skip the WAV detour.
     # OpenAI / NeMo / Windows-faster-whisper paths still need a WAV file.
@@ -1953,7 +1997,7 @@ def _transcribe_and_paste(force_model: str | None = None) -> None:
     use_numpy_path = (
         sys.platform == "darwin"
         and provider != "nemo"
-        and selected_model in LOCAL_WHISPER_MODELS
+        and (selected_model in LOCAL_WHISPER_MODELS or selected_model == "landa-base")
     )
 
     tmp_path: str | None = None
@@ -1970,10 +2014,15 @@ def _transcribe_and_paste(force_model: str | None = None) -> None:
         prep_latency_ms = round((time.time() - pipeline_start) * 1000)
         t_tx = time.time()
         if use_numpy_path:
-            text, transcribe_usage = transcribe_whisper_local(audio, selected_model)
+            if selected_model == "landa-base":
+                text, transcribe_usage = transcribe_landa_base(audio)
+            else:
+                text, transcribe_usage = transcribe_whisper_local(audio, selected_model)
         else:
             text, transcribe_usage = transcribe(tmp_path, force_model=force_model)
         logging.info("[pipeline] transcribe total: %.3fs", time.time() - t_tx)
+        if debug_ts:
+            logging.info("[debug-audio] %s raw transcript: %r", debug_ts, text)
         if not text or _is_hallucination(text):
             if text:
                 logging.info("[transcribe] Discarding hallucination: %r", text)
@@ -2077,6 +2126,7 @@ _whisper_model_cache: dict = {}           # model_name -> loaded model object
 _detected_language: str | None = None     # last auto-detected language code (e.g. "de")
 _whisper_download_state: dict = {}        # model_name -> {downloading, cached, error, progress_bytes, total_bytes}
 _whisper_download_lock = threading.Lock()
+_whisper_model_load_lock = threading.Lock()  # serializes model construction (warmup vs first transcription)
 
 
 def is_whisper_deps_installed() -> bool:
@@ -2217,13 +2267,15 @@ def transcribe_whisper_local(audio, model_name: str) -> tuple:
             return "[Error] pywhispercpp not installed. Please install from the Settings page.", _local_usage
 
         if model_name not in _whisper_model_cache:
-            info = WHISPER_MODELS.get(model_name)
-            if not info:
-                return f"[Error] Unknown local model: {model_name}", _local_usage
-            model_path = WHISPER_MODELS_DIR / info["filename"]
-            if not model_path.exists():
-                return f"[Error] Model not found: {model_path}. Please download from Settings.", _local_usage
-            _whisper_model_cache[model_name] = WhisperModel(str(model_path))
+            with _whisper_model_load_lock:
+                if model_name not in _whisper_model_cache:
+                    info = WHISPER_MODELS.get(model_name)
+                    if not info:
+                        return f"[Error] Unknown local model: {model_name}", _local_usage
+                    model_path = WHISPER_MODELS_DIR / info["filename"]
+                    if not model_path.exists():
+                        return f"[Error] Model not found: {model_path}. Please download from Settings.", _local_usage
+                    _whisper_model_cache[model_name] = WhisperModel(str(model_path))
 
         model = _whisper_model_cache[model_name]
         language = config.get("openai_language", "auto")
@@ -2255,13 +2307,15 @@ def transcribe_whisper_local(audio, model_name: str) -> tuple:
             return "[Error] faster-whisper not installed. Please install from the Settings page.", _local_usage
 
         if model_name not in _whisper_model_cache:
-            info = WHISPER_MODELS.get(model_name)
-            if not info:
-                return f"[Error] Unknown local model: {model_name}", _local_usage
-            model_dir = WHISPER_MODELS_DIR / model_name
-            if not (model_dir / "model.bin").exists():
-                return f"[Error] Model not found: {model_dir}. Please download from Settings.", _local_usage
-            _whisper_model_cache[model_name] = WhisperModel(str(model_dir), device="cpu", compute_type="int8")
+            with _whisper_model_load_lock:
+                if model_name not in _whisper_model_cache:
+                    info = WHISPER_MODELS.get(model_name)
+                    if not info:
+                        return f"[Error] Unknown local model: {model_name}", _local_usage
+                    model_dir = WHISPER_MODELS_DIR / model_name
+                    if not (model_dir / "model.bin").exists():
+                        return f"[Error] Model not found: {model_dir}. Please download from Settings.", _local_usage
+                    _whisper_model_cache[model_name] = WhisperModel(str(model_dir), device="cpu", compute_type="int8")
 
         model = _whisper_model_cache[model_name]
         language = config.get("openai_language", "auto")
@@ -2289,31 +2343,76 @@ def _warmup_whisper_pipeline(model_name: str) -> None:
     if model_name in _whisper_model_cache:
         return
     try:
-        info = WHISPER_MODELS.get(model_name)
-        if not info:
-            return
-        if sys.platform == "darwin":
-            from pywhispercpp.model import Model as WhisperModel
-            model_path = WHISPER_MODELS_DIR / info["filename"]
-            if not model_path.exists():
+        with _whisper_model_load_lock:
+            if model_name in _whisper_model_cache:
                 return
-            print(f"[Landa] Loading whisper.cpp model: {model_name}...")
-            _whisper_model_cache[model_name] = WhisperModel(str(model_path))
-        else:
-            from faster_whisper import WhisperModel
-            model_dir = WHISPER_MODELS_DIR / model_name
-            if not (model_dir / "model.bin").exists():
+            info = WHISPER_MODELS.get(model_name)
+            if not info:
                 return
-            print(f"[Landa] Loading faster-whisper model: {model_name}...")
-            _whisper_model_cache[model_name] = WhisperModel(str(model_dir), device="cpu", compute_type="int8")
-        print(f"[Landa] Whisper model ready: {model_name}")
+            if sys.platform == "darwin":
+                from pywhispercpp.model import Model as WhisperModel
+                model_path = WHISPER_MODELS_DIR / info["filename"]
+                if not model_path.exists():
+                    return
+                print(f"[Landa] Loading whisper.cpp model: {model_name}...")
+                _whisper_model_cache[model_name] = WhisperModel(str(model_path))
+            else:
+                from faster_whisper import WhisperModel
+                model_dir = WHISPER_MODELS_DIR / model_name
+                if not (model_dir / "model.bin").exists():
+                    return
+                print(f"[Landa] Loading faster-whisper model: {model_name}...")
+                _whisper_model_cache[model_name] = WhisperModel(str(model_dir), device="cpu", compute_type="int8")
+            print(f"[Landa] Whisper model ready: {model_name}")
     except Exception as e:
         print(f"[Landa] Model warmup failed: {e}")
+
+
+def _warmup_landa_base() -> None:
+    """Load the bundled ggml model (pywhispercpp) so the first transcription is
+    instant. The model is a class-level singleton shared by every LandaStreamer."""
+    try:
+        LandaStreamer()._ensure_model()
+        print("[Landa] landa-base model ready.")
+    except Exception as e:
+        print(f"[Landa] landa-base warmup failed: {e}")
+
+
+def _warmup_gpu_if_loaded() -> None:
+    """Fire a tiny dummy inference so the Metal GPU is clocked up by the time the
+    user stops speaking. The GPU clocks down when idle, which adds ~1.5 s to the
+    first transcription after a pause. macOS/Metal only — Windows whisper runs on
+    CPU. No-op unless the active pywhispercpp model is already loaded; the first
+    real transcription warms it otherwise."""
+    if sys.platform != "darwin":
+        return
+    model_name = config.get("openai_model", "whisper-1")
+    if model_name == "landa-base":
+        model = LandaStreamer._model_instance
+    elif model_name in LOCAL_WHISPER_MODELS:
+        model = _whisper_model_cache.get(model_name)
+    else:
+        return
+    if model is None:
+        return
+
+    def _run():
+        try:
+            silence = np.zeros(int(SAMPLE_RATE * 0.1), dtype=np.float32)
+            model.transcribe(silence, single_segment=True, no_context=True,
+                             print_progress=False, print_realtime=False)
+        except Exception as e:
+            logging.debug("[gpu-warmup] skipped: %s", e)
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def _startup_whisper_check() -> None:
     """Auto-download and warm up the selected local Whisper model on startup."""
     model = config.get("openai_model", "whisper-1")
+    if model == "landa-base":
+        _warmup_landa_base()  # bundled — nothing to download, just load it
+        return
     if model not in LOCAL_WHISPER_MODELS:
         return
     if not is_whisper_deps_installed():
@@ -2657,12 +2756,17 @@ def transcribe_openai(wav_path: str, model_override: str | None = None) -> tuple
 _landa_streamer_instance = None
 
 
-def transcribe_landa_base(wav_path: str) -> tuple[str, dict]:
+def transcribe_landa_base(audio) -> tuple[str, dict]:
+    """Transcribe with the bundled ggml model via pywhispercpp (LandaStreamer).
+
+    `audio` is a numpy float32 mono array at SAMPLE_RATE (hot path, no WAV) or a
+    str path to a WAV file (legacy callers via transcribe()).
+    """
     global _detected_language, _landa_streamer_instance
     if _landa_streamer_instance is None:
         _landa_streamer_instance = LandaStreamer()
     language = config.get("openai_language", "auto")
-    text, detected_language, usage = _landa_streamer_instance.transcribe(wav_path, language=language)
+    text, detected_language, usage = _landa_streamer_instance.transcribe(audio, language=language)
     _detected_language = detected_language
     return text, usage
 

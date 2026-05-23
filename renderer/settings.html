@@ -217,8 +217,9 @@
                 <button class="modes-no-llm-btn" id="modes-no-llm-goto-btn" data-i18n="modes.nollm.btn">Open LLM Settings</button>
               </div>
               <!-- Disabled notice (shown when selected category is toggled off) -->
-              <div class="modes-disabled-notice hidden" id="modes-disabled-notice" data-i18n="modes.disabled">
-                This mode is currently disabled. Enable it to activate auto-detection and reformatting.
+              <div class="modes-disabled-notice hidden" id="modes-disabled-notice">
+                <svg class="modes-disabled-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 6.7a8 8 0 1 0 10 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                <span class="modes-disabled-text" data-i18n="modes.disabled">This mode is currently disabled. Enable it to activate auto-detection and reformatting.</span>
               </div>
               <!-- Banner Card -->
               <div class="modes-banner" id="modes-banner"></div>
@@ -419,81 +420,6 @@
                     <input type="checkbox" id="opt-soundMuted">
                     <span class="slider"></span>
                   </label>
-                </div>
-                <div class="divider"></div>
-                <div class="sound-row" id="sound-start-row">
-                  <span data-i18n="settings.sounds.start">Start sound</span>
-                  <div class="sound-controls">
-                    <div class="logo-select" id="sel-soundStart">
-                      <div class="logo-select-trigger">
-                        <img class="logo-select-icon" src="" width="16" height="16" alt="">
-                        <span class="logo-select-label">Select…</span>
-                        <svg class="logo-select-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      </div>
-                      <div class="logo-select-menu"></div>
-                    </div>
-                    <button class="play-btn" data-sound="start" title="Preview">▶</button>
-                  </div>
-                </div>
-                <div class="divider"></div>
-                <div class="sound-row" id="sound-stop-row">
-                  <span data-i18n="settings.sounds.stop">Stop sound</span>
-                  <div class="sound-controls">
-                    <div class="logo-select" id="sel-soundStop">
-                      <div class="logo-select-trigger">
-                        <img class="logo-select-icon" src="" width="16" height="16" alt="">
-                        <span class="logo-select-label">Select…</span>
-                        <svg class="logo-select-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      </div>
-                      <div class="logo-select-menu"></div>
-                    </div>
-                    <button class="play-btn" data-sound="stop" title="Preview">▶</button>
-                  </div>
-                </div>
-                <div class="divider"></div>
-                <div class="sound-row" id="sound-cancel-row">
-                  <span data-i18n="settings.sounds.cancel">Cancel sound</span>
-                  <div class="sound-controls">
-                    <div class="logo-select" id="sel-soundCancel">
-                      <div class="logo-select-trigger">
-                        <img class="logo-select-icon" src="" width="16" height="16" alt="">
-                        <span class="logo-select-label">Select…</span>
-                        <svg class="logo-select-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      </div>
-                      <div class="logo-select-menu"></div>
-                    </div>
-                    <button class="play-btn" data-sound="cancel" title="Preview">▶</button>
-                  </div>
-                </div>
-                <div class="divider"></div>
-                <div class="sound-row" id="sound-hold-row">
-                  <span data-i18n="settings.sounds.hold">Hold sound</span>
-                  <div class="sound-controls">
-                    <div class="logo-select" id="sel-soundHold">
-                      <div class="logo-select-trigger">
-                        <img class="logo-select-icon" src="" width="16" height="16" alt="">
-                        <span class="logo-select-label">Select…</span>
-                        <svg class="logo-select-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      </div>
-                      <div class="logo-select-menu"></div>
-                    </div>
-                    <button class="play-btn" data-sound="hold" title="Preview">▶</button>
-                  </div>
-                </div>
-                <div class="divider"></div>
-                <div class="sound-row" id="sound-resume-row">
-                  <span data-i18n="settings.sounds.resume">Resume sound</span>
-                  <div class="sound-controls">
-                    <div class="logo-select" id="sel-soundResume">
-                      <div class="logo-select-trigger">
-                        <img class="logo-select-icon" src="" width="16" height="16" alt="">
-                        <span class="logo-select-label">Select…</span>
-                        <svg class="logo-select-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      </div>
-                      <div class="logo-select-menu"></div>
-                    </div>
-                    <button class="play-btn" data-sound="resume" title="Preview">▶</button>
-                  </div>
                 </div>
               </div>
             </section>

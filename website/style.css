@@ -744,7 +744,7 @@ h1 {
 
 .footer-wordmark {
   width: 100%;
-  padding: clamp(8px, 1.5vw, 20px) clamp(20px, 4vw, 48px) clamp(24px, 3vw, 40px);
+  padding: 0 clamp(20px, 4vw, 48px) clamp(24px, 3vw, 40px);
   line-height: 0;
 }
 

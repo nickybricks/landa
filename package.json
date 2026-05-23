@@ -1,6 +1,6 @@
 {
   "name": "landa",
-  "version": "0.25.6",
+  "version": "0.26.0",
   "description": "Talk into any app. Landa types it for you — formatted, polished, and private.",
   "main": "main.js",
   "scripts": {
@@ -66,12 +66,13 @@
         "to": "backend/landa_backend"
       },
       {
-        "from": "backend/landa_core.py",
-        "to": "backend/landa_core.py"
-      },
-      {
         "from": "backend/requirements.txt",
         "to": "backend/requirements.txt"
+      },
+      {
+        "from": "assets/sounds",
+        "to": "sounds",
+        "filter": ["*.wav"]
       }
     ]
   },

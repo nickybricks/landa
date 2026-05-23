@@ -8,18 +8,21 @@ from __future__ import annotations
 
 import os
 import sys
-import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Union
 
 import numpy as np
 import sounddevice as sd
-from scipy.io import wavfile
 
 
 SAMPLE_RATE = 16000
 MODEL_FILENAME = "landa-base.bin"
+
+# Serializes pywhispercpp model construction so a startup warmup and the first
+# real transcription can't load the (large) model twice in parallel.
+_model_load_lock = threading.Lock()
 
 
 def _resolve_model_path() -> Path:
@@ -49,12 +52,15 @@ class LandaStreamer:
     def _ensure_model(self):
         if LandaStreamer._model_instance is not None:
             return LandaStreamer._model_instance
-        if not self.model_path.exists():
-            raise FileNotFoundError(f"Landa model not found: {self.model_path}")
-        from pywhispercpp.model import Model as WhisperModel
-        print(f"[LandaStreamer] Loading model: {self.model_path}")
-        LandaStreamer._model_instance = WhisperModel(str(self.model_path))
-        return LandaStreamer._model_instance
+        with _model_load_lock:
+            if LandaStreamer._model_instance is not None:
+                return LandaStreamer._model_instance
+            if not self.model_path.exists():
+                raise FileNotFoundError(f"Landa model not found: {self.model_path}")
+            from pywhispercpp.model import Model as WhisperModel
+            print(f"[LandaStreamer] Loading model: {self.model_path}")
+            LandaStreamer._model_instance = WhisperModel(str(self.model_path))
+            return LandaStreamer._model_instance
 
     def start(self) -> None:
         if self._stream is not None:
@@ -88,60 +94,56 @@ class LandaStreamer:
     ) -> tuple[str, str | None, dict]:
         model = self._ensure_model()
 
-        cleanup_path: str | None = None
+        # pywhispercpp accepts a float32 numpy array directly, so the hot path
+        # feeds audio straight in — no WAV write/reload round-trip. A str/path
+        # input (legacy callers) is passed through unchanged.
         if isinstance(audio, np.ndarray):
-            tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-            tmp.close()
-            cleanup_path = tmp.name
-            wavfile.write(tmp.name, sample_rate, np.int16(audio * 32767))
-            wav_path = tmp.name
+            audio_input: Union[np.ndarray, str] = audio
+            duration_seconds = len(audio) / sample_rate
         else:
-            wav_path = str(audio)
-
-        try:
+            audio_input = str(audio)
             import contextlib
             import wave
             try:
-                with contextlib.closing(wave.open(wav_path, "r")) as wf:
+                with contextlib.closing(wave.open(audio_input, "r")) as wf:
                     duration_seconds = wf.getnframes() / wf.getframerate()
             except Exception:
                 duration_seconds = 0.0
 
-            t0 = time.time()
-            detected_language: str | None = None
-            if language and language != "auto":
-                detected_language = language
-            else:
-                try:
-                    (detected_code, prob), _ = model.auto_detect_language(wav_path)
-                    detected_language = detected_code
-                    print(f"[LandaStreamer] auto_detect_language: {detected_code} (prob={prob:.2f})")
-                except Exception as e:
-                    print(f"[LandaStreamer] auto_detect_language failed: {e}")
+        t0 = time.time()
+        detected_language: str | None = None
+        if language and language != "auto":
+            detected_language = language
+        else:
+            try:
+                (detected_code, prob), _ = model.auto_detect_language(audio_input)
+                detected_language = detected_code
+                print(f"[LandaStreamer] auto_detect_language: {detected_code} (prob={prob:.2f})")
+            except Exception as e:
+                print(f"[LandaStreamer] auto_detect_language failed: {e}")
 
-            kwargs = {"no_context": True}
-            if detected_language:
-                kwargs["language"] = detected_language
-            segments = model.transcribe(wav_path, **kwargs)
-            text = " ".join(seg.text for seg in segments).strip()
-            latency_ms = round((time.time() - t0) * 1000)
-            usage = {
-                "step": "transcription",
-                "model": "landa-base",
-                "input_tokens": 0,
-                "output_tokens": 0,
-                "duration_seconds": round(duration_seconds, 2),
-                "latency_ms": latency_ms,
-                "cost": 0.0,
-                "local": True,
-            }
-            return text, detected_language, usage
-        finally:
-            if cleanup_path:
-                try:
-                    os.unlink(cleanup_path)
-                except OSError:
-                    pass
+        kwargs = {
+            "single_segment": True,
+            "no_context": True,
+            "print_progress": False,
+            "print_realtime": False,
+        }
+        if detected_language:
+            kwargs["language"] = detected_language
+        segments = model.transcribe(audio_input, **kwargs)
+        text = " ".join(seg.text for seg in segments).strip()
+        latency_ms = round((time.time() - t0) * 1000)
+        usage = {
+            "step": "transcription",
+            "model": "landa-base",
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "duration_seconds": round(duration_seconds, 2),
+            "latency_ms": latency_ms,
+            "cost": 0.0,
+            "local": True,
+        }
+        return text, detected_language, usage
 
 
 def _cli() -> None:

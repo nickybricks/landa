@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('api', {
   saveConfig: (config) => ipcRenderer.invoke('save-config', config),
   saveConfigSync: (config) => ipcRenderer.sendSync('save-config-sync', config),
   patchConfig: (patch) => ipcRenderer.invoke('patch-config', patch),
+  setSoundMuted: (muted) => ipcRenderer.send('set-sound-muted', muted),
   debugLog: (msg) => ipcRenderer.send('debug-log', msg),
 
   // NeMo
@@ -33,11 +34,6 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.removeAllListeners('llm-deps-progress');
     ipcRenderer.on('llm-deps-progress', (_event, line) => callback(line));
   },
-
-  // Sounds
-  getSystemSounds: () => ipcRenderer.invoke('get-system-sounds'),
-  getDefaultSounds: () => ipcRenderer.invoke('get-default-sounds'),
-  playSound: (name) => ipcRenderer.invoke('play-sound', name),
 
   // Platform
   getPlatform: () => ipcRenderer.invoke('get-platform'),
@@ -94,6 +90,14 @@ contextBridge.exposeInMainWorld('api', {
   onRecordingProcessing: (callback) => {
     ipcRenderer.removeAllListeners('recording-processing');
     ipcRenderer.on('recording-processing', (_event, processing) => callback(processing));
+  },
+  onRecordingActive: (callback) => {
+    ipcRenderer.removeAllListeners('recording-active');
+    ipcRenderer.on('recording-active', (_event, active) => callback(active));
+  },
+  onRecordingDockEdge: (callback) => {
+    ipcRenderer.removeAllListeners('recording-dock-edge');
+    ipcRenderer.on('recording-dock-edge', (_event, edge) => callback(edge));
   },
 
   // Update notification (sidebar)
