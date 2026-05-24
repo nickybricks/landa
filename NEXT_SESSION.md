@@ -23,7 +23,15 @@
 
 ## Up next
 
-**Slice 1 is COMMITTED (`10a81a9`, 2026-05-24)** and live-verified working in the app — new `code` category (Cursor/VS Code/Codex), smart jargon-aware prompt, ON by default, banner shows only installed apps, bidirectional routing. **Not yet shipped in a release** — the on-by-default gates remain.
+### ▶ First, pick the next focus (decision deferred 2026-05-24)
+Nick asked to decide in a fresh session. Options I laid out (recommendation first):
+1. **Polish the everyday profiles (recommended)** — bring Email + Personal Message to the code profile's bar + the Slack-vs-WhatsApp tone/format split (slice 2). Serves the PRIMARY persona (whose profiles are thinnest), continues the TOP product priority, reuses the eval harness. Needs Nick's blind rating like code did.
+2. **Make transcription feel faster** — kill the local double-pass language detect (one pass). Solo-verifiable, low risk, felt by everyone (esp. Windows/slow machines).
+3. **Robustness & security** — top review items: config write-race, crash-restart loop, localhost backend lock/auth (the last pairs with payments).
+4. **Smarter offline transcription** — the deterministic local vocab fix ([tasks/local-vocab-correction.md](tasks/local-vocab-correction.md)) for the free/local path.
+
+### Slice 1 — committed, not yet released
+**Slice 1 is COMMITTED (`10a81a9`, 2026-05-24)** and live-verified working in the app — new `code` category (Cursor/VS Code/Codex), smart jargon-aware prompt, ON by default, banner shows only installed apps, bidirectional routing. **Not yet shipped in a release** — the on-by-default gates remain (below). These can run whenever; they don't block picking a new focus above.
 
 **Goal next session: clear the §11 gates, then cut the release.**
 1. **Eval:** ✅ automated regression harness passes **18/18** ([`evals/run_code_eval.py`](evals/run_code_eval.py); snapshot [tasks/code-eval-2026-05-24.md](tasks/code-eval-2026-05-24.md)). **Still owed:** the human blind A/B on Nick's own recorded audio (final sign-off) — probe the watch-outs below. Re-run the harness after any prompt change.
@@ -54,6 +62,13 @@
 ---
 
 ## Session log (most recent first)
+
+### 2026-05-24 (session 3d — review + harden + hold)
+- Ran `/review` (5-dimension prod-readiness) → [tasks/review-2026-05-24.md](tasks/review-2026-05-24.md). Most findings pre-existing/app-wide.
+- **Fixed** the one slice-1-relevant item: XSS escaping of app names + linked URLs in settings rendering, made `escapeHtml` quote-safe (`0c6892a`). Verified an injection payload is neutralized.
+- **Logged** the rest as a **hardening backlog** in STRATEGY.md → Engineering (`88dd09c`): backend auth/CORS, shared secret, config race, crash loop, auto-language double-pass, taxonomy dup, a11y.
+- Nick **deferred** the "what to build next" choice to a fresh session — 4 options captured at the top of "Up next."
+- All committed locally; **nothing pushed**. Working tree clean except the known `tasks/todo.md` (EU WIP) + untracked `LANDING.md`/`archive/`.
 
 ### 2026-05-24 (session 3c — commit + plan next)
 - Added a **"YOU ARE NOT THE AGENT"** guard to the code prompt (Nick dictated a Claude Code prompt and our LLM answered it). Verbatim cleanup only; live-verified on 4 request-style dictations.
