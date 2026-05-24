@@ -23,22 +23,31 @@
 
 ## Up next
 
-### ✅ DONE: everyday-profile polish + agent mode reviewed & committed
-Email + PM polish **and agent mode** were judged (LLM-as-judge, 53/55 clean), the corpus was
-expanded to **59 cases** with **4 adversarial misfire traps → detection passed 4/4**, and the
-work was **committed**. Snapshot: [tasks/profile-eval-2026-05-24.md](tasks/profile-eval-2026-05-24.md);
-re-run live (~2 min): `set -a && . ./.env && set +a && ./backend/venv/bin/python evals/run_profile_samples.py`.
-**⚠️ Carry-forward — agent mode is unreleased and unannounced:** before any release that ships
-it, update **onboarding + landing + changelog** (it changes what dictation does — CLAUDE.md §5).
-**Residuals (not blockers):** intermittent "loop in X → future communications" widening (1/59);
-slightly prim German-excited register; compose path adds mild courtesy filler — candidates for a
-future tightening pass, not required now.
+### First thing next session: commit session 3h
+This session is **entirely uncommitted** (full file list in In flight). Auto-register + the two
+Profiles UI redesigns are independent of the slice-1/EU work — land them as their own commit(s)
+before starting anything new. (Run the alignment ritual first, as always.)
 
-### Then, pick the next focus
-1. **Finish the profile roadmap item** — ✅ **Notes eval'd 14/14 clean (no changes)** and ✅ **preview cards polished** (session 3g). **Only slice 2 remains** (Slack/Discord vs WhatsApp/Signal tone/format split) — its own session: needs a product decision on the actual delta + a regression-eval budget (rides the most-tuned PM prompt).
-2. **Make transcription feel faster** — kill the local double-pass language detect (one pass). Solo-verifiable, low risk, felt by everyone (esp. Windows/slow machines).
-3. **Robustness & security** — top review items: config write-race, crash-restart loop, localhost backend lock/auth (the last pairs with payments).
-4. **Smarter offline transcription** — the deterministic local vocab fix ([tasks/local-vocab-correction.md](tasks/local-vocab-correction.md)) for the free/local path.
+### Where things stand
+The **profile-depth roadmap item is done** (Email/PM polish + agent mode + Notes eval + auto-register).
+A lot is now **built but unreleased**, and it stacks:
+- **Slice 1** — code category (committed `10a81a9`)
+- **Agent mode** — Email + PM compose-from-instruction (committed `102ab94`)
+- **Auto-register** — the "Automatic" style (3h, **uncommitted**)
+- **Profiles UI redesign** — tone selector + apps banner (3h, **uncommitted**)
+
+No release has shipped any of it yet.
+
+### Strongest next focus — converge on a release
+1. **Blind A/B evals (Nick):** (a) **code category** on real Cursor/VS Code dictations (slice-1 gate; watch-outs below); (b) **auto-register** on real email/Slack/WhatsApp dictations — especially **whether the work/personal nudge is strong enough** (it's subtle: identical neutral input gave identical output across buckets).
+2. **Release surfaces (CLAUDE.md §5):** onboarding + landing + changelog must reflect **agent mode + the Automatic style + the code category** before they ship.
+3. **Windows smoke:** code-category detection + the new **Teams/Telegram/Signal** routing fire and paste cleanly.
+4. **Cut it:** version bump + tag + push (CI notarizes) + write the GitHub release notes.
+
+### Alternatives (if not the release)
+- **Deeper Profiles UX rethink** — 3h was a first cut (tone selector + banner); the "distinctly Landa" mental-model redesign is still open.
+- **Robustness & security** — hardening backlog: config write-race, crash-restart loop, localhost backend auth (last pairs with payments).
+- **Smarter offline transcription** — deterministic local vocab fix ([tasks/local-vocab-correction.md](tasks/local-vocab-correction.md)) for the free/local path.
 
 ### Slice 1 — committed, not yet released
 **Slice 1 is COMMITTED (`10a81a9`, 2026-05-24)** and live-verified working in the app — new `code` category (Cursor/VS Code/Codex), smart jargon-aware prompt, ON by default, banner shows only installed apps, bidirectional routing. **Not yet shipped in a release** — the on-by-default gates remain (below). These can run whenever; they don't block picking a new focus above.
@@ -54,7 +63,7 @@ future tightening pass, not required now.
 - The cloud→Claude guard: confirm it holds on more real samples (infra "cloud" must stay "cloud").
 - Bundle-vs-process name mismatch affects ANY app added via the picker — sanity-check a few others.
 
-**Then slice 2:** messaging tone/format split (Slack/Discord vs WhatsApp/Signal deltas inside personal-message) — rides on the most heavily-tuned prompt, so budget for regression eval.
+**Slice 2 — DONE (reshaped), uncommitted:** became automatic register detection rather than a manual tone bucket (see session 3h log + [tasks/auto-register-style.md](tasks/auto-register-style.md)).
 
 **Also staged (Nick's planning docs, committed this session):** `tasks/local-vocab-correction.md` — deterministic on-device vocab fix for the local/free path; sequence it in a company-planning session.
 
@@ -68,12 +77,26 @@ future tightening pass, not required now.
 - **Slice 1 COMMITTED (`10a81a9`, 2026-05-24):** feature code shipped to `main` (backend prompt+defaults+migration+routing, settings tile, banner filter). Not released yet — gates pending (see "Up next"). main.js unchanged (tray lists only PM+Email — consistent).
 - **Everyday-profile polish + AGENT MODE — COMMITTED (`102ab94`, 2026-05-24, session 3f).** `backend/landa_core.py` (PM style prompts, `_EMAIL_GUARDRAILS`, emoji branch, `_EMAIL_AGENT`/`_PM_AGENT` blocks in `get_mode_prompt`) + `evals/run_profile_samples.py` + `evals/everyday_profiles.json` (now **59 cases**, incl. 4 adversarial traps) + `tasks/profile-polish-email-pm.md` + `tasks/profile-eval-2026-05-24.md` + `tasks/profile-eval-results-2026-05-24.md`. Reviewed (LLM-as-judge 53/55) + adversarial probe 4/4. **⚠️ Still owed:** agent mode is unreleased/unannounced — onboarding/landing/changelog before the release that ships it.
 - **Notes eval + preview-card polish — COMMITTED (session 3g, 2026-05-24).** Three commits on `main`, **not pushed**: `1ce01b9` (Notes eval 14/14 + preview cards), `db6dcf5` (descope sync — auto-language double-pass → WON'T FIX, incl. Nick's `tasks/review-2026-05-24.md` edit), `f2967f1` (Nick's German `du` refinements to the email previews). **Notes prompt itself UNCHANGED** (eval'd clean; corpus now 73). ⚠️ **Still owed:** Nick to eyeball the preview cards in-app after a Landa restart (a stale instance held the single-instance lock at commit time — low risk, copy-only).
+- **Auto-register style (reshaped slice 2) — BUILT, UNCOMMITTED (session 3h, 2026-05-24).** Files: `backend/landa_core.py` (`auto` prompts for PM+email, `_pm_app_bucket()`, app nudge in `get_mode_prompt`, `auto` greeting/sign-off variants, fresh-install default `auto`, conservative migration, app-list alignment + Teams enrichment), `renderer/settings.js` ("Automatic" style + EN/DE labels/previews + Teams icon), `evals/run_profile_samples.py` (`_pm_app_bucket` stub) + `evals/everyday_profiles.json` (now **83 cases**, 10 auto), `tasks/auto-register-style.md` (plan + eval results). Live eval **10/10, 0 guardrail failures**; manual styles unchanged (no-regression proven). **⚠️ Still owed:** (1) Nick eyeballs the new "Automatic" card in-app after a Landa restart; (2) Nick's blind A/B on real dictations — **probe whether the work/personal app nudge is strong enough** (it's subtle: identical neutral input gave identical output across buckets); (3) agent mode + Automatic are unreleased → onboarding/landing/changelog before the release that ships them.
+- **Profiles tone UI redesign — BUILT, UNCOMMITTED (session 3h).** Adding the 4th tone card squeezed the layout + looked like Wispr. Replaced the card wall with a compact segmented tone selector + one full-width preview (`renderStyleCards`/`selectStyle` in `renderer/settings.js`; `.modes-tone*` in `renderer/settings.css`; `modes.tone.label` i18n EN/DE). Fixed an off-brand blue selection glow → brand red. Also refined the **apps banner** ("This profile applies to:" → **"Active in"**, app icons squared, card height reduced, blue hover → red). **⚠️ Owed:** Nick reloads the app and eyeballs the new Profiles layout (all four categories). First cut at the roadmap's "rethink Profiles UX"; the deeper mental-model rethink is still open.
 - **Still uncommitted (clarify when relevant, not urgent):** `tasks/todo.md` (EU-migration WIP notes), and untracked `LANDING.md` + `archive/` — unknown provenance, left untouched until Nick confirms what they are.
 - _(add new in-flight items here as they happen)_
 
 ---
 
 ## Session log (most recent first)
+
+### 2026-05-24 (session 3h — slice 2, reshaped into automatic register detection)
+- Alignment ritual clean: only the known `tasks/todo.md` (EU WIP) + untracked `LANDING.md`/`archive/` uncommitted; 4 local commits ahead of origin (unpushed), all as logged.
+- Started on slice 2 (work/personal tone split). **Nick redirected mid-planning:** the *manual* formal/casual/excited switch is the real friction — "I don't want to keep switching modes." Pivoted to **automatic register detection**: the LLM auto-picks formal↔casual per dictation; the destination chat app (work vs personal) feeds it. This **subsumes** the original slice-2 split into one mechanism. Decisions: Auto = new **default** style (manual stays); Auto **never** chooses excited (manual-only — the sharpest misfire); conservative migration (keep explicit selections); align app lists (+Teams/Telegram/Signal).
+- **Built it** (net-new `auto` sibling prompt → can't regress the tuned prompts): `backend/landa_core.py` + `renderer/settings.js` ("Automatic"/"Automatisch") + eval sampler/corpus (83 cases). 
+- **Verified:** py_compile + node --check clean; logic checks incl. **no-regression proof** (manual prompts byte-identical); live sampler **10/10, 0 guardrail failures**. German formal-vs-casual + greeting/sign-off correct both ways; celebratory **misfire traps held** (no auto-excited); **Sie/du never flipped** (incl. a workplace chat staying Sie).
+- **⚠️ Honest finding:** the work/personal app nudge is *subtle* — identical neutral input gave identical output across buckets. The content-driven register is the strong signal; the app context only nudges borderline cases. Flagged for Nick's blind A/B.
+- **Then two UI redesigns (Nick saw the running app):**
+  - **Profiles tone UI** — the 4th tone card ("Automatic") squeezed Email/PM into a horizontal scroll, and the card wall was the main "looks like Wispr" tell. Replaced it with a **compact segmented tone selector + one full-width preview** (toggles inside it); Notes/Code show just the preview. Reused the native Recording-Window segmented pattern. Rewrote `renderStyleCards`/`selectStyle` in `renderer/settings.js`; `.modes-tone*` in `renderer/settings.css`; `modes.tone.label` i18n EN/DE. Nick picked this from 3 mocked options.
+  - **Apps banner** — relabeled "This profile applies to:" → **"Active in"** (EN) / "Aktiv in" (DE), **squared** the app icons (were round/social), removed the overlap, shrank the card height, bumped icons to 32px on Nick's note. (`.modes-banner*` in `renderer/settings.css` + banner i18n.)
+  - Fixed an off-brand **blue** selection/hover glow → brand red in both redesigns (DESIGN.md). node --check clean.
+- Logged everything to STRATEGY Decision Log + Product status. **Nothing this session is committed** — see In flight for the full file list. **⚠️ Carry-forward:** agent mode + the Automatic style + the code category are all unreleased → onboarding/landing/changelog owed before the release that ships them.
 
 ### 2026-05-24 (session 3g — finish profile roadmap: Notes eval + preview cards)
 - Alignment ritual clean: only the known `tasks/todo.md` (EU WIP) + untracked `LANDING.md`/`archive/` uncommitted; reconciled against the in-flight log.

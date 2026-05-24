@@ -119,13 +119,16 @@ const TRANSLATIONS = {
     'modes.nollm.btn': 'Open LLM Settings',
     'modes.nollm.local': 'Download Gemma 3 4B in LLM Settings to use modes.',
     'modes.disabled': 'This mode is currently disabled. Enable it to activate auto-detection and reformatting.',
-    'modes.banner.title': 'This profile applies to:',
+    'modes.banner.title': 'Active in',
     'modes.banner.empty': 'Click + to link apps or URLs to this profile',
     'modes.category.personal': 'Personal Message',
     'modes.category.email': 'Email',
     'modes.category.notes': 'Notes',
     'modes.category.code': 'Code',
     // Modes styles
+    'modes.tone.label': 'Tone',
+    'modes.style.auto': 'Automatic',
+    'modes.style.auto.sub': 'Picks the tone for you',
     'modes.style.formal': 'Formal.',
     'modes.style.formal.sub': 'Caps + Punctuation',
     'modes.style.casual': 'Casual',
@@ -195,9 +198,11 @@ const TRANSLATIONS = {
     'popup.no_apps_found': 'No apps found',
     'popup.no_installed': 'No installed apps found',
     // Modes card preview text
+    'modes.preview.personal-message.auto': 'Hey, are you free for lunch tomorrow?\nLet\'s do 12 if that works for you.',
     'modes.preview.personal-message.formal': 'Hey, are you free for lunch tomorrow?\nLet\'s do 12 if that works for you.',
     'modes.preview.personal-message.casual': 'Hey are you free for lunch tomorrow?\nLet\'s do 12 if that works for you',
     'modes.preview.personal-message.excited': 'Hey, are you free for lunch tomorrow?\nLet\'s do 12 if that works for you!',
+    'modes.preview.email.auto': 'Hi Oscar,\n\nThanks for sending over the Q3 numbers. I\'ve reviewed them and have a couple of questions about the forecast — could we find 15 minutes this week to walk through them?\n\nBest regards,\nLotti',
     'modes.preview.email.formal': 'Hi Oscar,\n\nThanks for sending over the Q3 numbers. I\'ve reviewed them and have a couple of questions about the forecast — could we find 15 minutes this week to walk through them?\n\nBest regards,\nLotti',
     'modes.preview.email.casual': 'Hi Oscar,\n\nthanks for sending the Q3 numbers, I\'ve had a look through. Got a couple of questions on the forecast — free for 15 minutes this week?\n\nCheers,\nLotti',
     'modes.preview.email.excited': 'Hi Oscar,\n\nThanks for the Q3 numbers — they look fantastic! I\'ve got a couple of quick questions on the forecast. Any chance we could grab 15 minutes this week?\n\nCheers,\nLotti',
@@ -272,13 +277,16 @@ const TRANSLATIONS = {
     'modes.nollm.btn': 'KI-Einstellungen öffnen',
     'modes.nollm.local': 'Gemma 3 4B in den KI-Einstellungen herunterladen, um Profile zu nutzen.',
     'modes.disabled': 'Dieser Modus ist derzeit deaktiviert. Aktiviere ihn, um automatische Erkennung und Umformatierung zu nutzen.',
-    'modes.banner.title': 'Dieses Profil gilt für:',
+    'modes.banner.title': 'Aktiv in',
     'modes.banner.empty': 'Klicke auf +, um Apps oder URLs zu verknüpfen',
     'modes.category.personal': 'Persönliche Nachricht',
     'modes.category.email': 'E-Mail',
     'modes.category.notes': 'Notizen',
     'modes.category.code': 'Code',
     // Modes styles
+    'modes.tone.label': 'Ton',
+    'modes.style.auto': 'Automatisch',
+    'modes.style.auto.sub': 'Wählt den Ton für dich',
     'modes.style.formal': 'Formell.',
     'modes.style.formal.sub': 'Großschreibung + Satzzeichen',
     'modes.style.casual': 'Casual',
@@ -348,9 +356,11 @@ const TRANSLATIONS = {
     'popup.no_apps_found': 'Keine Apps gefunden',
     'popup.no_installed': 'Keine installierten Apps gefunden',
     // Modes card preview text
+    'modes.preview.personal-message.auto': 'Hey, hast du morgen Zeit zum Mittagessen?\nUm 12 Uhr würde mir passen, wenn es dir passt.',
     'modes.preview.personal-message.formal': 'Hey, hast du morgen Zeit zum Mittagessen?\nUm 12 Uhr würde mir passen, wenn es dir passt.',
     'modes.preview.personal-message.casual': 'Hey hast du morgen Zeit zum Mittagessen?\nUm 12 würde passen, wenn es dir passt',
     'modes.preview.personal-message.excited': 'Hey, hast du morgen Zeit zum Mittagessen?\nUm 12 Uhr würde mir passen, wenn es dir passt!',
+    'modes.preview.email.auto': 'Hallo Oscar,\n\nvielen Dank für die Q3-Zahlen. Ich habe sie durchgesehen und hätte ein paar Fragen zur Prognose — hättest du diese Woche 15 Minuten Zeit sie gemeinsam durchzugehen?\n\nMit freundlichen Grüßen\nLotti',
     'modes.preview.email.formal': 'Hallo Oscar,\n\nvielen Dank für die Q3-Zahlen. Ich habe sie durchgesehen und hätte ein paar Fragen zur Prognose — hättest du diese Woche 15 Minuten Zeit sie gemeinsam durchzugehen?\n\nMit freundlichen Grüßen\nLotti',
     'modes.preview.email.casual': 'Hi Oscar,\n\ndanke für die Q3-Zahlen, ich hab schon mal reingeschaut. Ich hätte ein paar Fragen zur Prognose — hast du diese Woche 15 Minuten Zeit?\n\nBeste Grüße\nLotti',
     'modes.preview.email.excited': 'Hi Oscar,\n\ndanke für die Q3-Zahlen — die sehen super aus! Ich hab noch ein paar kurze Fragen zur Prognose. Hättest du diese Woche vielleicht 15 Minuten Zeit?\n\nBeste Grüße\nLotti',
@@ -1954,6 +1964,8 @@ const KNOWN_APP_ICONS = {
   'airmail': { label: 'A', bg: '#1E88E5' },
   'slack': { label: 'S', bg: '#4A154B' },
   'discord': { label: 'D', bg: '#5865F2' },
+  'teams': { label: 'T', bg: '#6264A7' },
+  'microsoft teams': { label: 'T', bg: '#6264A7' },
   'whatsapp': { label: 'W', bg: '#25D366' },
   'telegram': { label: 'T', bg: '#0088cc' },
   'signal': { label: 'S', bg: '#3A76F0' },
@@ -1982,6 +1994,7 @@ const DEFAULT_CATEGORIES = {
 };
 
 const MODES_STYLES = {
+  auto: { name: 'Automatic', subtitle: 'Picks the tone for you' },
   formal: { name: 'Formal.', subtitle: 'Caps + Punctuation' },
   casual: { name: 'Casual', subtitle: 'Caps + Less punctuation' },
   excited: { name: 'Excited!', subtitle: 'More exclamations' },
@@ -1997,7 +2010,7 @@ function stylesForCategory(categoryId) {
 }
 
 function defaultStyleFor(categoryId) {
-  return (categoryId === 'notes' || categoryId === 'code') ? 'smart' : 'formal';
+  return (categoryId === 'notes' || categoryId === 'code') ? 'smart' : 'auto';
 }
 
 const CATEGORY_TOGGLES = {
@@ -2532,71 +2545,83 @@ function renderCategoryToggles() {
 function renderStyleCards(categoryId) {
   const container = document.getElementById('modes-cards');
   const selections = (config && config.modes && config.modes.selections) || {};
-  const currentStyle = selections[categoryId] || defaultStyleFor(categoryId);
+  const styles = stylesForCategory(categoryId);
+  const styleIds = Object.keys(styles);
+  let currentStyle = selections[categoryId] || defaultStyleFor(categoryId);
+  if (!styles[currentStyle]) currentStyle = defaultStyleFor(categoryId);
 
   container.innerHTML = '';
 
-  for (const [styleId, style] of Object.entries(stylesForCategory(categoryId))) {
-    const preview = t(`modes.preview.${categoryId}.${styleId}`);
-    const isSelected = styleId === currentStyle;
+  // Compact tone selector — only when there's more than one tone to choose
+  // (Notes/Code have a single Smart style, so they show just the preview).
+  if (styleIds.length > 1) {
+    const tone = document.createElement('div');
+    tone.className = 'modes-tone';
 
-    const card = document.createElement('div');
-    card.className = `mode-card${isSelected ? ' selected' : ''}`;
-    card.dataset.style = styleId;
+    const label = document.createElement('div');
+    label.className = 'modes-tone-label';
+    label.textContent = t('modes.tone.label');
+    tone.appendChild(label);
 
-    const bodyHTML = categoryId === 'personal-message'
-      ? `<div class="mode-card-message-bubble">
-          <div class="mode-card-message-text">${preview.replace(/\n/g, '<br>')}</div>
-          <div class="mode-card-message-time">${t('modes.card.just_now')}</div>
-        </div>`
-      : (categoryId === 'notes' || categoryId === 'code')
-      ? `<div class="mode-card-preview mode-card-note">${preview.replace(/\n/g, '<br>')}</div>`
-      : `<div class="mode-card-to">${t('modes.card.to')}</div>
-         <div class="mode-card-preview">${preview}</div>`;
-
-    card.innerHTML = `
-      <div class="mode-card-header">
-        <div class="mode-card-name">${t('modes.style.' + styleId)}</div>
-        <div class="mode-card-subtitle">${t('modes.style.' + styleId + '.sub')}</div>
-      </div>
-      <div class="mode-card-divider"></div>
-      ${bodyHTML}
-    `;
-
-    // Append category toggles at the bottom of each card
-    const defs = CATEGORY_TOGGLES[categoryId] || [];
-    if (defs.length > 0) {
-      const togglesWrap = document.createElement('div');
-      togglesWrap.className = 'mode-card-toggles';
-      for (const { key, default: defaultVal } of defs) {
-        const checked = getToggleState(categoryId, styleId, key, defaultVal);
-        const row = document.createElement('div');
-        row.className = 'mode-card-toggle-row';
-        row.innerHTML = `
-          <span class="modes-toggle-label">${t('modes.toggle.' + key)}</span>
-          <label class="mode-toggle">
-            <input type="checkbox" ${checked ? 'checked' : ''}>
-            <span class="mode-toggle-slider"></span>
-          </label>
-        `;
-        const input = row.querySelector('input');
-        input.addEventListener('click', (e) => e.stopPropagation());
-        input.addEventListener('change', (e) => {
-          e.stopPropagation();
-          saveToggleState(categoryId, styleId, key, e.target.checked);
-        });
-        row.addEventListener('click', (e) => e.stopPropagation());
-        togglesWrap.appendChild(row);
-      }
-      card.appendChild(togglesWrap);
+    const seg = document.createElement('div');
+    seg.className = 'modes-tone-segmented';
+    seg.setAttribute('role', 'radiogroup');
+    for (const styleId of styleIds) {
+      const opt = document.createElement('button');
+      opt.className = 'modes-tone-option';
+      opt.dataset.style = styleId;
+      opt.setAttribute('role', 'radio');
+      opt.setAttribute('aria-checked', String(styleId === currentStyle));
+      opt.innerHTML = `
+        <span class="modes-tone-name">${t('modes.style.' + styleId)}</span>
+        <span class="modes-tone-sub">${t('modes.style.' + styleId + '.sub')}</span>
+      `;
+      opt.addEventListener('click', () => selectStyle(categoryId, styleId));
+      seg.appendChild(opt);
     }
-
-    card.addEventListener('click', () => {
-      selectStyle(categoryId, styleId);
-    });
-
-    container.appendChild(card);
+    tone.appendChild(seg);
+    container.appendChild(tone);
   }
+
+  // Single full-width preview for the selected tone
+  const preview = t(`modes.preview.${categoryId}.${currentStyle}`);
+  const previewWrap = document.createElement('div');
+  previewWrap.className = 'modes-tone-preview';
+  previewWrap.innerHTML = categoryId === 'personal-message'
+    ? `<div class="mode-card-message-bubble">
+        <div class="mode-card-message-text">${preview.replace(/\n/g, '<br>')}</div>
+        <div class="mode-card-message-time">${t('modes.card.just_now')}</div>
+      </div>`
+    : (categoryId === 'notes' || categoryId === 'code')
+    ? `<div class="mode-card-preview mode-card-note">${preview.replace(/\n/g, '<br>')}</div>`
+    : `<div class="mode-card-to">${t('modes.card.to')}</div>
+       <div class="mode-card-preview">${preview}</div>`;
+
+  // Toggles for the selected tone, inside the preview box at the bottom
+  const defs = CATEGORY_TOGGLES[categoryId] || [];
+  if (defs.length > 0) {
+    const togglesWrap = document.createElement('div');
+    togglesWrap.className = 'mode-card-toggles';
+    for (const { key, default: defaultVal } of defs) {
+      const checked = getToggleState(categoryId, currentStyle, key, defaultVal);
+      const row = document.createElement('div');
+      row.className = 'mode-card-toggle-row';
+      row.innerHTML = `
+        <span class="modes-toggle-label">${t('modes.toggle.' + key)}</span>
+        <label class="mode-toggle">
+          <input type="checkbox" ${checked ? 'checked' : ''}>
+          <span class="mode-toggle-slider"></span>
+        </label>
+      `;
+      row.querySelector('input').addEventListener('change', (e) => {
+        saveToggleState(categoryId, currentStyle, key, e.target.checked);
+      });
+      togglesWrap.appendChild(row);
+    }
+    previewWrap.appendChild(togglesWrap);
+  }
+
+  container.appendChild(previewWrap);
 }
 
 function selectStyle(categoryId, styleId) {
@@ -2607,16 +2632,11 @@ function selectStyle(categoryId, styleId) {
   if (!config.modes.selections) config.modes.selections = {};
 
   config.modes.selections[categoryId] = styleId;
-
-  // Update card selection visuals
-  document.querySelectorAll('.mode-card').forEach((card) => {
-    card.classList.toggle('selected', card.dataset.style === styleId);
-  });
-
-  // Update Column 2 subtitle
-  updateCategorySubtitles();
-
   saveConfig();
+
+  // Update the left-column subtitle and re-render the tone selector + preview
+  updateCategorySubtitles();
+  renderStyleCards(categoryId);
 }
 
 function updateCategorySubtitles() {
