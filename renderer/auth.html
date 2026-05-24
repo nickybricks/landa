@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:;">
+  <title>Landa</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="auth.css">
+</head>
+<body>
+  <div class="drag-region"></div>
+
+  <main class="auth-card">
+    <div class="auth-logo">Landa</div>
+
+    <!-- Step 1: enter email -->
+    <section id="step-email">
+      <h1 id="t-title">Sign in to Landa</h1>
+      <p class="auth-sub" id="t-sub">Enter your email and we'll send you a secure sign-in link.</p>
+      <form id="email-form" novalidate>
+        <input id="email" type="email" autocomplete="email" required
+               placeholder="you@example.com" aria-label="Email address" />
+        <button id="send-btn" type="submit"><span id="t-send">Send sign-in link</span></button>
+      </form>
+      <p class="auth-error" id="error" role="alert" hidden></p>
+    </section>
+
+    <!-- Step 2: link sent -->
+    <section id="step-sent" hidden>
+      <h1 id="t-sent-title">Check your inbox</h1>
+      <p class="auth-sub">
+        <span id="t-sent-pre">We sent a sign-in link to</span>
+        <strong id="sent-email"></strong>.
+        <span id="t-sent-post">Open it on this device to finish signing in.</span>
+      </p>
+      <button id="resend-btn" class="link-btn" type="button"><span id="t-resend">Use a different email</span></button>
+    </section>
+
+    <!-- Step 3: signed in (brief) -->
+    <section id="step-done" hidden>
+      <h1 id="t-done-title">Signed in</h1>
+      <p class="auth-sub" id="t-done-sub">Opening Landa…</p>
+    </section>
+
+    <p class="auth-foot" id="t-foot">Your account keeps Landa in sync and unlocks Pro features. Voice stays private — transcription runs on your device.</p>
+  </main>
+
+  <script src="auth.js"></script>
+</body>
+</html>

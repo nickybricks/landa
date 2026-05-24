@@ -49,7 +49,9 @@
     "nsis": {
       "allowToChangeInstallationDirectory": false,
       "deleteAppDataOnUninstall": false,
-      "installerLanguages": ["en_US"],
+      "installerLanguages": [
+        "en_US"
+      ],
       "perMachine": false
     },
     "files": [
@@ -72,7 +74,9 @@
       {
         "from": "assets/sounds",
         "to": "sounds",
-        "filter": ["*.wav"]
+        "filter": [
+          "*.wav"
+        ]
       }
     ]
   },
@@ -82,7 +86,9 @@
     "electron-builder": "^25.0.0"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.106.1",
     "@vercel/analytics": "^2.0.1",
-    "electron-updater": "^6.8.3"
+    "electron-updater": "^6.8.3",
+    "ws": "^8.21.0"
   }
 }

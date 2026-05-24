@@ -2569,3 +2569,50 @@ body.platform-darwin .content {
   border-radius: var(--radius-card);
 }
 
+/* Account section (auth + entitlement) */
+#section-account .account-value {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.account-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-sidebar);
+  color: var(--text-secondary);
+}
+.account-badge.is-pro {
+  background: var(--primary);
+  color: white;
+}
+.account-actions {
+  display: flex;
+  gap: 10px;
+  padding-top: 4px;
+}
+.account-btn {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-card);
+  color: var(--text);
+  cursor: pointer;
+}
+.account-btn:hover { border-color: var(--text-secondary); }
+.account-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.account-btn-primary {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+.account-btn-primary:hover { opacity: 0.9; }
+.account-msg {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+

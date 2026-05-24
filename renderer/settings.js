@@ -70,6 +70,14 @@ const TRANSLATIONS = {
     // Home
     'home.desc': 'Talk into any app. Landa types it for you — formatted, polished, and private.<br>Press your hotkey to start recording, press again to transcribe and paste.',
     // Settings tab — app settings section
+    'settings.account.section': 'Account',
+    'settings.account.email': 'Email',
+    'settings.account.plan': 'Plan',
+    'settings.account.usage': 'Words this month',
+    'settings.account.upgrade': 'Upgrade to Pro',
+    'settings.account.signout': 'Sign out',
+    'settings.account.unlimited': 'Unlimited',
+    'settings.account.upgradeSoon': 'Pro upgrades are coming soon.',
     'settings.language.section': 'App Settings',
     'settings.language.label': 'App Language',
     'settings.app.startWithSystem': 'Start with system',
@@ -223,6 +231,14 @@ const TRANSLATIONS = {
     // Home
     'home.desc': 'Sprich in jede App rein – formatiert, bereinigt, privat<br>Drücke dein Tastaturkürzel zum Aufnehmen, erneut drücken zum Transkribieren und Einfügen.',
     // Settings tab — app settings section
+    'settings.account.section': 'Konto',
+    'settings.account.email': 'E-Mail',
+    'settings.account.plan': 'Tarif',
+    'settings.account.usage': 'Wörter diesen Monat',
+    'settings.account.upgrade': 'Auf Pro upgraden',
+    'settings.account.signout': 'Abmelden',
+    'settings.account.unlimited': 'Unbegrenzt',
+    'settings.account.upgradeSoon': 'Pro-Upgrades sind bald verfügbar.',
     'settings.language.section': 'App-Einstellungen',
     'settings.language.label': 'App-Sprache',
     'settings.app.startWithSystem': 'Mit System starten',
@@ -474,6 +490,47 @@ let _pendingVocabWord = null;
 let _navReady = false;
 let _updatePromptShownThisSession = false;
 
+// --- Account section: reads auth + entitlement and shows the upgrade seam. The
+// renderer only READS; the proxy is the authoritative usage writer (next session). ---
+async function setupAccount() {
+  const emailEl = document.getElementById('account-email');
+  const planEl = document.getElementById('account-plan');
+  const usageEl = document.getElementById('account-usage');
+  const msgEl = document.getElementById('account-msg');
+  const upgradeBtn = document.getElementById('btn-upgrade');
+  const signoutBtn = document.getElementById('btn-signout');
+  if (!emailEl) return;
+
+  async function refresh() {
+    const session = await window.api.auth.getSession();
+    emailEl.textContent = session ? session.email : '—';
+    const ent = await window.api.auth.getEntitlement();
+    const plan = ent ? ent.plan : 'free';
+    planEl.textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
+    planEl.classList.toggle('is-pro', plan !== 'free');
+    upgradeBtn.hidden = plan !== 'free';
+    const usage = await window.api.auth.getUsage();
+    if (plan === 'free' && usage) {
+      usageEl.textContent = `${usage.wordsUsed.toLocaleString()} / ${usage.limit.toLocaleString()}`;
+    } else {
+      usageEl.textContent = t('settings.account.unlimited');
+    }
+  }
+
+  upgradeBtn.addEventListener('click', async () => {
+    await window.api.auth.startUpgrade(); // seam: stubbed until the legal entity exists
+    msgEl.textContent = t('settings.account.upgradeSoon');
+    msgEl.hidden = false;
+  });
+
+  signoutBtn.addEventListener('click', () => {
+    window.api.auth.signOut(); // main process re-shows the auth gate on sign-out
+  });
+
+  window.api.auth.onChange(() => refresh());
+  refresh();
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   // Register IPC listeners FIRST, before any await, so messages from main
   // that arrive on did-finish-load are captured.
@@ -538,6 +595,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupVocabularyTab();
   setupHomeTab();
   setupRecordingWindowStyle();
+  setupAccount();
 
   if (config) applyConfig(config);
 

@@ -248,6 +248,33 @@
         <div class="tab-panel" id="tab-configuration">
           <div class="tab-scroll">
 
+            <!-- Account -->
+            <section id="section-account">
+              <h3 class="section-title" data-i18n="settings.account.section">Account</h3>
+              <div class="settings-card">
+                <div class="toggle-row">
+                  <span data-i18n="settings.account.email">Email</span>
+                  <span id="account-email" class="account-value">—</span>
+                </div>
+                <div class="divider"></div>
+                <div class="toggle-row">
+                  <span data-i18n="settings.account.plan">Plan</span>
+                  <span id="account-plan" class="account-badge">Free</span>
+                </div>
+                <div class="divider"></div>
+                <div class="toggle-row">
+                  <span data-i18n="settings.account.usage">Words this month</span>
+                  <span id="account-usage" class="account-value">—</span>
+                </div>
+                <div class="divider"></div>
+                <div class="account-actions">
+                  <button id="btn-upgrade" class="account-btn account-btn-primary" data-i18n="settings.account.upgrade">Upgrade to Pro</button>
+                  <button id="btn-signout" class="account-btn" data-i18n="settings.account.signout">Sign out</button>
+                </div>
+                <div id="account-msg" class="account-msg" hidden></div>
+              </div>
+            </section>
+
             <!-- App Settings -->
             <section id="section-language">
               <h3 class="section-title" data-i18n="settings.language.section">App Settings</h3>

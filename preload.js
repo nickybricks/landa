@@ -126,4 +126,20 @@ contextBridge.exposeInMainWorld('api', {
 
   getLoginItemEnabled: () => ipcRenderer.invoke('get-login-item-enabled'),
   setLoginItemEnabled: (enabled) => ipcRenderer.invoke('set-login-item-enabled', enabled),
+
+  // Auth (Supabase magic-link). The renderer never sees Supabase or any token —
+  // every call round-trips to the main-process auth module.
+  auth: {
+    requestMagicLink: (email) => ipcRenderer.invoke('auth-request-magic-link', email),
+    signOut: () => ipcRenderer.invoke('auth-sign-out'),
+    getSession: () => ipcRenderer.invoke('auth-get-session'),
+    isSignedIn: () => ipcRenderer.invoke('auth-is-signed-in'),
+    getEntitlement: () => ipcRenderer.invoke('auth-get-entitlement'),
+    getUsage: () => ipcRenderer.invoke('auth-get-usage'),
+    startUpgrade: () => ipcRenderer.invoke('auth-start-upgrade'),
+    onChange: (callback) => {
+      ipcRenderer.removeAllListeners('auth-changed');
+      ipcRenderer.on('auth-changed', (_event, state) => callback(state));
+    },
+  },
 });
