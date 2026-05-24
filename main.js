@@ -1059,21 +1059,6 @@ function createRecordingWindow() {
 }
 
 /**
- * Height the Dock reserves at the bottom of its display, in DIP. macOS reports this only
- * for the display the Dock is pinned to (bounds.bottom − workArea.bottom); every other
- * display reads 0. We take the max across displays so a multi-monitor setup still gets the
- * real Dock height, then apply it everywhere — the pinned Dock is summoned bottom-center
- * onto whichever display the cursor visits, so the pill must clear it on all of them.
- * Returns 0 when the Dock is left/right-mounted or auto-hidden (nothing to clear at bottom).
- */
-function dockBottomReserve() {
-  return screen.getAllDisplays().reduce((max, d) => {
-    const reserve = (d.bounds.y + d.bounds.height) - (d.workArea.y + d.workArea.height);
-    return Math.max(max, reserve);
-  }, 0);
-}
-
-/**
  * Size the window for the current state and position it so the (centered) pill's
  * bottom edge lands on the saved anchor — a { x: pill-center, y: pill-bottom } point.
  * Falls back to bottom-center hugging the Dock/taskbar. Resizing keeps the pill's
@@ -1097,13 +1082,13 @@ function layoutRecordingWindow() {
     edgeY = y + recordingWindowPosition.fy * height;
   } else {
     pillCenterX = x + width / 2;
-    // Rest just above the Dock. macOS only reserves bottom space in the work area of the
-    // display the Dock is pinned to — but the pinned Dock gets *summoned* onto whichever
-    // display the cursor visits, landing bottom-center where the pill lives. So anchor off
-    // the full screen bottom minus the Dock's measured height, applied on every display, so
-    // the pill clears the Dock wherever it appears (0 if the Dock is side-mounted/hidden →
-    // hugs the bottom as before).
-    edgeY = (display.bounds.y + display.bounds.height) - dockBottomReserve() - RECORDING_DOCK_GAP;
+    // Rest just above the bottom of THIS display's usable area. macOS/Windows exclude the
+    // Dock/taskbar from the work area only on the display that actually has it, and report
+    // the full height on displays that don't — so a screen with no Dock hugs the bottom
+    // instead of floating above a phantom Dock. When the Dock is summoned onto this display,
+    // its work area shrinks and 'display-metrics-changed' fires, relaying the pill out to
+    // clear it (side-mounted/hidden Dock → no bottom reserve → hugs the bottom as before).
+    edgeY = (y + height) - RECORDING_DOCK_GAP;
   }
 
   // Anchor the docked edge of the pill (window edge ± margin) and grow away from it,
@@ -1525,6 +1510,19 @@ function startStatusPolling() {
       }
     }
   }, POLL_INTERVAL);
+}
+
+// Re-anchor the resting pill when the Dock/taskbar geometry changes on the display it's
+// already on. The status poller only relays out when the cursor crosses to a *different*
+// display, so resizing, moving, hiding, or re-orienting the Dock on the pill's own display
+// would otherwise leave it with a stale gap (or floating mid-screen for a side Dock).
+// 'display-metrics-changed' fires with 'workArea' among the changed metrics on any of those
+// Dock changes. Guarded like the poller: always-show mode, not recording, live window.
+function handleDisplayMetricsChanged(_event, _display, changedMetrics) {
+  if (!changedMetrics.includes('workArea')) return;
+  if (!recordingWindowAlwaysShow || isRecording) return;
+  if (!recordingWindow || recordingWindow.isDestroyed()) return;
+  layoutRecordingWindow();
 }
 
 // ---------------------------------------------------------------------------
@@ -2152,6 +2150,7 @@ app.whenReady().then(() => {
     }, 2000);
 
     startStatusPolling();
+    screen.on('display-metrics-changed', handleDisplayMetricsChanged);
 
     if (app.isPackaged) {
       setupAutoUpdater();
@@ -2164,6 +2163,7 @@ app.whenReady().then(() => {
 app.on('will-quit', () => {
   appQuitting = true;
   globalShortcut.unregisterAll();
+  screen.removeListener('display-metrics-changed', handleDisplayMetricsChanged);
   if (pollTimer) clearInterval(pollTimer);
   destroyRecordingWindow();
   stopBackend();
