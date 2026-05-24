@@ -124,6 +124,7 @@ const TRANSLATIONS = {
     'modes.category.personal': 'Personal Message',
     'modes.category.email': 'Email',
     'modes.category.notes': 'Notes',
+    'modes.category.code': 'Code',
     // Modes styles
     'modes.style.formal': 'Formal.',
     'modes.style.formal.sub': 'Caps + Punctuation',
@@ -201,6 +202,7 @@ const TRANSLATIONS = {
     'modes.preview.email.casual': 'Hi Oscar,\n\ngreat talking with you today. Looking forward to catching up again soon\n\nBest,\nLotti',
     'modes.preview.email.excited': 'Hi Oscar,\n\nIt was great talking with you today! Really looking forward to our next chat!\n\nBest,\nLotti',
     'modes.preview.notes.smart': 'Groceries\n- Tomatoes\n- Eggs\n- Milk\n- Bread',
+    'modes.preview.code.smart': 'Add a loading spinner to the submit button and disable it while the request is in flight.',
   },
   de: {
     // Sidebar
@@ -275,6 +277,7 @@ const TRANSLATIONS = {
     'modes.category.personal': 'Persönliche Nachricht',
     'modes.category.email': 'E-Mail',
     'modes.category.notes': 'Notizen',
+    'modes.category.code': 'Code',
     // Modes styles
     'modes.style.formal': 'Formell.',
     'modes.style.formal.sub': 'Großschreibung + Satzzeichen',
@@ -352,6 +355,7 @@ const TRANSLATIONS = {
     'modes.preview.email.casual': 'Hi Oscar,\n\ntolles Gespräch heute. Freue mich schon auf unser nächstes Treffen.\n\nBeste Grüße\nLotti',
     'modes.preview.email.excited': 'Hi Oscar,\n\nes war wirklich toll, heute mit dir zu sprechen! Ich freue mich sehr auf unser nächstes Gespräch!\n\nBeste Grüße\nLotti',
     'modes.preview.notes.smart': 'Einkauf\n- Tomaten\n- Eier\n- Milch\n- Brot',
+    'modes.preview.code.smart': 'Füge dem Absenden-Button einen Ladespinner hinzu und deaktiviere ihn, während die Anfrage läuft.',
   },
 };
 
@@ -1933,6 +1937,10 @@ const MODES_CATEGORIES = {
     name: 'Notes',
     icon: '📝',
   },
+  'code': {
+    name: 'Code',
+    icon: '💻',
+  },
 };
 
 // Known app icons — label + background color for recognizable apps
@@ -1967,6 +1975,10 @@ const DEFAULT_CATEGORIES = {
     linkedApps: [],
     linkedUrls: [],
   },
+  'code': {
+    linkedApps: [],
+    linkedUrls: [],
+  },
 };
 
 const MODES_STYLES = {
@@ -1981,11 +1993,11 @@ const NOTES_STYLES = {
 };
 
 function stylesForCategory(categoryId) {
-  return categoryId === 'notes' ? NOTES_STYLES : MODES_STYLES;
+  return (categoryId === 'notes' || categoryId === 'code') ? NOTES_STYLES : MODES_STYLES;
 }
 
 function defaultStyleFor(categoryId) {
-  return categoryId === 'notes' ? 'smart' : 'formal';
+  return (categoryId === 'notes' || categoryId === 'code') ? 'smart' : 'formal';
 }
 
 const CATEGORY_TOGGLES = {
@@ -2115,6 +2127,34 @@ function getAppIcon(appName) {
   return { label: appName.charAt(0).toUpperCase(), bg: '#6B7280' };
 }
 
+// Configured linkedApps store the active-PROCESS name (e.g. "Code"), which differs from the
+// installed BUNDLE/display name (e.g. "Visual Studio Code" on macOS, "Microsoft VS Code" on
+// Windows) and is a substring of unrelated apps ("Codex", "Xcode", "Claude Code URL Handler").
+// Map such tokens to the substrings that identify the real bundle.
+const INSTALLED_APP_ALIASES = {
+  'code': ['visual studio code', 'vs code', 'vscode'],
+};
+
+// Resolve a configured linkedApps name to the installed app it refers to. Ranked so a short
+// token lands on the right app: exact token > known bundle alias > whole-word match >
+// loose substring as a last resort. Returns null when nothing on the machine matches.
+function findInstalledApp(linkedName) {
+  if (!installedAppsCache) return null;
+  const ln = linkedName.toLowerCase();
+  const aliases = INSTALLED_APP_ALIASES[ln] || [];
+  const wordRe = new RegExp(`\\b${ln.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+  let wordMatch = null;
+  let substrMatch = null;
+  for (const a of installedAppsCache) {
+    const an = a.name.toLowerCase();
+    if (an === ln) return a;
+    if (aliases.some((al) => an.includes(al))) return a;
+    if (!wordMatch && wordRe.test(a.name)) wordMatch = a;
+    if (!substrMatch && (an.includes(ln) || ln.includes(an))) substrMatch = a;
+  }
+  return wordMatch || substrMatch || null;
+}
+
 function getBannerIconHtml(name) {
   if (installedAppsCache) {
     const cached = installedAppsCache.find((a) => a.name.toLowerCase() === name.toLowerCase());
@@ -2133,7 +2173,17 @@ function renderBanner(categoryId) {
   const urls = catCfg.linkedUrls || [];
 
   const MAX_VISIBLE = 5;
-  const allItems = [...apps];
+
+  // Only show linked apps actually installed on this machine — defaults like the code
+  // category's Cursor/Code must not render confusing placeholder chips for users who
+  // don't have those apps. Map to the installed app's real name so its icon resolves.
+  // URLs always show (a website is always reachable). While the installed-apps scan is
+  // still loading the cache is null; fall back to showing all apps — preloadInstalledApps()
+  // re-renders the banner once the cache is ready.
+  const appItems = installedAppsCache
+    ? apps.map(findInstalledApp).filter(Boolean).map((a) => a.name)
+    : [...apps];
+  const allItems = [...appItems];
   for (const url of urls) {
     const domain = url.replace(/^https?:\/\//, '').split('/')[0];
     allItems.push(domain);
@@ -2499,7 +2549,7 @@ function renderStyleCards(categoryId) {
           <div class="mode-card-message-text">${preview.replace(/\n/g, '<br>')}</div>
           <div class="mode-card-message-time">${t('modes.card.just_now')}</div>
         </div>`
-      : categoryId === 'notes'
+      : (categoryId === 'notes' || categoryId === 'code')
       ? `<div class="mode-card-preview mode-card-note">${preview.replace(/\n/g, '<br>')}</div>`
       : `<div class="mode-card-to">${t('modes.card.to')}</div>
          <div class="mode-card-preview">${preview}</div>`;
