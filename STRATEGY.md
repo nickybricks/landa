@@ -171,7 +171,7 @@ Landa lets anyone **talk into any app and get polished, formatted text pasted in
 - **Hardening backlog** (from [tasks/review-2026-05-24.md](tasks/review-2026-05-24.md), 2026-05-24 — pre-existing, prioritize separately; several pair naturally with the payments/EU track):
   - *Security:* localhost backend `/config` has no auth/CORS (can be repointed at an attacker proxy) → add a per-launch token + `Origin`/`Host` check; shared `LANDA_APP_SECRET` is extractable from every binary → per-install credentials (ties to abuse/billing); `execAsync` shell-injection in macOS icon scan → use `execFile`; pin model `.bin` SHA-256.
   - *Reliability:* unlocked config write-race under `threaded=True` → single lock; crash-restart loop has no cap/backoff → cap + surface error; force-kill backend on quit so the mic isn't orphaned; atomic history write.
-  - *Performance:* `language:"auto"` runs detect+transcribe = two full passes → one pass (halves local stop→paste wait); cap history size; bound the macOS icon-scan concurrency.
+  - *Performance:* cap history size; bound the macOS icon-scan concurrency. (~~Auto-language double-pass → one pass~~ **WON'T FIX, descoped 2026-05-24** — see Decision Log; transcription path stays as-is.)
   - *Maintainability:* category taxonomy defined twice (settings.js + landa_core.py) — slice 1 worsened this → backend owns a `/modes/schema`, renderer fetches it; extract the duplicated finalize pipeline; archive the dead lexicon code (~750 LOC).
   - *UX/a11y:* sidebar + shortcut controls are click-only `<div>`s and focus is invisible app-wide → keyboard-reachable + `:focus-visible`; loading/error states for History & Update windows.
 
