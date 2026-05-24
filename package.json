@@ -15,6 +15,14 @@
   "build": {
     "appId": "com.landa.app",
     "productName": "Landa",
+    "protocols": [
+      {
+        "name": "Landa Auth",
+        "schemes": [
+          "landa"
+        ]
+      }
+    ],
     "publish": {
       "provider": "github",
       "owner": "nickybricks",

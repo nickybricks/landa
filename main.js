@@ -1026,13 +1026,17 @@ async function applyAuthState(nowSignedIn) {
     if (cfg) applyConfig(cfg);            // gate now open → applyConfig registers hotkeys
     if (!isOnboarded(cfg)) openOnboarding();
   } else {
-    // Signed out: tear down hotkeys and reset trackers so a later sign-in re-registers.
+    // Signed out → re-lock the app: drop hotkeys (reset trackers so a later sign-in
+    // re-registers), close every non-gate window, and show only the auth gate.
     globalShortcut.unregisterAll();
     currentShortcut = null;
     currentHotkeyCombo = null;
     currentCancelCombo = null;
     currentHoldCombo = null;
     currentVocabCombo = null;
+    if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.close();
+    if (onboardingWindow && !onboardingWindow.isDestroyed()) onboardingWindow.close();
+    destroyRecordingWindow();
     openAuthWindow();
   }
 }

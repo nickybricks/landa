@@ -284,3 +284,23 @@ verify + server-side metering is the next seam.
 access token app→backend→proxy (`x-landa-user-jwt`); verify JWT (JWKS); meter words into
 `public.usage` (service role); enforce the free-tier limit. Then the live magic-link round-trip
 test on a packaged build.
+
+---
+
+## Live test log (2026-05-24)
+
+- **Deep-link routing verified by me:** `open "landa://auth-callback?code=…"` routed into the
+  running dev app and reached `exchangeCodeForSession` (failed only on the expected "PKCE verifier
+  not found" for a dummy code). Works even unpackaged.
+- **Full magic-link sign-in verified by Nick:** real email → click → app signed in. ✅ The core
+  round-trip works.
+- **Two bugs Nick found, both fixed (pending live re-test after the email rate limit resets):**
+  1. Free users showed **"Unlimited"** usage when the usage read came back empty → `setupAccount`
+     now always renders `X / limit` for free. (`renderer/settings.js`)
+  2. **Sign-out didn't re-lock** — gate opened but Settings/pill stayed → `applyAuthState` now
+     closes Settings + onboarding + the recording pill on sign-out, leaving only the gate.
+     (`main.js`)
+- **⚠️ Email blocker → PRE-LAUNCH TASK:** Supabase's built-in email is throttled to a few/hour
+  ("testing only"), independent of plan tier. **A custom SMTP provider — ideally EU-region (e.g.
+  Brevo) to fit the wedge — is required before any real use/launch.** Once set, wire it via the
+  Management API (`config/auth` `smtp_*`) and raise `rate_limit.email_sent`.

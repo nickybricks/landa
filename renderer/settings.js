@@ -510,8 +510,11 @@ async function setupAccount() {
     planEl.classList.toggle('is-pro', plan !== 'free');
     upgradeBtn.hidden = plan !== 'free';
     const usage = await window.api.auth.getUsage();
-    if (plan === 'free' && usage) {
-      usageEl.textContent = `${usage.wordsUsed.toLocaleString()} / ${usage.limit.toLocaleString()}`;
+    if (plan === 'free') {
+      // Free always shows a counter, even if the usage read came back empty.
+      const used = usage ? usage.wordsUsed : 0;
+      const limit = usage ? usage.limit : 2000;
+      usageEl.textContent = `${used.toLocaleString()} / ${limit.toLocaleString()}`;
     } else {
       usageEl.textContent = t('settings.account.unlimited');
     }
