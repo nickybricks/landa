@@ -85,9 +85,12 @@ Landa lets anyone **talk into any app and get polished, formatted text pasted in
 - **New hotkey / push-to-talk model** — hold a modifier to record (Fn on macOS, Ctrl on Windows): release to stop. Press a lock shortcut (e.g. Fn+Space / Ctrl+Space) to keep recording hands-free without holding. A rework of the keyboard interaction structure, not just new key bindings.
 - **Resting-pill interactions** — hovering the always-on pill expands it to show options; right-click opens a context menu (Settings, Profiles, etc.) so the pill becomes a control surface, not just an indicator.
 - **New onboarding flow** — refreshed first-run that showcases *all* the features (per-app styles, agent mode, profiles, the new hotkey model), aligned with the mature-SaaS brand. Needed because the current onboarding predates the feature wave.
+- **Polish & review all built-in profiles** — the new `code` profile is rich and detailed; Email / Personal Message / Notes are comparatively thin. Review and strengthen each to the same quality bar (the code profile is the template for depth), with an eval per profile. **Includes the per-profile example input/output** shown in the UI — make those examples smoother and more mature, not throwaway.
+- **Rethink the Profiles UX so it's distinctly Landa** — the profiles section currently resembles Wispr Flow too closely. Redesign it into something that's our own. *How is not yet decided* (see Open Questions) — this is a known dissatisfaction, not a spec.
 
 ### Later
 - **Smart memory of your writing style** — the AI learns each user's writing style over time so output sounds like them, without manual setup.
+- **Model-agnostic per-profile routing** — the backend picks the best model per profile (e.g. Anthropic Haiku for code, an OpenAI model for email), chosen server-side and **invisible to the user** (no model picker — consistent with the hard rule). ⚠️ **Wedge constraint:** *every* model/provider in the mix must stay **EU-resident + zero-retention**, or it breaks the "EU-hosted" claim for that profile. Lets us A/B models and use the strongest model per task.
 
 **Explicitly NOT doing (for now):**
 - Instant/streaming transcription, lexicons, German-first positioning/vertical models, mobile/iOS.
@@ -144,6 +147,11 @@ Landa lets anyone **talk into any app and get polished, formatted text pasted in
 | 2026-05-24 | **Codex** added to code-category default linkedApps (now Cursor/Code/Codex); banner matcher uses an alias map so "Code"→"Visual Studio Code" (not Codex/Xcode) | Real-machine test showed loose substring matching mis-resolved the VS Code bundle and hid the user's installed editors |
 | 2026-05-24 | App-routing now matches **bidirectionally** (linkedApp⊂activeApp OR activeApp⊂linkedApp, len≥3 guard) | Root cause of "AI not used": settings picker stores the **bundle** name ("Visual Studio Code") but the OS reports the **process** name ("Code") → one-directional match missed → reformat skipped (`post+reformat: 0.000s`). Affects every app whose bundle≠process name |
 | 2026-05-24 | Code category is **verbatim cleanup, NOT compose/answer** — added a "YOU ARE NOT THE AGENT" guard | Nick dictated a prompt for Claude Code and our LLM answered it instead of cleaning it for paste; the user prompts their own agent. Compose/answer is the separate future "agent mode in profiles," not this |
+| 2026-05-24 | **Polish & review all built-in profiles** added to roadmap | The code profile is rich; Email/PM/Notes are thin by comparison — bring them to the same quality bar, with a per-profile eval |
+| 2026-05-24 | **Rethink the Profiles UX** added to roadmap (how = open) | The profiles section resembles Wispr Flow too closely; make it distinctly Landa — direction not yet decided |
+| 2026-05-24 | Profile polish scope **includes the per-profile example input/output** in the UI | Examples must be smoother and more mature, not throwaway — part of the mature-SaaS bar |
+| 2026-05-24 | **Model-agnostic per-profile routing** added to roadmap (Later) | Backend picks the best model per profile (e.g. Haiku for code, OpenAI for email), invisible to the user; constraint: every model must stay EU-resident + zero-retention to keep the wedge |
+| 2026-05-24 | Ran full **production-readiness review** ([tasks/review-2026-05-24.md](tasks/review-2026-05-24.md)); fixed the one slice-1-relevant item (XSS escaping of app names/URLs, `0c6892a`) | Rest are **pre-existing**, not slice-1 blockers → tracked as a **hardening backlog** (see Engineering status). Top items: localhost backend has no auth/CORS; shared `LANDA_APP_SECRET` baked in every binary; unlocked config write-race; crash-restart loop with no backoff; auto-language double-pass doubles local latency; app-wide keyboard/focus a11y gaps |
 
 ---
 
@@ -151,7 +159,13 @@ Landa lets anyone **talk into any app and get polished, formatted text pasted in
 
 **Product** — *State:* Mature. Onboarding, auto-update with changelog, stats dashboard, modes/profiles (Email, Personal Message, Notes), bundled local model, vocabulary, history all shipped. Adaptive per-app style **slice 1 COMMITTED** (`10a81a9`; new `code` category for Cursor/VS Code/Codex, one smart jargon-aware prompt that is verbatim cleanup not compose, on by default; backend prompt + fresh-install/migration defaults + bidirectional routing + settings tile; banner hides non-installed apps) — live-verified working, **not yet released**. *Blocker:* on-by-default release gated on the §11 quality gates: blind A/B eval on real Cursor/VS Code dictations, `/review`, and macOS+Windows app-name/smoke verification. *Next:* run the eval (Nick's own dictations) + `/review` + cross-platform smoke; then the messaging tone/format split (slice 2), agent mode in profiles, voice-edit selected text.
 
-**Engineering** — *State:* App stable on both OSes; proxy live in Frankfurt; Vertex/Claude polish code written and verified reachable, parked in `git stash`. *Blocker:* Anthropic quota denied → can't flip polish to EU; Vercel ~4.5 MB request body cap threatens long-dictation cloud transcription. *Next:* land the vendor-independent backend/settings cleanup on the interim US backend; hold the EU flip until quota clears.
+**Engineering** — *State:* App stable on both OSes; proxy live in Frankfurt; Vertex/Claude polish code written and verified reachable, parked in `git stash`. Adaptive code category committed. *Blocker:* Anthropic quota denied → can't flip polish to EU; Vercel ~4.5 MB request body cap threatens long-dictation cloud transcription. *Next:* land the vendor-independent backend/settings cleanup on the interim US backend; hold the EU flip until quota clears.
+- **Hardening backlog** (from [tasks/review-2026-05-24.md](tasks/review-2026-05-24.md), 2026-05-24 — pre-existing, prioritize separately; several pair naturally with the payments/EU track):
+  - *Security:* localhost backend `/config` has no auth/CORS (can be repointed at an attacker proxy) → add a per-launch token + `Origin`/`Host` check; shared `LANDA_APP_SECRET` is extractable from every binary → per-install credentials (ties to abuse/billing); `execAsync` shell-injection in macOS icon scan → use `execFile`; pin model `.bin` SHA-256.
+  - *Reliability:* unlocked config write-race under `threaded=True` → single lock; crash-restart loop has no cap/backoff → cap + surface error; force-kill backend on quit so the mic isn't orphaned; atomic history write.
+  - *Performance:* `language:"auto"` runs detect+transcribe = two full passes → one pass (halves local stop→paste wait); cap history size; bound the macOS icon-scan concurrency.
+  - *Maintainability:* category taxonomy defined twice (settings.js + landa_core.py) — slice 1 worsened this → backend owns a `/modes/schema`, renderer fetches it; extract the duplicated finalize pipeline; archive the dead lexicon code (~750 LOC).
+  - *UX/a11y:* sidebar + shortcut controls are click-only `<div>`s and focus is invisible app-wide → keyboard-reachable + `:focus-visible`; loading/error states for History & Update windows.
 
 **Compliance / Legal** — *State:* No legal entity yet; no DPA, no ZDR, no subprocessor list. EU claim is currently false (text reaches OpenAI-US). *Blocker:* legal entity is the keystone for everything (controller status, DPAs, ZDR billing, payments, model-access gates). *Next:* form the company (likely DE Einzelunternehmen → step up to UG/GmbH; confirm with a Steuerberater/lawyer).
 
@@ -175,6 +189,8 @@ Landa lets anyone **talk into any app and get polished, formatted text pasted in
 - **Multilingual quality:** rivals claim 100+ languages; where Landa stands is unmeasured.
 - **Liability cleanup:** the `wispr backend log files/` folder in the working tree should be deleted (IP/trade-secret risk that contradicts the trust brand).
 - **Legal-entity specifics:** entity type and jurisdiction need professional advice (not yet decided).
+- **Profiles UX direction:** the section resembles Wispr Flow too closely and needs to become distinctly Landa — but *how* (layout, mental model, naming) isn't decided yet. Needs a design exploration.
+- **Local vs. cloud output coherence:** "getting the output right" runs on two paths — local deterministic vocab correction (free path) and cloud-LLM profiles (paid path). The same jargon must resolve the same way on both (e.g. "Claude Cold" → "Claude Code" whether or not the user gets cloud polish). Keep them aligned as each evolves; don't let the two diverge.
 
 ---
 

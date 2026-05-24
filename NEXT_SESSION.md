@@ -27,7 +27,7 @@
 
 **Goal next session: clear the §11 gates, then cut the release.**
 1. **Eval:** ✅ automated regression harness passes **18/18** ([`evals/run_code_eval.py`](evals/run_code_eval.py); snapshot [tasks/code-eval-2026-05-24.md](tasks/code-eval-2026-05-24.md)). **Still owed:** the human blind A/B on Nick's own recorded audio (final sign-off) — probe the watch-outs below. Re-run the harness after any prompt change.
-2. **Run `/review`** (security · maintainability · reliability · performance · UX); fix findings.
+2. **`/review` — DONE** ([tasks/review-2026-05-24.md](tasks/review-2026-05-24.md)). Slice-1-relevant fix shipped: XSS escaping of app names/URLs (`0c6892a`). Everything else is **pre-existing** → captured as the **hardening backlog** in STRATEGY.md → Engineering status (not slice-1 blockers; prioritize separately, several pair with payments/EU). One slice-1 follow-up: the category taxonomy is now defined twice — fix via a backend `/modes/schema` before adding the next category.
 3. **Windows smoke:** confirm detection fires + output pastes cleanly. VS Code's process is also `Code` on Windows; Cursor=`Cursor`. ⚠️ `"Code"` substring-matches `Xcode` (and bidirectional matching is looser now) — confirm acceptable.
 4. **Then release:** version bump + tag + push (CI builds/notarizes) + write the GitHub release notes.
 
