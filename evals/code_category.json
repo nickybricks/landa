@@ -1,0 +1,146 @@
+[
+  {
+    "id": "A1",
+    "category": "agent-prompt",
+    "input": "hey claude code can you explain to me how a sync await works in JavaScript",
+    "expect": ["Claude Code", "async", "?"],
+    "forbid": ["a sync"],
+    "note": "stays a question; never answered"
+  },
+  {
+    "id": "A2",
+    "category": "agent-prompt",
+    "input": "refactor the get user info camel case function to use a sync await and add error handling",
+    "expect": ["getUserInfo", "async"],
+    "forbid": ["a sync", "camel case"],
+    "note": "instruction stays an instruction; no code generated"
+  },
+  {
+    "id": "A3",
+    "category": "agent-prompt",
+    "input": "what is the difference between a list and a tuple in python",
+    "expect": ["Python", "?"],
+    "forbid": [],
+    "note": "question stays a question; not answered"
+  },
+  {
+    "id": "A4",
+    "category": "agent-prompt",
+    "input": "write me a regular expression that matches an email and put it in the auth middleware",
+    "expect": ["regex", "auth"],
+    "forbid": ["regular expression"],
+    "note": "stays an instruction; does NOT write the regex"
+  },
+  {
+    "id": "C1",
+    "category": "comment",
+    "input": "this function fetches the user by user ID snake case and returns null if not found",
+    "expect": ["user_id"],
+    "forbid": ["snake case", "user ID"],
+    "note": "snake_case identifier"
+  },
+  {
+    "id": "C2",
+    "category": "comment",
+    "input": "to do colon handle the cores error before we parse the jason response",
+    "expect": ["TODO", "CORS", "JSON"],
+    "forbid": ["cores", "jason"],
+    "note": "phonetic traps + TODO marker"
+  },
+  {
+    "id": "M1",
+    "category": "commit",
+    "input": "fix the gun fig loader so it reads the dot env file on startup",
+    "expect": ["config", ".env"],
+    "forbid": ["gun fig", "dot env"],
+    "note": "config + .env"
+  },
+  {
+    "id": "M2",
+    "category": "commit",
+    "input": "add retry logic to the post grey sequel connection with a max retries screaming snake case of five",
+    "expect": ["PostgreSQL", "MAX_RETRIES", "5"],
+    "forbid": ["post grey", "screaming snake case", "five"],
+    "note": "PostgreSQL + SCREAMING_SNAKE + number"
+  },
+  {
+    "id": "OP1",
+    "category": "prose",
+    "input": "set the status to active when is logged in camel case equals true",
+    "expect": ["isLoggedIn", "=="],
+    "forbid": ["camel case", "is logged in"],
+    "note": "camelCase identifier + comparison operator"
+  },
+  {
+    "id": "OP2",
+    "category": "prose",
+    "input": "increment the index using index plus plus inside the while loop",
+    "expect": ["index++"],
+    "forbid": ["plus plus", "+ +"],
+    "note": "operator, no internal space"
+  },
+  {
+    "id": "K1",
+    "category": "agent-prompt",
+    "input": "use cloud bonnet for the cheap calls but run the hard refactor on cloud opless",
+    "expect": ["Claude Sonnet", "Claude Opus"],
+    "forbid": ["cloud bonnet", "cloud opless", "bonnet", "opless"],
+    "note": "Claude model names"
+  },
+  {
+    "id": "K2",
+    "category": "agent-prompt",
+    "input": "look at the cloud dot empty file then run slash review and use train of thought",
+    "expect": ["CLAUDE.md", "/review", "chain of thought"],
+    "forbid": ["cloud dot", "slash review", "train of thought"],
+    "note": "CLAUDE.md + slash command + technique"
+  },
+  {
+    "id": "K3",
+    "category": "agent-prompt",
+    "input": "wrap the output in art effect tags and put examples in horse tags",
+    "expect": ["<artifact>", "<source>"],
+    "forbid": ["art effect", "horse tags"],
+    "note": "XML tag names"
+  },
+  {
+    "id": "CTRL1",
+    "category": "prose",
+    "input": "deploy the worker to the cloud and upload the backup to cloud storage",
+    "expect": ["cloud"],
+    "forbid": ["Claude"],
+    "note": "CONTROL: cloud-infra must NOT become Claude"
+  },
+  {
+    "id": "INV1",
+    "category": "agent-prompt",
+    "input": "i still need to add some validation to the form but i am not sure which fields yet",
+    "expect": ["validation"],
+    "forbid": [],
+    "note": "anti-invention: must keep the uncertainty, not invent fields (length guard catches fabrication)"
+  },
+  {
+    "id": "DE1",
+    "category": "agent-prompt",
+    "input": "erkläre mir bitte wie der event handler funktioniert und mach die variable is valid camel case",
+    "expect": ["isValid"],
+    "forbid": ["camel case"],
+    "note": "German prose kept; identifier reconstructed; explains nothing"
+  },
+  {
+    "id": "DE2",
+    "category": "comment",
+    "input": "diese funktion parst die jason antwort und wirft einen fehler bei einer ungültigen you you id",
+    "expect": ["JSON", "UUID"],
+    "forbid": ["jason", "you you", "you id"],
+    "note": "German + acronyms"
+  },
+  {
+    "id": "LONG1",
+    "category": "agent-prompt",
+    "input": "okay so um i want you to create a new endpoint slash users that takes a you you id and returns the user as jason and if the user is not found return a four oh four",
+    "expect": ["/users", "UUID", "JSON", "404"],
+    "forbid": ["you you", "jason", "four oh four"],
+    "note": "long; filler removed; stays an instruction"
+  }
+]

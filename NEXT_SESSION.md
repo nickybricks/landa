@@ -26,7 +26,7 @@
 **Slice 1 is COMMITTED (`10a81a9`, 2026-05-24)** and live-verified working in the app — new `code` category (Cursor/VS Code/Codex), smart jargon-aware prompt, ON by default, banner shows only installed apps, bidirectional routing. **Not yet shipped in a release** — the on-by-default gates remain.
 
 **Goal next session: clear the §11 gates, then cut the release.**
-1. **Eval (Nick's own dictations):** ~15–20 real Cursor/VS Code dictations, blind A/B vs raw transcription. On-by-default = everyone gets it at once, so it must clear first. Probe the watch-outs below.
+1. **Eval:** ✅ automated regression harness passes **18/18** ([`evals/run_code_eval.py`](evals/run_code_eval.py); snapshot [tasks/code-eval-2026-05-24.md](tasks/code-eval-2026-05-24.md)). **Still owed:** the human blind A/B on Nick's own recorded audio (final sign-off) — probe the watch-outs below. Re-run the harness after any prompt change.
 2. **Run `/review`** (security · maintainability · reliability · performance · UX); fix findings.
 3. **Windows smoke:** confirm detection fires + output pastes cleanly. VS Code's process is also `Code` on Windows; Cursor=`Cursor`. ⚠️ `"Code"` substring-matches `Xcode` (and bidirectional matching is looser now) — confirm acceptable.
 4. **Then release:** version bump + tag + push (CI builds/notarizes) + write the GitHub release notes.
