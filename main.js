@@ -881,6 +881,11 @@ function capitalize(s) {
 // ---------------------------------------------------------------------------
 
 function openSettings() {
+  // Hard auth gate: the app stays inert until signed in. Every entry point to Settings
+  // (tray click, tray menu, dock/app activate) funnels through here, so routing a
+  // signed-out user to the sign-in window instead closes them all in one place.
+  if (!signedIn) { openAuthWindow(); return; }
+
   if (settingsWindow && !settingsWindow.isDestroyed()) {
     settingsWindow.focus();
     return;
