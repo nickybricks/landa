@@ -65,6 +65,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "auth.js",
       "renderer/**/*",
       "assets/**/*",
       "node_modules/**/*",
