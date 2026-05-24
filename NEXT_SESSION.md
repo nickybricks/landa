@@ -23,6 +23,20 @@
 
 ## Up next
 
+### ✅ DONE (parallel auth session): Authentication foundation — Supabase (EU) magic-link + entitlement
+Built + **verified live** on branch **`auth-supabase`** (worktree; 3 commits `5db4f7a`/`d4c70fc`/`0e0d916`,
+**unmerged, not pushed**). Supabase project `landa` (EU/Frankfurt) + `profiles`/`usage` schema (RLS
+read-only), magic-link sign-in via `landa://` deep link (PKCE), encrypted session, hard sign-in gate,
+Account panel (plan/usage/sign-out + **payment seam stubbed**). Brevo (EU) SMTP wired for auth email.
+Full spec + the exact STRATEGY/NEXT_SESSION rows are in [tasks/auth-supabase.md](tasks/auth-supabase.md).
+**Pick the next auth step:**
+1. **Proxy enforcement** (`landa-proxy` repo) — forward + verify the Supabase JWT, meter words
+   server-side into `public.usage`, enforce the free-tier limit. The real teeth; makes is-Pro tamper-proof.
+2. **Authenticate `landavoice.com` in Brevo** (SPF/DKIM/DMARC DNS) — auth mail currently lands in spam.
+   Needs registrar access. Pre-launch.
+3. **Integrate the branch** — merge `auth-supabase` → `main` (after the profile session's uncommitted
+   edits land, to reconcile the shared STRATEGY/NEXT_SESSION rows).
+
 ### ✅ DONE: everyday-profile polish + agent mode reviewed & committed
 Email + PM polish **and agent mode** were judged (LLM-as-judge, 53/55 clean), the corpus was
 expanded to **59 cases** with **4 adversarial misfire traps → detection passed 4/4**, and the
@@ -68,11 +82,30 @@ future tightening pass, not required now.
 - **Slice 1 COMMITTED (`10a81a9`, 2026-05-24):** feature code shipped to `main` (backend prompt+defaults+migration+routing, settings tile, banner filter). Not released yet — gates pending (see "Up next"). main.js unchanged (tray lists only PM+Email — consistent).
 - **Everyday-profile polish + AGENT MODE — COMMITTED (`102ab94`, 2026-05-24, session 3f).** `backend/landa_core.py` (PM style prompts, `_EMAIL_GUARDRAILS`, emoji branch, `_EMAIL_AGENT`/`_PM_AGENT` blocks in `get_mode_prompt`) + `evals/run_profile_samples.py` + `evals/everyday_profiles.json` (now **59 cases**, incl. 4 adversarial traps) + `tasks/profile-polish-email-pm.md` + `tasks/profile-eval-2026-05-24.md` + `tasks/profile-eval-results-2026-05-24.md`. Reviewed (LLM-as-judge 53/55) + adversarial probe 4/4. **⚠️ Still owed:** agent mode is unreleased/unannounced — onboarding/landing/changelog before the release that ships it.
 - **Still uncommitted (clarify when relevant, not urgent):** `tasks/todo.md` (EU-migration WIP notes), and untracked `LANDING.md` + `archive/` — unknown provenance, left untouched until Nick confirms what they are.
+- **Auth foundation on branch `auth-supabase` — COMMITTED, UNMERGED, NOT PUSHED** (3 commits;
+  `auth.js`, `renderer/auth.*`, `supabase/`, `main.js`/`preload.js`, settings Account section,
+  `+@supabase/supabase-js`+`ws`). Verified live. **Pre-launch owed:** authenticate `landavoice.com`
+  in Brevo (spam); proxy-side JWT verify + server metering + free-tier enforcement (`landa-proxy`).
+  These STRATEGY/NEXT_SESSION edits were made **on the branch** (not main) to avoid clobbering the
+  parallel profile session — they reconcile at merge. Full detail: [tasks/auth-supabase.md](tasks/auth-supabase.md).
 - _(add new in-flight items here as they happen)_
 
 ---
 
 ## Session log (most recent first)
+
+### 2026-05-24 (parallel session — auth foundation: Supabase EU magic-link + entitlement)
+- Ran in an isolated `auth-supabase` git worktree so it never clobbered the concurrent profile session.
+- Planned to `tasks/auth-supabase.md`, checked in, then built: Supabase EU/Frankfurt project + schema
+  (RLS), main-process auth module (PKCE magic-link, safeStorage-encrypted session, entitlement/usage
+  reads, payment seam stub), `landa://` deep-link handler + hard sign-in gate, auth window, settings
+  Account section. Added a `ws` polyfill (Electron Node-20 has no global WebSocket).
+- **Verified live with Nick:** deep-link routing (dummy-code test) + full magic-link sign-in. Fixed two
+  test-found bugs (`d4c70fc`): sign-out now re-locks the app; free-tier usage shows `X/limit` (was
+  "Unlimited"). Hit Supabase's built-in email rate limit → wired **Brevo (EU) SMTP**; sign-in then
+  worked end-to-end. Email lands in spam → `landavoice.com` domain auth is a pre-launch task.
+- Committed `5db4f7a`/`d4c70fc`/`0e0d916` on the branch (unmerged, not pushed). STRATEGY + this file
+  updated **on the branch**. Saved memory `project_auth_foundation_branch`.
 
 ### 2026-05-24 (session 3f — judge the profile polish + agent mode, then commit)
 - Alignment ritual: every uncommitted change reconciled against the in-flight log — clean. (Mid-session, STRATEGY.md gained brand/naming decision rows from a **parallel edit** — surfaced, kept out of this commit; left in the working tree for Nick.)
