@@ -294,13 +294,19 @@ test on a packaged build.
   not found" for a dummy code). Works even unpackaged.
 - **Full magic-link sign-in verified by Nick:** real email → click → app signed in. ✅ The core
   round-trip works.
-- **Two bugs Nick found, both fixed (pending live re-test after the email rate limit resets):**
+- **Two bugs Nick found, both fixed and RE-TESTED working (`d4c70fc`):**
   1. Free users showed **"Unlimited"** usage when the usage read came back empty → `setupAccount`
      now always renders `X / limit` for free. (`renderer/settings.js`)
   2. **Sign-out didn't re-lock** — gate opened but Settings/pill stayed → `applyAuthState` now
      closes Settings + onboarding + the recording pill on sign-out, leaving only the gate.
      (`main.js`)
-- **⚠️ Email blocker → PRE-LAUNCH TASK:** Supabase's built-in email is throttled to a few/hour
-  ("testing only"), independent of plan tier. **A custom SMTP provider — ideally EU-region (e.g.
-  Brevo) to fit the wedge — is required before any real use/launch.** Once set, wire it via the
-  Management API (`config/auth` `smtp_*`) and raise `rate_limit.email_sent`.
+- **Email: SOLVED for testing via Brevo (EU) custom SMTP.** Supabase's built-in email is throttled
+  to a few/hour ("testing only"), independent of plan tier — hit "email rate limit exceeded".
+  Wired **Brevo** SMTP into Supabase via the Management API (`config/auth`: `smtp_host
+  smtp-relay.brevo.com:587`, user `ac628e001@smtp-brevo.com`, sender `nick@landavoice.com` name
+  "Landa", `rate_limit_email_sent=100`). The SMTP key lives only in Supabase config, never the repo.
+  **✅ Sign-in then worked end-to-end** (gate → email → click → signed in → Account shows Free +
+  `0/2,000` → upgrade stub → sign-out re-locks).
+- **⚠️ PRE-LAUNCH deliverability TASK:** the Brevo email lands in **spam** because `landavoice.com`
+  isn't an authenticated sending domain yet. Run Brevo's **domain authentication** (add SPF + DKIM
+  + DMARC DNS records on landavoice.com) before any real use; needs DNS/registrar access.
