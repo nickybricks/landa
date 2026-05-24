@@ -23,20 +23,24 @@
 
 ## Up next
 
-**Goal:** **Plan** the **adaptive per-app writing style** feature (STRATEGY.md → top product priority). Nick's call (2026-05-24): **plan only this session — no code yet.** Produce a design doc + per-app style table at `tasks/adaptive-per-app-style.md` for review before any implementation.
+**Goal:** **Implement slice 1** of adaptive per-app style: a **new `code` category** for code editors (Cursor, VS Code), **enabled ON by default**. Design + rationale in [tasks/adaptive-per-app-style.md](tasks/adaptive-per-app-style.md) — read it first; it's approved.
 
-**Why this one:** highest-leverage product bet, and *not* blocked by the legal entity or vendor quota.
+**Decided 2026-05-24:** slice = code-category-first (not the messaging split); on-by-default for all existing users via migration. Messaging tone/format split is slice 2.
 
-**Research already done (2026-05-24 — don't re-derive):**
-- The app **already routes per app**: backend detects frontmost app/URL and matches it to one of 3 buckets — Email / Personal Message / Notes — via `get_active_category()` ([landa_core.py:809](backend/landa_core.py#L809)), then applies a tuned prompt via `get_mode_prompt()` ([landa_core.py:849](backend/landa_core.py#L849)).
-- **Notion is the proven per-app override pattern:** `_is_notion_target()` swaps in a Notion-Markdown prompt instead of the generic Notes one ([landa_core.py:877-882](backend/landa_core.py#L877-L882)). Extend *this* mechanism rather than inventing a new one.
-- **The gap:** apps inside a bucket share one voice — Slack/WhatsApp/Discord/Telegram/Signal are all "personal-message" with the *identical* prompt. **Cursor / code editors aren't handled at all** (a genuinely new "code" purpose, not a tone tweak).
-- Config shape: `modes.categories[].linkedApps/linkedUrls`, `modes.selections` (style per category), `modes.toggles`; prompts in `MODE_SYSTEM_PROMPTS[category][style]` ([landa_core.py:507](backend/landa_core.py#L507)).
-- ⚠️ Prompts are **heavily tuned** (German address forms Sie/du, guardrails). Per-app variants are prompt-engineering that needs an **eval on real dictations** (STRATEGY.md: "polish quality needs an eval, not vibes"), and must work on **macOS + Windows**.
+**Build checklist (see the design doc §4b/§8 for detail):**
+1. Add a `code` category to `MODE_SYSTEM_PROMPTS` with its own behavioral core — **no email/Sie-du guardrails** (they'd be wrong); keep identifiers/technical terms verbatim, neutral instruction/prose tone, one "smart" style to start. → [landa_core.py:507](backend/landa_core.py#L507)
+2. Add `code` to the fresh-install default `categories` + a **migration** that back-fills it (linkedApps: `Cursor`, `Code`) and sets `enabled = true`. → [landa_core.py:188](backend/landa_core.py#L188), [landa_core.py:293-329](backend/landa_core.py#L293-L329)
+3. New settings tile for the `code` category, consistent with the others (renderer). Messaging needs no UI.
+4. **Verify detected app names on real macOS + Windows machines** (process name only on Windows — no URL detection). Cursor=`Cursor`, VS Code=`Code` on both — confirm, don't assume.
+5. **Eval before the release ships it** (§7): ~15–20 real dictations in Cursor/VS Code, blind A/B vs today's raw transcription. On-by-default means everyone gets it at once, so it must clear the eval first.
+6. **Pass the quality gates before shipping** (doc §11): evals + security + maintainability + reliability reviews (run `/review`) + macOS/Windows smoke. Feature working ≠ done.
 
-**Open scoping decision for the planning doc** (Nick declined to pick a build-scope yet — the plan should lay out the options): (a) messaging tone split first [smallest], (b) + new Cursor/code-editor target, (c) full per-app matrix [multi-session]. Keep consistent with "built-in profiles, not user-defined" (STRATEGY.md).
+**Watch-outs carried from the design:**
+- Don't touch the shared personal-message/email cores or guardrails — slice 1 is purely additive.
+- Prose-in-a-Markdown-file inside VS Code shouldn't read badly → keep the code core neutral, not aggressively code-only.
+- Two `linkedApps` defaults have drifted (fresh-install lacks Telegram/Signal that the migration adds) — flag to Nick if touching that code; open Q in the doc.
 
-**Done when:** `tasks/adaptive-per-app-style.md` exists with the design + a per-app → style/format table + the recommended first slice, reviewed by Nick. No code until approved.
+**Still-open Qs for Nick (doc §10):** code sub-styles (one smart style vs comment/commit/agent-prompt variants); Telegram/Signal default alignment; eval corpus source.
 
 **Parallel (Nick, real-world — not a Claude task):** form the legal entity; chase the Anthropic/Google EU quota. These unblock payments + the EU flip.
 
@@ -52,7 +56,14 @@
 
 ## Session log (most recent first)
 
-### 2026-05-24
+### 2026-05-24 (session 2 — planning)
+- Ran the alignment ritual: uncommitted `tasks/todo.md` + untracked `LANDING.md`/`archive/` all already logged in "In flight" — nothing new/unexplained.
+- Wrote the adaptive-per-app-style design doc at [tasks/adaptive-per-app-style.md](tasks/adaptive-per-app-style.md), grounded in the actual code (decomposed the gap into format/tone/purpose; recommended extending the Notion override pattern).
+- **Nick decided:** slice 1 = new `code` category (Cursor/VS Code), enabled ON by default; messaging split is slice 2. Logged to STRATEGY.md Decision Log + Status by Area.
+- **Next:** new session → implement slice 1 (see "Up next"). Eval must clear before the on-by-default release.
+- **Not committed yet:** the new doc + STRATEGY/NEXT_SESSION edits are local (this session's work). `tasks/todo.md`, `LANDING.md`, `archive/` remain as-is.
+
+### 2026-05-24 (session 1)
 - Built `STRATEGY.md` (single source of truth) from memory + todo + the old Product Strategy doc.
 - Mirrored it read-only into Notion under the **Landa** page.
 - Set up this session-planning workflow + the alignment ritual in `CLAUDE.md`.

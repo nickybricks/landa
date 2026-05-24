@@ -128,12 +128,14 @@ Landa lets anyone **talk into any app and get polished, formatted text pasted in
 | 2026-05-24 | **Logo refresh:** replace voice-mark with an "L" mark | Cleaner, more mature brand identity |
 | 2026-05-24 | **App repolish pass** as new features land | Keep the app cohesive at the mature-SaaS bar, not bolted-on |
 | 2026-05-24 | Interim: polish stays on OpenAI gpt-4o (US, NOT EU-resident) | Testing only — no real EU customers until EU path is live under the entity |
+| 2026-05-24 | Adaptive per-app style: **first slice = new `code` category for Cursor/VS Code, enabled ON by default**; messaging tone/format split is slice 2 | Code editors today get *raw transcription* (broken, not generic) → biggest jump, lowest regression risk, easiest eval; design doc at `tasks/adaptive-per-app-style.md` |
+| 2026-05-24 | Mechanism: **extend the Notion override pattern** (shared behavioral core + swappable FORMAT/tone delta), don't reinvent | Reuses the hard-won tuning (Sie/du, anti-invention guardrails); messaging = deltas inside personal-message, code = a real new category |
 
 ---
 
 ## 5. Status by Area
 
-**Product** — *State:* Mature. Onboarding, auto-update with changelog, stats dashboard, modes/profiles (Email, Personal Message, Notes), bundled local model, vocabulary, history all shipped. *Blocker:* none critical. *Next:* adaptive per-app writing style (top product bet), then agent mode in profiles and voice-edit selected text.
+**Product** — *State:* Mature. Onboarding, auto-update with changelog, stats dashboard, modes/profiles (Email, Personal Message, Notes), bundled local model, vocabulary, history all shipped. Adaptive per-app style **designed** (`tasks/adaptive-per-app-style.md`) — not built. *Blocker:* none critical. *Next:* implement slice 1 of adaptive per-app style = a new `code` category for Cursor/VS Code (enabled on by default), gated on the real-dictation eval; then the messaging tone/format split, then agent mode in profiles and voice-edit selected text.
 
 **Engineering** — *State:* App stable on both OSes; proxy live in Frankfurt; Vertex/Claude polish code written and verified reachable, parked in `git stash`. *Blocker:* Anthropic quota denied → can't flip polish to EU; Vercel ~4.5 MB request body cap threatens long-dictation cloud transcription. *Next:* land the vendor-independent backend/settings cleanup on the interim US backend; hold the EU flip until quota clears.
 
