@@ -3,6 +3,21 @@
 ## What This Is
 A cross-platform Electron app for Landa — global hotkey voice-to-text that pastes into any active app. Electron + Node.js frontend communicating with the Python backend over HTTP.
 
+## Strategy & Session Workflow (read this first)
+
+Landa is a one-person company. To stay aligned across sessions, two docs are canonical and **must be read at the start of every session**:
+
+- **`STRATEGY.md`** — the single source of truth for *what we're building and why*: vision, positioning, roadmap, a dated **Decision Log**, **Status by Area**, open questions, and key facts/vendors. When anything conflicts (old notes, `tasks/todo.md`, the Notion mirror), `STRATEGY.md` wins. The Notion copy is a **read-only mirror** — never treat it as authoritative; re-sync it only when asked.
+- **`NEXT_SESSION.md`** — the tactical planner: the start/end-of-session checklists, the confirmed goal for the next session, an **⚠️ In flight / don't forget** list, and a session log.
+
+**Keep the docs alive (every working session):**
+- When something is **decided**, immediately append a dated row to `STRATEGY.md` → Decision Log and refresh the affected **Status by Area** line. Don't batch this for later — undocumented decisions are how changes get forgotten.
+- At session end, update `NEXT_SESSION.md` (next goal, in-flight items, session log) per its End-of-session checklist.
+
+**Alignment ritual — prevent forgotten changes from becoming bugs:**
+- At session start, run `git status` + `git diff` and **reconcile every uncommitted change against the plan before writing new code**. If you find an edit that isn't explained by the plan or a logged decision, STOP and surface it — don't build on top of a change nobody remembers making.
+- Never leave a change undocumented: either commit it, or record it in `NEXT_SESSION.md` → "In flight / don't forget" with file references.
+
 ## Claude Code Behavior
 
 > These guidelines bias toward caution over speed. For trivial tasks, use judgment.
@@ -77,11 +92,13 @@ Project-specific verification:
 - One task per subagent for focused execution
 
 ### Task Tracking
-- Write plan to `tasks/todo.md` with checkable items before starting
+- Strategic alignment lives in `STRATEGY.md` + `NEXT_SESSION.md` (see "Strategy & Session Workflow" above) — start there.
+- For the *implementation detail* of a single feature, write the plan to `tasks/todo.md` with checkable items before starting.
 - Check in before starting implementation
 - Mark items complete as you go
 - High-level summary at each step
 - Add a review section to `tasks/todo.md` when done
+- When a feature is decided or finished, reflect it back up into `STRATEGY.md` (Decision Log + Status by Area) and `NEXT_SESSION.md`.
 
 
 
