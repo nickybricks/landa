@@ -23,10 +23,30 @@
 
 ## Up next
 
-### Start: alignment ritual, then pick the focus below
-Session 3h is **committed** — `b4da6b6` (auto-register feature) + `ec89261` (Profiles UI redesign),
-on `main`, **not pushed**. Tree is clean apart from the long-standing `tasks/todo.md` (EU WIP) +
-untracked `LANDING.md`/`archive/`. Run the alignment ritual, then go.
+### ✅ DONE (parallel auth session): Authentication foundation — Supabase (EU) magic-link + entitlement
+Built + **verified live** on branch **`auth-supabase`** (worktree; 3 commits `5db4f7a`/`d4c70fc`/`0e0d916`,
+**unmerged, not pushed**). Supabase project `landa` (EU/Frankfurt) + `profiles`/`usage` schema (RLS
+read-only), magic-link sign-in via `landa://` deep link (PKCE), encrypted session, hard sign-in gate,
+Account panel (plan/usage/sign-out + **payment seam stubbed**). Brevo (EU) SMTP wired for auth email.
+Full spec + the exact STRATEGY/NEXT_SESSION rows are in [tasks/auth-supabase.md](tasks/auth-supabase.md).
+**Pick the next auth step:**
+1. **Proxy enforcement** (`landa-proxy` repo) — forward + verify the Supabase JWT, meter words
+   server-side into `public.usage`, enforce the free-tier limit. The real teeth; makes is-Pro tamper-proof.
+2. **Authenticate `landavoice.com` in Brevo** (SPF/DKIM/DMARC DNS) — auth mail currently lands in spam.
+   Needs registrar access. Pre-launch.
+3. **Integrate the branch** — merge `auth-supabase` → `main` (after the profile session's uncommitted
+   edits land, to reconcile the shared STRATEGY/NEXT_SESSION rows).
+
+### ✅ DONE: everyday-profile polish + agent mode reviewed & committed
+Email + PM polish **and agent mode** were judged (LLM-as-judge, 53/55 clean), the corpus was
+expanded to **59 cases** with **4 adversarial misfire traps → detection passed 4/4**, and the
+work was **committed**. Snapshot: [tasks/profile-eval-2026-05-24.md](tasks/profile-eval-2026-05-24.md);
+re-run live (~2 min): `set -a && . ./.env && set +a && ./backend/venv/bin/python evals/run_profile_samples.py`.
+**⚠️ Carry-forward — agent mode is unreleased and unannounced:** before any release that ships
+it, update **onboarding + landing + changelog** (it changes what dictation does — CLAUDE.md §5).
+**Residuals (not blockers):** intermittent "loop in X → future communications" widening (1/59);
+slightly prim German-excited register; compose path adds mild courtesy filler — candidates for a
+future tightening pass, not required now.
 
 ### Where things stand
 The **profile-depth roadmap item is done** (Email/PM polish + agent mode + Notes eval + auto-register).
@@ -80,6 +100,12 @@ No release has shipped any of it yet.
 - **Auto-register style (reshaped slice 2) — BUILT + COMMITTED `b4da6b6` (session 3h, not pushed).** Files: `backend/landa_core.py` (`auto` prompts for PM+email, `_pm_app_bucket()`, app nudge in `get_mode_prompt`, `auto` greeting/sign-off variants, fresh-install default `auto`, conservative migration, app-list alignment + Teams enrichment), `renderer/settings.js` ("Automatic" style + EN/DE labels/previews + Teams icon), `evals/run_profile_samples.py` (`_pm_app_bucket` stub) + `evals/everyday_profiles.json` (now **83 cases**, 10 auto), `tasks/auto-register-style.md` (plan + eval results). Live eval **10/10, 0 guardrail failures**; manual styles unchanged (no-regression proven). **⚠️ Still owed:** (1) Nick eyeballs the new "Automatic" card in-app after a Landa restart; (2) Nick's blind A/B on real dictations — **probe whether the work/personal app nudge is strong enough** (it's subtle: identical neutral input gave identical output across buckets); (3) agent mode + Automatic are unreleased → onboarding/landing/changelog before the release that ships them.
 - **Profiles tone UI redesign — BUILT + COMMITTED `ec89261` (session 3h, not pushed).** Adding the 4th tone card squeezed the layout + looked like Wispr. Replaced the card wall with a compact segmented tone selector + one full-width preview (`renderStyleCards`/`selectStyle` in `renderer/settings.js`; `.modes-tone*` in `renderer/settings.css`; `modes.tone.label` i18n EN/DE). Fixed an off-brand blue selection glow → brand red. Also refined the **apps banner** ("This profile applies to:" → **"Active in"**, app icons squared, card height reduced, blue hover → red). **⚠️ Owed:** Nick reloads the app and eyeballs the new Profiles layout (all four categories). First cut at the roadmap's "rethink Profiles UX"; the deeper mental-model rethink is still open.
 - **Still uncommitted (clarify when relevant, not urgent):** `tasks/todo.md` (EU-migration WIP notes), and untracked `LANDING.md` + `archive/` — unknown provenance, left untouched until Nick confirms what they are.
+- **Auth foundation on branch `auth-supabase` — COMMITTED, UNMERGED, NOT PUSHED** (3 commits;
+  `auth.js`, `renderer/auth.*`, `supabase/`, `main.js`/`preload.js`, settings Account section,
+  `+@supabase/supabase-js`+`ws`). Verified live. **Pre-launch owed:** authenticate `landavoice.com`
+  in Brevo (spam); proxy-side JWT verify + server metering + free-tier enforcement (`landa-proxy`).
+  These STRATEGY/NEXT_SESSION edits were made **on the branch** (not main) to avoid clobbering the
+  parallel profile session — they reconcile at merge. Full detail: [tasks/auth-supabase.md](tasks/auth-supabase.md).
 - _(add new in-flight items here as they happen)_
 
 ---
@@ -105,6 +131,18 @@ No release has shipped any of it yet.
 - **Part B — preview cards:** elevated `modes.preview.*` for **email** (unified all 3 styles on one scenario; **removed the invented boilerplate** the old formal preview still showed — it contradicted our own `_EMAIL_GUARDRAILS`) and **notes** (grocery list → professional project note), EN+DE. **PM + code left unchanged** (already at the bar). `node --check`/JSON/py_compile pass; app launches, backend healthy.
 - **Committed** `1ce01b9` (profile work + the two canonical docs). Logged to STRATEGY Decision Log + Product status.
 - **Then two follow-ups:** synced Nick's parallel descope (auto-language double-pass → **WON'T FIX**) into STRATEGY's hardening backlog so the docs agree (`db6dcf5`, with his `tasks/review-2026-05-24.md` edit); committed Nick's native-speaker pass making the German email previews consistently **du** (`f2967f1`). Tree clean except the long-standing `tasks/todo.md` (EU WIP) + untracked `LANDING.md`/`archive/`.
+### 2026-05-24 (parallel session — auth foundation: Supabase EU magic-link + entitlement)
+- Ran in an isolated `auth-supabase` git worktree so it never clobbered the concurrent profile session.
+- Planned to `tasks/auth-supabase.md`, checked in, then built: Supabase EU/Frankfurt project + schema
+  (RLS), main-process auth module (PKCE magic-link, safeStorage-encrypted session, entitlement/usage
+  reads, payment seam stub), `landa://` deep-link handler + hard sign-in gate, auth window, settings
+  Account section. Added a `ws` polyfill (Electron Node-20 has no global WebSocket).
+- **Verified live with Nick:** deep-link routing (dummy-code test) + full magic-link sign-in. Fixed two
+  test-found bugs (`d4c70fc`): sign-out now re-locks the app; free-tier usage shows `X/limit` (was
+  "Unlimited"). Hit Supabase's built-in email rate limit → wired **Brevo (EU) SMTP**; sign-in then
+  worked end-to-end. Email lands in spam → `landavoice.com` domain auth is a pre-launch task.
+- Committed `5db4f7a`/`d4c70fc`/`0e0d916` on the branch (unmerged, not pushed). STRATEGY + this file
+  updated **on the branch**. Saved memory `project_auth_foundation_branch`.
 
 ### 2026-05-24 (session 3f — judge the profile polish + agent mode, then commit)
 - Alignment ritual: every uncommitted change reconciled against the in-flight log — clean. (Mid-session, STRATEGY.md gained brand/naming decision rows from a **parallel edit** — surfaced, kept out of this commit; left in the working tree for Nick.)

@@ -7,6 +7,7 @@ const { promisify } = require('util');
 const execAsync = promisify(exec);
 const http = require('http');
 const os = require('os');
+const auth = require('./auth');
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -95,6 +96,10 @@ let trayIconIdle = null;
 let trayIconRecording = null;
 let settingsWindow = null;
 let onboardingWindow = null;
+let authWindow = null;
+let signedIn = false;        // hard auth gate: app is inert until true
+let appReady = false;        // true once whenReady init has run
+let pendingAuthUrl = null;   // a landa:// callback that arrived before we were ready
 let recordingWindow = null;
 let recordingWindowStyle = 'mini'; // 'classic' | 'mini' | 'none'
 let recordingWindowAlwaysShow = true; // when true, pill lives on screen at rest
@@ -972,6 +977,80 @@ function openOnboarding() {
 }
 
 // ---------------------------------------------------------------------------
+// Auth gate — magic-link sign-in (Supabase). The app is inert until signed in.
+// ---------------------------------------------------------------------------
+
+function openAuthWindow() {
+  if (authWindow && !authWindow.isDestroyed()) { authWindow.focus(); return; }
+
+  authWindow = new BrowserWindow({
+    width: 460,
+    height: 600,
+    title: 'Landa',
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    frame: false,
+    titleBarStyle: 'hidden',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1e1e1e' : '#f5f5f7',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  authWindow.loadFile(path.join(__dirname, 'renderer', 'auth.html'));
+  authWindow.on('closed', () => { authWindow = null; });
+}
+
+// Tell any open windows whether we're signed in (auth window + settings Account tab).
+function broadcastAuth() {
+  for (const w of [authWindow, settingsWindow]) {
+    if (w && !w.isDestroyed()) w.webContents.send('auth-changed', { signedIn });
+  }
+}
+
+// React to a sign-in / sign-out transition (driven by auth.onChange).
+async function applyAuthState(nowSignedIn) {
+  if (nowSignedIn === signedIn) return;
+  signedIn = nowSignedIn;
+  broadcastAuth();
+
+  if (signedIn) {
+    if (authWindow && !authWindow.isDestroyed()) authWindow.close();
+    let cfg = null;
+    try { cfg = await getBestAvailableConfig(); } catch {}
+    if (cfg) applyConfig(cfg);            // gate now open → applyConfig registers hotkeys
+    if (!isOnboarded(cfg)) openOnboarding();
+  } else {
+    // Signed out → re-lock the app: drop hotkeys (reset trackers so a later sign-in
+    // re-registers), close every non-gate window, and show only the auth gate.
+    globalShortcut.unregisterAll();
+    currentShortcut = null;
+    currentHotkeyCombo = null;
+    currentCancelCombo = null;
+    currentHoldCombo = null;
+    currentVocabCombo = null;
+    if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.close();
+    if (onboardingWindow && !onboardingWindow.isDestroyed()) onboardingWindow.close();
+    destroyRecordingWindow();
+    openAuthWindow();
+  }
+}
+
+// Handle a `landa://auth-callback?code=…` deep link (magic-link return; later OAuth).
+function handleAuthCallback(url) {
+  if (!url || url.indexOf('landa://') !== 0) return;
+  if (!appReady) { pendingAuthUrl = url; return; }
+  auth.completeFromUrl(url)
+    .then((res) => { if (!res.ok) logEvent('[Landa] auth callback failed: ' + res.error); })
+    .catch((e) => logEvent('[Landa] auth callback error: ' + e.message));
+}
+
+// ---------------------------------------------------------------------------
 // Recording Window — floating always-on-top indicator while recording
 // ---------------------------------------------------------------------------
 
@@ -1396,10 +1475,10 @@ let currentHoldCombo = null;
 let currentVocabCombo = null;
 
 function applyConfig(config) {
-  // Don't register hotkeys until onboarding is complete — registering a global
-  // shortcut on macOS triggers the Accessibility TCC prompt, which should only
-  // appear inside the onboarding flow that explains why it's needed.
-  const onboardingDone = isOnboarded(config);
+  // Don't register hotkeys until onboarding is complete AND the user is signed in
+  // (hard auth gate). Registering a global shortcut on macOS triggers the
+  // Accessibility TCC prompt, which should only appear inside the onboarding flow.
+  const onboardingDone = isOnboarded(config) && signedIn;
 
   const combo = config.toggle_recording;
   const newAccelerator = hotkeyToAccelerator(combo);
@@ -1950,6 +2029,18 @@ function setupIpcHandlers() {
     app.setLoginItemSettings({ openAtLogin: enabled });
   });
 
+  // --- Auth (Supabase). Renderer never receives tokens — get-session is sanitised. ---
+  ipcMain.handle('auth-request-magic-link', (_event, email) => auth.requestMagicLink(email));
+  ipcMain.handle('auth-sign-out', () => auth.signOut());
+  ipcMain.handle('auth-get-session', async () => {
+    const s = await auth.getSession();
+    return s ? { email: s.user.email, userId: s.user.id } : null;
+  });
+  ipcMain.handle('auth-is-signed-in', () => auth.isSignedIn());
+  ipcMain.handle('auth-get-entitlement', () => auth.getEntitlement());
+  ipcMain.handle('auth-get-usage', () => auth.getUsage());
+  ipcMain.handle('auth-start-upgrade', () => auth.startUpgrade());
+
   ipcMain.handle('install-update', () => {
     if (!pendingUpdateVersion) return false;
     setImmediate(() => {
@@ -2100,8 +2191,25 @@ if (!gotLock) {
   app.quit();
 }
 
-app.on('second-instance', () => {
-  if (settingsWindow) settingsWindow.focus();
+// Register the `landa://` scheme so magic-link (and future OAuth) deep links return
+// to this app. macOS delivers them via `open-url`; Windows/Linux via argv on the
+// second-instance event (the single-instance lock above routes the relaunch here).
+if (!app.isPackaged && process.platform === 'win32') {
+  app.setAsDefaultProtocolClient('landa', process.execPath, [path.resolve(process.argv[1])]);
+} else {
+  app.setAsDefaultProtocolClient('landa');
+}
+
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleAuthCallback(url);
+});
+
+app.on('second-instance', (_event, argv) => {
+  const deepLink = argv.find((a) => typeof a === 'string' && a.indexOf('landa://') === 0);
+  if (deepLink) handleAuthCallback(deepLink);
+  if (authWindow && !authWindow.isDestroyed()) authWindow.focus();
+  else if (settingsWindow) settingsWindow.focus();
 });
 
 process.on('uncaughtException', (err) => {
@@ -2112,10 +2220,17 @@ process.on('unhandledRejection', (reason) => {
 });
 
 app.whenReady().then(() => {
-  ensureMacAppInstalled().then((ok) => {
+  ensureMacAppInstalled().then(async (ok) => {
     if (!ok) return;
 
     setupIpcHandlers();
+
+    // Initialise auth before anything user-facing; the app stays inert until signed in.
+    auth.init();
+    try { signedIn = await auth.isSignedIn(); } catch { signedIn = false; }
+    auth.onChange((_event, session) => { applyAuthState(!!session); });
+    appReady = true;
+    if (pendingAuthUrl) { const u = pendingAuthUrl; pendingAuthUrl = null; handleAuthCallback(u); }
 
     recordFirstLaunchOrSkip();
 
@@ -2137,14 +2252,18 @@ app.whenReady().then(() => {
         if (config) applyConfig(config);
       } catch {}
 
-      if (!config) {
-        // Final fallback if neither backend nor disk config is available.
+      if (!config && signedIn) {
+        // Final fallback if neither backend nor disk config is available — only when
+        // signed in, so the auth gate isn't bypassed by registering default hotkeys.
         registerHotkey({ key: 'space', key_code: 49, modifiers: ['command', 'shift'] });
         registerCancelHotkey({ key: 'escape', key_code: 53, modifiers: [] });
         registerHoldHotkey({ key: 'f6', key_code: 97, modifiers: [] });
       }
 
-      if (!isOnboarded(config)) {
+      // Hard auth gate first: sign-in is required before the app is usable.
+      if (!signedIn) {
+        openAuthWindow();
+      } else if (!isOnboarded(config)) {
         openOnboarding();
       }
     }, 2000);
