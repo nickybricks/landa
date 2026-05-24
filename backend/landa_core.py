@@ -182,8 +182,8 @@ DEFAULT_CONFIG: dict = {
             "code": True,
         },
         "selections": {
-            "personal-message": "formal",
-            "email": "formal",
+            "personal-message": "auto",
+            "email": "auto",
             "notes": "smart",
             "code": "smart",
         },
@@ -193,7 +193,7 @@ DEFAULT_CONFIG: dict = {
                 "linkedUrls": ["mail.google.com", "outlook.live.com", "outlook.office.com"],
             },
             "personal-message": {
-                "linkedApps": ["Slack", "Discord", "WhatsApp"],
+                "linkedApps": ["Slack", "Discord", "Teams", "WhatsApp", "Telegram", "Signal"],
                 "linkedUrls": [],
             },
             "notes": {
@@ -207,11 +207,13 @@ DEFAULT_CONFIG: dict = {
         },
         "toggles": {
             "email": {
+                "auto": {"include_greeting": True, "include_sign_off": True},
                 "formal": {"include_greeting": True, "include_sign_off": True},
                 "casual": {"include_greeting": True, "include_sign_off": True},
                 "excited": {"include_greeting": True, "include_sign_off": True},
             },
             "personal-message": {
+                "auto": {"use_emoji": False},
                 "formal": {"use_emoji": False},
                 "casual": {"use_emoji": False},
                 "excited": {"use_emoji": False},
@@ -280,20 +282,23 @@ def _migrate(cfg: dict) -> tuple[dict, bool]:
             cfg.pop(field)
             changed = True
 
-    # ensure modes config exists
+    # ensure modes config exists. New default for email + personal-message is "auto"
+    # (LLM picks formal↔casual per dictation). Conservative: only backfill the default
+    # where a selection key is MISSING — never overwrite a user's explicit formal/
+    # casual/excited choice, so existing users' output is unchanged on update.
     if "modes" not in cfg:
-        cfg["modes"] = {"selections": {"personal-message": "formal", "email": "formal", "notes": "smart"}}
+        cfg["modes"] = {"selections": {"personal-message": "auto", "email": "auto", "notes": "smart"}}
         changed = True
     elif "selections" not in cfg["modes"]:
-        cfg["modes"]["selections"] = {"personal-message": "formal", "email": "formal"}
+        cfg["modes"]["selections"] = {"personal-message": "auto", "email": "auto"}
         changed = True
     else:
         sels = cfg["modes"]["selections"]
         if "personal-message" not in sels:
-            sels["personal-message"] = "formal"
+            sels["personal-message"] = "auto"
             changed = True
         if "email" not in sels:
-            sels["email"] = "formal"
+            sels["email"] = "auto"
             changed = True
         if "notes" not in sels:
             sels["notes"] = "smart"
@@ -311,7 +316,7 @@ def _migrate(cfg: dict) -> tuple[dict, bool]:
                 "linkedUrls": ["mail.google.com", "outlook.live.com", "outlook.office.com"],
             },
             "personal-message": {
-                "linkedApps": ["Slack", "Discord", "WhatsApp", "Telegram", "Signal"],
+                "linkedApps": ["Slack", "Discord", "Teams", "WhatsApp", "Telegram", "Signal"],
                 "linkedUrls": [],
             },
             "notes": {
@@ -330,8 +335,18 @@ def _migrate(cfg: dict) -> tuple[dict, bool]:
             cats["email"] = {"linkedApps": ["Mail", "Outlook", "Superhuman"], "linkedUrls": ["mail.google.com", "outlook.live.com", "outlook.office.com"]}
             changed = True
         if "personal-message" not in cats:
-            cats["personal-message"] = {"linkedApps": ["Slack", "Discord", "WhatsApp", "Telegram", "Signal"], "linkedUrls": []}
+            cats["personal-message"] = {"linkedApps": ["Slack", "Discord", "Teams", "WhatsApp", "Telegram", "Signal"], "linkedUrls": []}
             changed = True
+        else:
+            # Enrich pre-existing personal-message config with chat apps added to the
+            # default after it shipped (Teams/Telegram/Signal). Purely additive routing
+            # — those apps go from raw transcription to polished; no tone change.
+            pmc = cats["personal-message"]
+            pm_apps = pmc.setdefault("linkedApps", [])
+            for app in ("Teams", "Telegram", "Signal"):
+                if app not in pm_apps:
+                    pm_apps.append(app)
+                    changed = True
         if "code" not in cats:
             cats["code"] = {"linkedApps": ["Cursor", "Code", "Codex"], "linkedUrls": []}
             changed = True
@@ -690,6 +705,23 @@ MODE_SYSTEM_PROMPTS: dict[str, dict[str, str]] = {
             "No greeting or sign-off. Match the dictation language. "
             + _PM_GUARDRAILS
         ),
+        "auto": (
+            "Rewrite the following dictated text as a polished personal message (not an email). "
+            "FIRST choose the register that fits what was said and how it was said: a clear, "
+            "put-together tone with complete sentences and full punctuation when the content is "
+            "practical or work-related; or a relaxed, conversational texting tone with lighter "
+            "punctuation (you may drop a trailing period) when it's a friendly, casual message. "
+            "This is a TRANSFORMATION, not a cleanup: rephrase spoken phrasing into natural written prose. "
+            "Do NOT make it enthusiastic or stack exclamation marks — at most one '!', and only if the "
+            "meaning truly calls for it (an excited tone is a separate, deliberate choice the user makes). "
+            "Examples: 'um are you free for lunch tomorrow lets just do twelve' → "
+            "put-together: 'Are you free for lunch tomorrow? Let's do 12 if that works for you.' / "
+            "casual: 'Hey, you free for lunch tomorrow? Let's do 12 if that works'. "
+            "Keep it concise. No greeting or sign-off. "
+            "Preserve the address form that was spoken: keep 'Sie/Ihnen/Ihr' if used, keep 'du/dir/dein' if used — never switch between them. "
+            "Match the dictation language. "
+            + _PM_GUARDRAILS
+        ),
     },
     "email": {
         "formal": (
@@ -714,6 +746,17 @@ MODE_SYSTEM_PROMPTS: dict[str, dict[str, str]] = {
             "Transform spoken phrasing into energetic written prose — rephrase, don't just clean up. "
             "Use exclamation marks where they convey genuine warmth, keep the tone professional but lively, "
             "and structure into 1–3 short paragraphs. "
+            + _EMAIL_GUARDRAILS
+        ),
+        "auto": (
+            "Rewrite the following dictated text as an email body. "
+            "FIRST choose the register that fits the content and how it was said: a professional, "
+            "polished tone in 2–4 short paragraphs when the message is formal or work-related; or a "
+            "friendly, conversational tone with lighter punctuation in 1–3 short paragraphs when it's casual. "
+            "This is a TRANSFORMATION, not a cleanup — change wording and sentence structure so it reads "
+            "like written prose, not transcribed speech. "
+            "Do NOT make it enthusiastic or stack exclamation marks — an excited tone is a separate, "
+            "deliberate choice; use exclamation marks only where genuinely warranted. "
             + _EMAIL_GUARDRAILS
         ),
     },
@@ -797,6 +840,15 @@ _EMAIL_GREETINGS: dict[str, str] = {
         "German → 'Hallo [Name]!' (or 'Hallo zusammen!' if no name was spoken). "
         "English → 'Hi [Name]!' (or 'Hi there!' if no name was spoken)."
     ),
+    "auto": (
+        " Add a greeting that matches the register you chose and the dictation language. "
+        "Formal German: 'Sehr geehrter Herr [Nachname],' / 'Sehr geehrte Frau [Nachname],' if a surname was spoken, "
+        "else 'Hallo [Vorname],' for a first name, else 'Sehr geehrte Damen und Herren,'. "
+        "Casual German: 'Hallo [Name],' (or 'Hallo,' if no name was spoken). "
+        "Never use 'Sehr geehrter [Vorname]' — that is wrong with a first name. "
+        "Formal English: 'Dear [Name],' (or 'Hello,' if no name was spoken). "
+        "Casual English: 'Hi [Name],' (or 'Hi,' if no name was spoken)."
+    ),
 }
 
 _EMAIL_SIGNOFFS: dict[str, str] = {
@@ -811,6 +863,11 @@ _EMAIL_SIGNOFFS: dict[str, str] = {
     "excited": (
         " Add a warm sign-off matching the dictation language: "
         "German → 'Liebe Grüße,'. English → 'Cheers,' or 'Thanks so much,'."
+    ),
+    "auto": (
+        " Add a sign-off matching the register you chose and the dictation language. "
+        "Formal German → 'Mit freundlichen Grüßen,'; casual German → 'Viele Grüße,'. "
+        "Formal English → 'Best regards,'; casual English → 'Cheers,' or 'Thanks,'."
     ),
 }
 
@@ -1012,6 +1069,30 @@ def _is_notion_target() -> bool:
     return "notion.so" in url_lower or "notion.site" in url_lower
 
 
+# Personal-message apps split into a work-chat vs personal-chat bucket. The "auto"
+# register uses this to lean concise/professional for workplace chats and warm for
+# personal ones. Matched like get_active_category() — case-insensitive substring,
+# both directions, with a length floor so a short name can't match unrelated apps.
+_PM_WORK_APPS = ("slack", "discord", "teams")
+_PM_PERSONAL_APPS = ("whatsapp", "signal", "telegram", "imessage", "messages")
+
+
+def _pm_app_bucket() -> str | None:
+    """Classify the frontmost chat app as 'work' or 'personal', or None if unknown.
+    Reads the same cached active-app value get_active_category() already consumed."""
+    app_name, _ = _consume_active_app()
+    name = app_name.lower()
+    if not name:
+        return None
+    for a in _PM_WORK_APPS:
+        if a in name or (len(name) >= 3 and name in a):
+            return "work"
+    for a in _PM_PERSONAL_APPS:
+        if a in name or (len(name) >= 3 and name in a):
+            return "personal"
+    return None
+
+
 def get_mode_prompt() -> str | None:
     """Get the system prompt for the current active app + selected style.
     Returns None if the active category is disabled (raw transcription)."""
@@ -1035,6 +1116,15 @@ def get_mode_prompt() -> str | None:
         else:
             prompt += " Do not include a sign-off or closing. Still use proper email paragraph structure with line breaks between sections."
     elif category == "personal-message":
+        if style == "auto":
+            bucket = _pm_app_bucket()
+            if bucket == "work":
+                prompt += (
+                    " This message is going to a workplace chat — lean toward the concise, "
+                    "professional-casual end unless the content is clearly personal."
+                )
+            elif bucket == "personal":
+                prompt += " This message is going to a personal chat — lean toward the warm, relaxed end."
         prompt = _PM_AGENT + prompt
         if toggles.get("use_emoji", False):
             prompt += (

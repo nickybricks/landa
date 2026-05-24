@@ -523,5 +523,76 @@
     "input": "ich muss noch ein paar Sachen für die Reise besorgen",
     "note": "ANTI-INVENTION TRAP: kündigt Absicht an, nennt aber KEINE konkreten Dinge -> nur den Satz behalten, KEINE Liste erfinden. Jede Aufzählung '- ' = erfunden = fail.",
     "expect": [], "forbid": ["- "]
+  },
+
+  {
+    "id": "EM-auto-biz-formal-en",
+    "category": "email", "style": "auto", "lang": "English", "persona": "business",
+    "input": "hey so I wanted to reach out about the vendor contract we discussed the terms look mostly fine but we need to push back on the payment schedule can we set up a call next week to go through it",
+    "note": "AUTO REGISTER: work/contract content -> should land FORMAL (polished, professional). Judge: did it pick a professional register, not a chatty one? No invented details.",
+    "forbid": ["um", "!!"]
+  },
+  {
+    "id": "EM-auto-personal-casual-en",
+    "category": "email", "style": "auto", "lang": "English", "persona": "personal",
+    "input": "hey just wanted to say thanks so much for having us over last weekend we had such a nice time and the kids loved the garden we should do it again soon",
+    "note": "AUTO REGISTER: warm personal thank-you -> should land CASUAL/friendly, not stiff-formal. Judge: relaxed but clean. Must NOT escalate to excited (no stacked !).",
+    "forbid": ["!!"]
+  },
+  {
+    "id": "EM-auto-biz-Sie-de",
+    "category": "email", "style": "auto", "lang": "German", "persona": "business",
+    "input": "guten Tag Frau Bergmann ich wollte mich wegen des Wartungsvertrags melden die Konditionen die Sie mir geschickt haben passen soweit aber ich hätte noch eine Frage zur Laufzeit können wir nächste Woche telefonieren",
+    "note": "AUTO REGISTER + Sie preserved: formal business content -> formal register, Sie kept (never flipped to du).",
+    "expect": ["Sie"], "forbid": ["!!"]
+  },
+  {
+    "id": "EM-auto-personal-du-de",
+    "category": "email", "style": "auto", "lang": "German", "persona": "personal",
+    "input": "hey lukas wollte dir nur kurz bescheid geben dass ich es morgen zum grillen schaffe soll ich was mitbringen",
+    "note": "AUTO REGISTER + du preserved: casual du content -> casual register, du kept (no formal Sie address).",
+    "forbid": ["Sie", "!!"]
+  },
+  {
+    "id": "PM-auto-bucket-work-en",
+    "category": "personal-message", "style": "auto", "lang": "English", "persona": "business", "app_bucket": "work",
+    "input": "hey are you still good for tomorrow I should be free around two let me know if that works",
+    "note": "WORK BUCKET (paired with PM-auto-bucket-personal-en, identical input): should lean concise/professional-casual. Judge A/B: is this tighter/more buttoned-up than the personal version?",
+    "forbid": ["!!"]
+  },
+  {
+    "id": "PM-auto-bucket-personal-en",
+    "category": "personal-message", "style": "auto", "lang": "English", "persona": "personal", "app_bucket": "personal",
+    "input": "hey are you still good for tomorrow I should be free around two let me know if that works",
+    "note": "PERSONAL BUCKET (paired with PM-auto-bucket-work-en, identical input): should lean warm/relaxed. Judge A/B: warmer/looser than the work version?",
+    "forbid": ["!!"]
+  },
+  {
+    "id": "PM-auto-personal-du-de",
+    "category": "personal-message", "style": "auto", "lang": "German", "persona": "personal", "app_bucket": "personal",
+    "input": "hey kannst du mir morgen bescheid geben wann du zuhause bist ich würde gern kurz vorbeikommen",
+    "note": "AUTO + personal bucket + du preserved: warm casual chat, du kept (no formal Sie).",
+    "forbid": ["Sie", "!!"]
+  },
+  {
+    "id": "PM-auto-work-Sie-de",
+    "category": "personal-message", "style": "auto", "lang": "German", "persona": "business", "app_bucket": "work",
+    "input": "guten Morgen könnten Sie mir bitte die aktualisierten Zahlen bis heute Mittag schicken ich brauche sie für das Meeting um zwei",
+    "note": "AUTO + work bucket + Sie preserved: a workplace chat written formally -> keep Sie, do not flip to du just because it's a chat app.",
+    "expect": ["Sie"], "forbid": ["!!"]
+  },
+  {
+    "id": "PM-auto-misfire-celebratory-en",
+    "category": "personal-message", "style": "auto", "lang": "English", "persona": "business", "app_bucket": "work",
+    "input": "oh my god we just closed the biggest deal of the year I can't believe it everyone worked so hard on this",
+    "note": "MISFIRE TRAP: celebratory content must NOT trigger the excited register under auto (excited is manual-only). Judge: measured/warm, at most one '!', no manic enthusiasm. Stacked '!!' = fail.",
+    "forbid": ["!!"]
+  },
+  {
+    "id": "EM-auto-misfire-celebratory-en",
+    "category": "email", "style": "auto", "lang": "English", "persona": "business",
+    "input": "hey team wanted to share that we hit our q4 target ahead of schedule big thanks to everyone who pushed hard on this over the last few weeks",
+    "note": "MISFIRE TRAP (email): good news must NOT become an excited blast under auto. Judge: professional-warm, restrained punctuation. Stacked '!!' = fail.",
+    "forbid": ["!!"]
   }
 ]

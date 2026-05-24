@@ -64,6 +64,10 @@ def run_case(case: dict) -> str:
     # The sampler has no real active app, so drive that branch from a `target`
     # field: "notion" -> Markdown variant, anything else -> plain-text variant.
     lc._is_notion_target = lambda: case.get("target") == "notion"
+    # "auto" personal-message leans on the destination app (work vs personal chat).
+    # The sampler has no real active app, so drive _pm_app_bucket from an `app_bucket`
+    # field: "work" / "personal" / (absent -> None = unknown, content-only register).
+    lc._pm_app_bucket = lambda: case.get("app_bucket")
     out, _ = lc.reformat_text(case["input"])
     return out
 
