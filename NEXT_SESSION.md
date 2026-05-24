@@ -23,9 +23,19 @@
 
 ## Up next
 
-### ▶ First, pick the next focus (decision deferred 2026-05-24)
-Nick asked to decide in a fresh session. Options I laid out (recommendation first):
-1. **Polish the everyday profiles (recommended)** — bring Email + Personal Message to the code profile's bar + the Slack-vs-WhatsApp tone/format split (slice 2). Serves the PRIMARY persona (whose profiles are thinnest), continues the TOP product priority, reuses the eval harness. Needs Nick's blind rating like code did.
+### ✅ DONE: everyday-profile polish + agent mode reviewed & committed
+Email + PM polish **and agent mode** were judged (LLM-as-judge, 53/55 clean), the corpus was
+expanded to **59 cases** with **4 adversarial misfire traps → detection passed 4/4**, and the
+work was **committed**. Snapshot: [tasks/profile-eval-2026-05-24.md](tasks/profile-eval-2026-05-24.md);
+re-run live (~2 min): `set -a && . ./.env && set +a && ./backend/venv/bin/python evals/run_profile_samples.py`.
+**⚠️ Carry-forward — agent mode is unreleased and unannounced:** before any release that ships
+it, update **onboarding + landing + changelog** (it changes what dictation does — CLAUDE.md §5).
+**Residuals (not blockers):** intermittent "loop in X → future communications" widening (1/59);
+slightly prim German-excited register; compose path adds mild courtesy filler — candidates for a
+future tightening pass, not required now.
+
+### Then, pick the next focus
+1. **Finish the profile roadmap item** — what's still open after this session's Email+PM polish: the **Notes** prompt, the **per-profile UI card examples** (`modes.preview.*`), and **slice 2** (Slack-vs-WhatsApp split). Reuses the new `evals/run_profile_samples.py` sampler.
 2. **Make transcription feel faster** — kill the local double-pass language detect (one pass). Solo-verifiable, low risk, felt by everyone (esp. Windows/slow machines).
 3. **Robustness & security** — top review items: config write-race, crash-restart loop, localhost backend lock/auth (the last pairs with payments).
 4. **Smarter offline transcription** — the deterministic local vocab fix ([tasks/local-vocab-correction.md](tasks/local-vocab-correction.md)) for the free/local path.
@@ -56,12 +66,28 @@ Nick asked to decide in a fresh session. Options I laid out (recommendation firs
 
 - **Resolved 2026-05-24:** the unexplained `main.js` pill-positioning change was reviewed and committed (`a997538`); strategy/workflow docs committed (`0f0f79b`).
 - **Slice 1 COMMITTED (`10a81a9`, 2026-05-24):** feature code shipped to `main` (backend prompt+defaults+migration+routing, settings tile, banner filter). Not released yet — gates pending (see "Up next"). main.js unchanged (tray lists only PM+Email — consistent).
+- **Everyday-profile polish + AGENT MODE — COMMITTED (2026-05-24, session 3f).** `backend/landa_core.py` (PM style prompts, `_EMAIL_GUARDRAILS`, emoji branch, `_EMAIL_AGENT`/`_PM_AGENT` blocks in `get_mode_prompt`) + `evals/run_profile_samples.py` + `evals/everyday_profiles.json` (now **59 cases**, incl. 4 adversarial traps) + `tasks/profile-polish-email-pm.md` + `tasks/profile-eval-2026-05-24.md` + `tasks/profile-eval-results-2026-05-24.md`. Reviewed (LLM-as-judge 53/55) + adversarial probe 4/4. **⚠️ Still owed:** agent mode is unreleased/unannounced — onboarding/landing/changelog before the release that ships it.
 - **Still uncommitted (clarify when relevant, not urgent):** `tasks/todo.md` (EU-migration WIP notes), and untracked `LANDING.md` + `archive/` — unknown provenance, left untouched until Nick confirms what they are.
 - _(add new in-flight items here as they happen)_
 
 ---
 
 ## Session log (most recent first)
+
+### 2026-05-24 (session 3f — judge the profile polish + agent mode, then commit)
+- Alignment ritual: every uncommitted change reconciled against the in-flight log — clean. (Mid-session, STRATEGY.md gained brand/naming decision rows from a **parallel edit** — surfaced, kept out of this commit; left in the working tree for Nick.)
+- Nick asked me to **be the LLM-as-judge** rather than rate himself. Reviewed all 55 cases against spec: **53/55 clean**. Two residuals, both pre-known watch-outs (intermittent "loop in X → future communications" widening; prim German-excited). Agent mode: 8/8 composed correctly, none echoed, no invented facts, du/Sie preserved.
+- Flagged the one real coverage gap: the corpus only tested clearly-instruction vs clearly-message. Nick chose **add adversarial cases first**. Added 4 boundary traps (literal message opening with "tell"; genuine message mentioning a third person; instruction with no directive verb; instruction in the second person). Live run: **detection passed 4/4 both directions**, incl. the second-person person-shift ("you are happy" → "I am happy"). Corpus now **59 cases**, 0 guardrail failures, 0 fallbacks. Only residual: compose path adds mild courtesy filler (tone padding, not invented facts).
+- **Committed** the polish + agent mode + evals + docs. Logged to STRATEGY Decision Log + Product status. **Not pushed.** ⚠️ Agent mode unreleased/unannounced → onboarding/landing/changelog owed before the release that ships it.
+
+### 2026-05-24 (session 3e — polish everyday profiles: Email + PM)
+- Picked option 1 (deepen Email + PM). Alignment ritual clean (`tasks/todo.md` EU-WIP + untracked `LANDING.md`/`archive/` as logged).
+- Built a reusable Email/PM **sampler** (`evals/run_profile_samples.py` + 14-case `evals/everyday_profiles.json`, EN+DE, all styles × toggles). Tone is subjective → it prints input→output for blind rating + auto-checks only the deterministic guardrails (case-sensitive, so German `Sie`≠`sie`=them).
+- **Baseline diagnosis (the reframe):** Email/PM aren't broken like code-in-editors — they're thin-in-spec but already good. Three real gaps: emoji leaks into Excited regardless of the toggle; PM formal/casual/excited barely differ; formal email invents pleasantries.
+- Nick chose **targeted fixes** (not a wholesale rewrite) + emoji=toggle-only + suppress email boilerplate. Made 3 surgical edits in `backend/landa_core.py`. Verified live: emoji only when toggled (one, inline); same-input triptych shows distinct styles; German formal dropped "ich hoffe, es geht Ihnen gut". Guardrails 0-fail; **code eval still 18/18**.
+- Snapshot for rating: [tasks/profile-eval-2026-05-24.md](tasks/profile-eval-2026-05-24.md). **Not committed — awaiting Nick's blind A/B.** Logged to STRATEGY Decision Log + Product status.
+- **Then Nick redirected: implement AGENT MODE now, eval after.** Added `_EMAIL_AGENT`/`_PM_AGENT` blocks (auto compose-from-instruction, no toggle, reuses the Notes pattern; Code excluded) wired into `get_mode_prompt`. **Expanded the corpus to 55 cases** (29 email/26 PM, 8 agent, business/private/personal personas + edge cases). Sampler now spaces calls (proxy rate-limit was producing false "echo" failures) + flags `out==in` fallbacks.
+- Live-verified agent mode composes (EN+DE, du preserved, only the given points): "tell her I'm so sorry…" → "I'm really sorry about yesterday. I'll make it up to you this weekend." Caught + fixed two compose-path issues: residual "I hope this message finds you well" boilerplate and a literal "[Name]" placeholder when no recipient named. Final full run: **0 guardrail failures, 0 fallbacks**; code eval **18/18**.
 
 ### 2026-05-24 (session 3d — review + harden + hold)
 - Ran `/review` (5-dimension prod-readiness) → [tasks/review-2026-05-24.md](tasks/review-2026-05-24.md). Most findings pre-existing/app-wide.

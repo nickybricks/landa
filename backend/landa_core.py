@@ -513,7 +513,14 @@ _EMAIL_GUARDRAILS = (
     "Preserve every fact, name, number, request, and intent that was spoken. "
     "Do not invent names, companies, dates, numbers, or facts that were not spoken. "
     "Preserve the address form that was spoken: keep 'Sie/Ihnen/Ihr' if used, keep 'du/dir/dein' if used — never switch between them. "
-    "Greetings, sign-offs, transitions, and polite framing are formatting — adding them is allowed. "
+    "Greetings, sign-offs, and connecting transitions are formatting — adding them is allowed. "
+    "But do NOT add generic pleasantries or filler sentences that were not spoken — in particular, "
+    "never open with an 'I hope ... well' courtesy or any equivalent unsolicited opener "
+    "('I hope you're well', 'I hope this email/message finds you well', 'I hope you're doing well', "
+    "'I look forward to hearing from you', 'ich hoffe, es geht Ihnen gut', 'ich hoffe, es geht dir gut') "
+    "unless the speaker actually said it. And do NOT widen a request beyond what was said "
+    "(e.g. 'loop in Sarah' must stay 'loop in Sarah', not become 'include Sarah in future communications'). "
+    "Stay faithful to what the speaker actually meant — tighten and structure it, don't embellish it. "
     "Do not translate or change the language. Do not include a subject line. "
     "Return only the email body."
 )
@@ -603,29 +610,81 @@ _CODE_SMART = (
     + _CODE_GUARDRAILS
 )
 
+# Agent mode (compose-from-instruction). Prepended to the email / personal-message
+# prompts in get_mode_prompt. The model auto-detects per dictation: a message spoken
+# directly to the recipient is cleaned verbatim (the usual path); an INSTRUCTION about
+# what to write is carried out and composed. Code is deliberately excluded (it has the
+# opposite "YOU ARE NOT THE AGENT" guard — there the user is prompting their own agent).
+# Notes already has its own "REQUEST RULE (act like an agent)".
+_EMAIL_AGENT = (
+    "FIRST decide what the dictation is. Usually it IS the message — spoken directly to the "
+    "recipient — and you simply clean and format it into an email as described below. But "
+    "sometimes it is an INSTRUCTION telling you what email to write, phrased about the recipient "
+    "or as a command to you (e.g. 'tell her I'm sorry about yesterday and that I'll make it up to "
+    "her this weekend', 'reply to him that the proposal looks good but ask for a revised version by "
+    "next week', 'write an answer covering X and Y'). When the dictation is clearly such an "
+    "instruction, COMPOSE the actual email that carries it out — write the real message addressed to "
+    "the recipient, in the tone and format described below; do NOT merely restate the instruction. "
+    "Cover every point the instruction gives and nothing more: never invent facts, names, numbers, "
+    "dates, prices, or commitments that were not given. Signals of an instruction: it refers to the "
+    "recipient in the third person ('her', 'him', 'them', 'the customer') and/or opens with a "
+    "directive like write / reply / tell / answer / let them know. If instead the dictation is spoken "
+    "straight to the recipient ('hi, just following up on…'), treat it as the message and clean it "
+    "up — do not compose. When you DO compose, write ONLY the points the instruction gave: no courtesy "
+    "openers like 'I hope this finds you well', and if no recipient name was given, do not invent one "
+    "or leave a '[Name]' placeholder — use the no-name greeting form instead.\n\n"
+)
+_PM_AGENT = (
+    "FIRST decide what the dictation is. Usually it IS the message — spoken directly to the person — "
+    "and you simply clean and format it into a chat message as described below. But sometimes it is "
+    "an INSTRUCTION telling you what message to write, phrased about the recipient or as a command to "
+    "you (e.g. 'tell her I'm sorry about yesterday and that I'll make it up to her this weekend', "
+    "'reply to mom that I'll be there for dinner and ask if I should bring anything', 'answer that "
+    "I'm interested and ask when we can meet'). When the dictation is clearly such an instruction, "
+    "COMPOSE the actual message that carries it out — write what you would send to the person, in the "
+    "tone described below; do NOT merely restate the instruction. Cover every point the instruction "
+    "gives and nothing more: never invent facts, names, numbers, dates, or commitments that were not "
+    "given. Signals of an instruction: it refers to the recipient in the third person ('her', 'him', "
+    "'them', 'mom') and/or opens with a directive like tell / reply / write / answer / say / let them "
+    "know. If instead the dictation is spoken straight to the person ('hey, are you free…'), treat it "
+    "as the message and clean it up — do not compose. When you DO compose, write ONLY what the "
+    "instruction gave — no invented details and no extra courtesy padding.\n\n"
+)
+
 MODE_SYSTEM_PROMPTS: dict[str, dict[str, str]] = {
     "personal-message": {
         "formal": (
-            "Rewrite the following dictated text as a polished personal message. "
-            "This is a TRANSFORMATION, not a cleanup — change wording and sentence structure "
-            "so it reads like a written chat message, not transcribed speech. "
-            "Use proper capitalization and full punctuation. Keep it direct and concise. "
+            "Rewrite the following dictated text as a polished personal message — the way someone "
+            "writes a clear, put-together chat message (not an email). This is a TRANSFORMATION, not a "
+            "cleanup: change wording and sentence structure so it reads like writing, not transcribed speech. "
+            "Use complete sentences, correct capitalization, and full punctuation (including the closing "
+            "period). Keep it direct and concise. At most one exclamation mark, and only if the meaning "
+            "truly calls for it. "
+            "Example: 'um are you free for lunch tomorrow lets just do twelve' → "
+            "'Are you free for lunch tomorrow? Let's do 12 if that works for you.' "
             "Preserve the address form that was spoken: keep 'Sie/Ihnen/Ihr' if used, keep 'du/dir/dein' if used — never switch between them. "
             "No greeting or sign-off. Match the dictation language. "
             + _PM_GUARDRAILS
         ),
         "casual": (
-            "Rewrite the following dictated text as a casual personal message — texting style. "
+            "Rewrite the following dictated text as a casual personal message — relaxed texting style. "
             "Transform spoken phrasing into natural written prose; rephrase, don't just clean up. "
-            "Spelling and grammar must be correct."
+            "Spelling and capitalization stay correct, but the tone is loose and conversational and the "
+            "punctuation is light — short, flowing phrasing, and you may drop a trailing period the way "
+            "people text. No exclamation marks unless one is clearly warranted. "
+            "Example: 'um are you free for lunch tomorrow lets just do twelve' → "
+            "'Hey, you free for lunch tomorrow? Let's do 12 if that works' "
             "Preserve the address form that was spoken: keep 'Sie/Ihnen/Ihr' if used, keep 'du/dir/dein' if used — never switch between them. "
             "Keep it short. No greeting or sign-off. Match the dictation language. "
             + _PM_GUARDRAILS
         ),
         "excited": (
-            "Rewrite the following dictated text as an enthusiastic personal message — texting style with energy. "
-            "Transform spoken phrasing into energetic written prose; rephrase, don't just clean up. "
-            "Spelling and grammar must be correct. "
+            "Rewrite the following dictated text as an enthusiastic personal message — texting style with "
+            "genuine energy. Transform spoken phrasing into upbeat written prose; rephrase, don't just clean up. "
+            "Spelling and grammar stay correct. Convey the excitement through warm word choice and exclamation "
+            "marks — but keep it natural, not manic (don't end every sentence with multiple '!'). "
+            "Example: 'oh my god lunch tomorrow yes lets just do twelve' → "
+            "'Yes, lunch tomorrow sounds perfect! Let's do 12!' "
             "Keep it short, warm, and upbeat. "
             "Preserve the address form that was spoken: keep 'Sie/Ihnen/Ihr' if used, keep 'du/dir/dein' if used — never switch between them. "
             "No greeting or sign-off. Match the dictation language. "
@@ -966,6 +1025,7 @@ def get_mode_prompt() -> str | None:
     prompt = cat_prompts.get(style) or cat_prompts.get(default_style) or MODE_SYSTEM_PROMPTS["personal-message"]["formal"]
     toggles = config.get("modes", {}).get("toggles", {}).get(category, {}).get(style, {})
     if category == "email":
+        prompt = _EMAIL_AGENT + prompt
         if toggles.get("include_greeting", True):
             prompt += _EMAIL_GREETINGS.get(style, _EMAIL_GREETINGS["formal"])
         else:
@@ -975,12 +1035,17 @@ def get_mode_prompt() -> str | None:
         else:
             prompt += " Do not include a sign-off or closing. Still use proper email paragraph structure with line breaks between sections."
     elif category == "personal-message":
+        prompt = _PM_AGENT + prompt
         if toggles.get("use_emoji", False):
             prompt += (
                 " You may add at most one relevant emoji if it fits the message naturally and adds genuine value. "
                 "Do not decorate every sentence. Many messages should have no emoji at all — only use one when it clearly enhances the meaning or tone. "
                 "Place it inline where it feels organic, never as decoration at the start or end."
             )
+        else:
+            # The emoji toggle is the single control: with it off, never add emojis —
+            # not even in the excited style (which otherwise tends to sprinkle them).
+            prompt += " Do not use any emojis."
     elif category == "notes":
         # Notion renders Markdown on paste (real checkboxes/headings); Apple Notes
         # and Notepad do not, so they get the plain-text variant.

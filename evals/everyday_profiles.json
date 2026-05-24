@@ -1,0 +1,429 @@
+[
+  {
+    "id": "EM-biz-followup",
+    "category": "email", "style": "formal", "lang": "English", "persona": "business",
+    "input": "uh hey so I just wanted to follow up on the call we had this morning um about the Q3 roadmap I think it went really well and yeah I'll send over the deck by end of week also let me know if you want to loop in Sarah",
+    "note": "spoken -> written register; 2-4 short paragraphs; 'loop in Sarah' must NOT widen into 'future communications'",
+    "forbid": ["um", "future communications"]
+  },
+  {
+    "id": "EM-biz-offer-Sie",
+    "category": "email", "style": "formal", "lang": "German", "persona": "business",
+    "input": "ja hallo Herr Müller also ich wollte mich kurz melden wegen dem Angebot das Sie mir geschickt haben das sieht soweit gut aus ich hätte nur noch eine Frage zu den Lieferzeiten können wir da vielleicht nächste Woche mal telefonieren",
+    "note": "keep Sie throughout; Sehr geehrter Herr Müller greeting; no invented 'ich hoffe es geht Ihnen gut'",
+    "expect": ["Sie"], "forbid": ["ich hoffe, es geht Ihnen gut"]
+  },
+  {
+    "id": "EM-biz-decline",
+    "category": "email", "style": "formal", "lang": "English", "persona": "business",
+    "input": "hi thanks for the invite to the workshop on thursday unfortunately I have got a conflict that afternoon so I will not be able to make it but please send me the notes afterwards",
+    "note": "polite decline; preserves Thursday + the notes request; no invented reason",
+    "forbid": ["Thursday morning"]
+  },
+  {
+    "id": "EM-biz-status",
+    "category": "email", "style": "casual", "lang": "English", "persona": "business",
+    "input": "hey just a quick update we shipped the login fix yesterday and the dashboard is about eighty percent done should be ready for review by friday",
+    "note": "friendly status update; keep the ~80% and Friday (the model may write '80%' or 'eighty percent' — both fine)",
+    "forbid": []
+  },
+  {
+    "id": "EM-biz-intro",
+    "category": "email", "style": "formal", "lang": "English", "persona": "business",
+    "input": "hi everyone I wanted to introduce you two uh sarah this is mark he runs ops at our berlin office mark sarah is leading the new analytics project I think you will have a lot to talk about",
+    "note": "double intro; keep both names + roles; readable structure",
+    "forbid": ["um"]
+  },
+  {
+    "id": "EM-biz-apology-delay",
+    "category": "email", "style": "formal", "lang": "English", "persona": "business",
+    "input": "hi so I am really sorry about the delay on the report I had a few things blow up this week I will have it to you by tuesday at the latest thanks for your patience",
+    "note": "professional apology; keep Tuesday; do not invent what blew up",
+    "forbid": []
+  },
+  {
+    "id": "EM-biz-deadline-Sie",
+    "category": "email", "style": "formal", "lang": "German", "persona": "business",
+    "input": "guten tag frau schmidt ich melde mich wegen der frist für das projekt wir bräuchten leider noch zwei wochen länger weil uns ein zulieferer ausgefallen ist wäre das für sie in ordnung",
+    "note": "Sie form (here 'für Sie'); keep 'zwei Wochen'; Sehr geehrte/Hallo Frau Schmidt",
+    "expect": ["Sie"], "forbid": []
+  },
+  {
+    "id": "EM-biz-thanks-vendor",
+    "category": "email", "style": "casual", "lang": "English", "persona": "business",
+    "input": "hey just wanted to say thanks for turning that order around so fast it really helped us hit our deadline definitely going to work with you again",
+    "note": "warm casual thanks; concise; 1-2 short paragraphs",
+    "forbid": []
+  },
+  {
+    "id": "EM-biz-1on1-sensitive",
+    "category": "email", "style": "formal", "lang": "English", "persona": "business",
+    "input": "hi could we set up some time to chat this week there is a few things about my role and compensation I would like to discuss nothing urgent but I would appreciate half an hour",
+    "note": "EDGE sensitive topic; keep it measured; do not over-formalize or invent specifics",
+    "forbid": ["raise", "promotion"]
+  },
+  {
+    "id": "EM-biz-handover",
+    "category": "email", "style": "formal", "lang": "English", "persona": "business",
+    "input": "hi team I am out next week for vacation um while I am gone please reach out to tom for anything urgent on the client account I have briefed him on the open items",
+    "note": "out-of-office handover; keep Tom + next week",
+    "expect": ["Tom"], "forbid": ["um"]
+  },
+  {
+    "id": "EM-priv-landlord-Sie",
+    "category": "email", "style": "formal", "lang": "German", "persona": "private",
+    "input": "sehr geehrte frau weber die heizung in der wohnung funktioniert seit gestern nicht mehr es wird gar nicht warm könnten sie da bitte jemanden vorbeischicken es ist gerade ziemlich kalt",
+    "note": "Sie form; faithful complaint; no invented dates/costs",
+    "expect": ["Sie"], "forbid": []
+  },
+  {
+    "id": "EM-priv-wedding",
+    "category": "email", "style": "excited", "lang": "English", "persona": "personal",
+    "input": "hi guys oh my god congratulations we would absolutely love to come to the wedding in june just let us know if we should book a hotel nearby cannot wait",
+    "note": "genuine excited RSVP; warmth via words, NOT emojis (email never adds emoji); keep June",
+    "forbid": ["🎉"]
+  },
+  {
+    "id": "EM-priv-complaint",
+    "category": "email", "style": "formal", "lang": "English", "persona": "private",
+    "input": "hello I ordered a pair of headphones two weeks ago order number is 4471 and they still have not arrived the tracking has not updated in days I would like a refund or a replacement",
+    "note": "EDGE preserve order number 4471 exactly; clear ask (refund OR replacement)",
+    "expect": ["4471"], "forbid": []
+  },
+  {
+    "id": "EM-priv-school-Sie",
+    "category": "email", "style": "formal", "lang": "German", "persona": "private",
+    "input": "guten tag frau bauer meine tochter lena war diese woche krank deshalb konnte sie die hausaufgaben nicht machen könnten sie mir sagen was sie nachholen muss",
+    "note": "Sie to teacher; keep names Lena + Frau Bauer; 'sie' (=she, Lena) is lowercase and fine",
+    "expect": ["Sie"], "forbid": []
+  },
+  {
+    "id": "EM-priv-hotel",
+    "category": "email", "style": "formal", "lang": "English", "persona": "private",
+    "input": "hi I would like to ask about availability for a double room from the 12th to the 15th of july do you have anything with a sea view and what would the rate be",
+    "note": "booking inquiry; keep dates 12-15 July + sea view + rate question",
+    "expect": ["12", "15"], "forbid": []
+  },
+  {
+    "id": "EM-priv-friend-catchup",
+    "category": "email", "style": "casual", "lang": "English", "persona": "personal",
+    "input": "heeey it has been way too long I was just thinking about that trip we took to portugal we should really catch up soon how is the new job going and how is the dog",
+    "note": "warm personal email; keep both questions (job + dog); relaxed register",
+    "forbid": []
+  },
+  {
+    "id": "EM-priv-family-du",
+    "category": "email", "style": "casual", "lang": "German", "persona": "personal",
+    "input": "hey mama also wir kommen am samstag so gegen mittag an die kinder freuen sich schon total brauchst du dass wir was mitbringen ich kann auch einen kuchen backen",
+    "note": "du form to mum; keep Saturday + the offer to bring/bake; never flip to Sie",
+    "forbid": ["Sie", "Ihnen"]
+  },
+  {
+    "id": "EM-priv-cancel-sub",
+    "category": "email", "style": "formal", "lang": "English", "persona": "private",
+    "input": "hi I would like to cancel my subscription effective at the end of the month I do not need the service anymore can you confirm there will not be any further charges",
+    "note": "cancellation; keep end-of-month + the no-further-charges confirmation request",
+    "forbid": []
+  },
+  {
+    "id": "EM-edge-short-antiinvent",
+    "category": "email", "style": "formal", "lang": "English", "persona": "business",
+    "input": "hi can you send me the report when you get a chance thanks",
+    "note": "EDGE tiny input; must NOT invent a report name, deadline, or attachment",
+    "forbid": ["by Friday", "by Monday", "attached", "next week"]
+  },
+  {
+    "id": "EM-edge-multitopic",
+    "category": "email", "style": "formal", "lang": "English", "persona": "business",
+    "input": "hey so a few things first the invoice for march is still open second can we move the standup to ten and third I will be working from home thursday and friday that is it",
+    "note": "EDGE three distinct topics -> should structure clearly (list or paragraphs); keep all three (standup time may render 'ten' or '10:00')",
+    "expect": ["March"], "forbid": []
+  },
+  {
+    "id": "EM-edge-numbers",
+    "category": "email", "style": "formal", "lang": "English", "persona": "business",
+    "input": "hi just confirming the order 250 units at 14 euros 90 each delivered to the warehouse on baker street by march 3rd let me know if that all looks right",
+    "note": "EDGE preserve every number exactly (250, 14.90, March 3) + Baker Street",
+    "expect": ["250", "Baker Street"], "forbid": []
+  },
+  {
+    "id": "EM-edge-selfcorrect",
+    "category": "email", "style": "casual", "lang": "English", "persona": "business",
+    "input": "hey let us meet tuesday no wait wednesday at 3 actually make it 3 30 at the usual coffee place",
+    "note": "EDGE self-correction -> resolve to Wednesday 3:30; drop the abandoned Tuesday/3:00",
+    "expect": ["Wednesday"], "forbid": ["Tuesday"]
+  },
+  {
+    "id": "EM-edge-nonnative",
+    "category": "email", "style": "formal", "lang": "English", "persona": "business",
+    "input": "hello I am writing for to ask if is possible to get the document until friday because I need it for the meeting thank you very much",
+    "note": "EDGE non-native phrasing -> smooth into correct English, keep meaning + Friday",
+    "expect": ["Friday"], "forbid": []
+  },
+  {
+    "id": "EM-edge-alreadyclean",
+    "category": "email", "style": "formal", "lang": "English", "persona": "business",
+    "input": "Hi Tom, thanks for sending the slides. I will review them tonight and share my feedback tomorrow morning.",
+    "note": "EDGE already clean -> minimal change, do not pad or restructure unnecessarily",
+    "expect": ["Tom"], "forbid": []
+  },
+  {
+    "id": "EM-edge-list-inline",
+    "category": "email", "style": "casual", "lang": "English", "persona": "business",
+    "input": "hey for the offsite we need to sort out the venue the catering the transport and someone to handle the slides can you take the venue and catering",
+    "note": "EDGE inline list in an email -> readable prose (email isn't notes); keep all four items + the ask",
+    "forbid": []
+  },
+  {
+    "id": "EM-agent-reschedule",
+    "category": "email", "style": "formal", "lang": "English", "persona": "business",
+    "mode": "agent",
+    "input": "write her a reply saying I cannot make friday but monday works and apologize for the short notice",
+    "note": "AGENT (live): should COMPOSE a real reply (declines Friday, offers Monday, apologizes for short notice) — not echo the instruction. Human-rate compose vs echo.",
+    "expect": ["Monday"]
+  },
+  {
+    "id": "EM-agent-proposal",
+    "category": "email", "style": "formal", "lang": "English", "persona": "business",
+    "mode": "agent",
+    "input": "reply to him that the proposal looks good but we need to cut the budget by about ten percent and ask for a revised version by next week",
+    "note": "AGENT (live): should COMPOSE a reply covering praise + ~10% budget cut + revised version by next week. Human-rate compose vs echo.",
+    "expect": ["revised"]
+  },
+  {
+    "id": "EM-agent-apology-du",
+    "category": "email", "style": "casual", "lang": "German", "persona": "personal",
+    "mode": "agent",
+    "input": "schreib ihr dass es mir wirklich leid tut wegen gestern und dass ich es am wochenende wieder gutmachen will",
+    "note": "AGENT (live): should COMPOSE a du apology email (sorry about yesterday, make it up this weekend); keep du. Human-rate compose vs echo.",
+    "expect": ["gestern"], "forbid": ["Sie", "Ihnen"]
+  },
+  {
+    "id": "EM-agent-customer",
+    "category": "email", "style": "formal", "lang": "English", "persona": "business",
+    "mode": "agent",
+    "input": "answer the customer explaining that we will refund the order within five business days and apologize for the inconvenience",
+    "note": "AGENT (live): should COMPOSE a customer reply (5-business-day refund + apology). Human-rate compose vs echo.",
+    "expect": ["refund"]
+  },
+
+  {
+    "id": "PM-plans",
+    "category": "personal-message", "style": "casual", "lang": "English", "persona": "friends",
+    "input": "hey so um are you still good for the thing on saturday I was thinking we could just meet at the place around like 7 ish and then figure out dinner after",
+    "note": "texting style; transform not just clean; no greeting/signoff; keep Saturday + 7ish",
+    "forbid": ["um", "Best regards"]
+  },
+  {
+    "id": "PM-address",
+    "category": "personal-message", "style": "formal", "lang": "English", "persona": "acquaintance",
+    "input": "hi just checking can you send me the address for tomorrow and also let me know what time I should be there I do not want to be late",
+    "note": "polished chat message; full punctuation + closing period; concise",
+    "forbid": ["Sincerely"]
+  },
+  {
+    "id": "PM-goodnews",
+    "category": "personal-message", "style": "excited", "lang": "English", "persona": "friends",
+    "input": "oh my god I just got the apartment they said yes we can move in next month I cannot believe it",
+    "note": "energetic; emoji toggle OFF -> NO emoji; energy via words + '!'",
+    "forbid": ["🎉", "🏠"]
+  },
+  {
+    "id": "PM-birthday-emoji",
+    "category": "personal-message", "style": "casual", "lang": "English", "persona": "friends",
+    "toggles": {"use_emoji": true},
+    "input": "happy birthday hope you have an amazing day and we should definitely grab drinks soon to celebrate",
+    "note": "emoji toggle ON -> at most ONE organic emoji, inline (not stacked)",
+    "forbid": []
+  },
+  {
+    "id": "PM-presentation-du",
+    "category": "personal-message", "style": "casual", "lang": "German", "persona": "coworker",
+    "input": "hey du kannst du mir morgen kurz die präsentation schicken ich brauch die für das meeting und sag mir auch bescheid ob du um drei zeit hast",
+    "note": "du preserved; texting style; keep 'drei'; never flip to Sie",
+    "forbid": ["Sie", "Ihnen"]
+  },
+  {
+    "id": "PM-exam",
+    "category": "personal-message", "style": "excited", "lang": "German", "persona": "friends",
+    "input": "boah ich hab die prüfung bestanden und zwar mit ner eins ich freu mich so wir müssen das unbedingt feiern",
+    "note": "energetic German; emoji OFF -> no emoji; WATCH that excited stays natural (keep 'ich hab/freu mich' colloquial feel, do not over-formalize)",
+    "forbid": ["🎉", "🥳"]
+  },
+  {
+    "id": "PM-late-antiinvent",
+    "category": "personal-message", "style": "casual", "lang": "English", "persona": "friends",
+    "input": "running a bit late be there soon",
+    "note": "EDGE tiny input; must NOT invent how late, a reason, or a place",
+    "forbid": ["minutes", "traffic"]
+  },
+  {
+    "id": "PM-logistics-runon",
+    "category": "personal-message", "style": "casual", "lang": "English", "persona": "friends",
+    "input": "ok so for tomorrow I will grab the keys from my sister then pick you up around 8 and then we drive to the airport together my flight is at 11 so we have time",
+    "note": "EDGE long run-on -> readable; keep the 8 / 11 times + the sequence",
+    "expect": ["8", "11"], "forbid": []
+  },
+  {
+    "id": "PM-partner-dinner",
+    "category": "personal-message", "style": "casual", "lang": "English", "persona": "partner",
+    "input": "hey babe what do you feel like for dinner I could cook or we could just order something I am kinda tired honestly",
+    "note": "intimate casual; keep the two options + the 'tired' tone; do not strip warmth",
+    "forbid": []
+  },
+  {
+    "id": "PM-sickfriend",
+    "category": "personal-message", "style": "casual", "lang": "English", "persona": "friends",
+    "input": "hey I heard you are not feeling well I am so sorry let me know if you need anything I can drop off some soup or just keep you company",
+    "note": "warm/caring; keep the soup + company offer; tone matters most",
+    "forbid": []
+  },
+  {
+    "id": "PM-group-event",
+    "category": "personal-message", "style": "casual", "lang": "English", "persona": "group-chat",
+    "input": "ok everyone so the plan for saturday is we meet at mine at 6 then head to the restaurant for 7 can someone book a table for 8 people",
+    "note": "group logistics; keep 6 / 7 / table for 8; clear and scannable",
+    "expect": ["6", "7", "8"], "forbid": []
+  },
+  {
+    "id": "PM-decline",
+    "category": "personal-message", "style": "casual", "lang": "English", "persona": "friends",
+    "input": "hey thanks so much for the invite but I will not be able to make it this weekend already have something on hope it goes great though",
+    "note": "warm decline; do not invent the conflicting plan",
+    "forbid": []
+  },
+  {
+    "id": "PM-favor",
+    "category": "personal-message", "style": "casual", "lang": "English", "persona": "friends",
+    "input": "hey random question would you be able to water my plants next week while I am away it is just three days I would really owe you one",
+    "note": "casual favor; keep 'three days' + next week",
+    "forbid": []
+  },
+  {
+    "id": "PM-affectionate",
+    "category": "personal-message", "style": "casual", "lang": "English", "persona": "partner",
+    "input": "just thinking about you and wanted to say I had such a good time last night cannot wait to see you again",
+    "note": "EDGE affectionate tone -> must stay warm/personal, not generic or stiff",
+    "forbid": []
+  },
+  {
+    "id": "PM-venting-tone",
+    "category": "personal-message", "style": "casual", "lang": "English", "persona": "friends",
+    "input": "ugh today was such a mess the meeting ran over I missed lunch and then the train was delayed I just want to crawl into bed",
+    "note": "EDGE venting -> keep the frustrated tone; do NOT sanitize into something neutral/cheery",
+    "forbid": []
+  },
+  {
+    "id": "PM-colleague-Sie",
+    "category": "personal-message", "style": "formal", "lang": "German", "persona": "coworker",
+    "input": "hallo herr klein können sie mir kurz sagen ob das meeting morgen um zehn noch stattfindet ich habe dazu keine einladung bekommen",
+    "note": "EDGE Sie in a chat message; keep Sie + Herr Klein + 'zehn'; concise",
+    "expect": ["Sie"], "forbid": []
+  },
+  {
+    "id": "PM-emoji-multi",
+    "category": "personal-message", "style": "excited", "lang": "English", "persona": "group-chat",
+    "toggles": {"use_emoji": true},
+    "input": "we did it the team hit the target this quarter so proud of everyone let us celebrate next week",
+    "note": "emoji toggle ON + excited -> still at most ONE emoji (not a string of them)",
+    "forbid": []
+  },
+  {
+    "id": "PM-veryshort",
+    "category": "personal-message", "style": "casual", "lang": "English", "persona": "friends",
+    "input": "on my way",
+    "note": "EDGE 3-word input; near-passthrough; do NOT invent ETA or destination",
+    "forbid": ["minutes", "soon as"]
+  },
+  {
+    "id": "PM-numbers",
+    "category": "personal-message", "style": "formal", "lang": "English", "persona": "friends",
+    "input": "hey my new number is 0176 23456789 save it and the dinner reservation is under my name for 8 pm",
+    "note": "EDGE preserve the phone digits exactly + 8 pm",
+    "expect": ["0176", "23456789", "8"], "forbid": []
+  },
+  {
+    "id": "PM-selfcorrect",
+    "category": "personal-message", "style": "casual", "lang": "English", "persona": "friends",
+    "input": "let us meet at the station no actually let us meet at the cafe across from it at quarter past",
+    "note": "EDGE self-correction -> resolve to the cafe (not the station) at quarter past",
+    "expect": ["cafe"], "forbid": []
+  },
+  {
+    "id": "PM-excited-restraint",
+    "category": "personal-message", "style": "excited", "lang": "English", "persona": "friends",
+    "input": "guess what I finally finished the marathon I am exhausted but so happy",
+    "note": "EDGE excited but mixed feeling -> energy without manic over-exclaiming every clause; keep 'exhausted but happy'",
+    "forbid": ["🎉"]
+  },
+  {
+    "id": "PM-partner-du-DE",
+    "category": "personal-message", "style": "casual", "lang": "German", "persona": "partner",
+    "input": "schatz kannst du auf dem heimweg noch milch und brot mitnehmen und wir haben glaub ich auch keine eier mehr",
+    "note": "du to partner; keep all three items (Milch, Brot, Eier); never flip to Sie",
+    "forbid": ["Sie", "Ihnen"]
+  },
+  {
+    "id": "PM-agent-sorry",
+    "category": "personal-message", "style": "casual", "lang": "English", "persona": "partner",
+    "mode": "agent",
+    "input": "tell her I am so sorry about yesterday and that I will make it up to her this weekend",
+    "note": "AGENT (live): should COMPOSE the actual message (apology + make-it-up-this-weekend), addressed to her as 'you'. Human-rate compose vs echo.",
+    "expect": ["weekend"]
+  },
+  {
+    "id": "PM-agent-mom",
+    "category": "personal-message", "style": "casual", "lang": "English", "persona": "family",
+    "mode": "agent",
+    "input": "reply to mom that I will be there for dinner on sunday and ask if I should bring anything",
+    "note": "AGENT (live): should COMPOSE a reply (confirms Sunday dinner + asks what to bring). Human-rate compose vs echo.",
+    "expect": ["Sunday"]
+  },
+  {
+    "id": "PM-agent-du",
+    "category": "personal-message", "style": "casual", "lang": "German", "persona": "friends",
+    "mode": "agent",
+    "input": "sag ihm dass ich es heute leider nicht schaffe aber morgen auf jeden fall vorbeikomme",
+    "note": "AGENT (live): should COMPOSE a du message (cannot today, will definitely come by tomorrow); keep du. Human-rate compose vs echo.",
+    "expect": ["morgen"], "forbid": ["Sie", "Ihnen"]
+  },
+  {
+    "id": "PM-agent-interested",
+    "category": "personal-message", "style": "casual", "lang": "English", "persona": "acquaintance",
+    "mode": "agent",
+    "input": "answer that I am really interested and ask when would be a good time to meet",
+    "note": "AGENT (live): should COMPOSE a reply (expresses interest + asks for a good time to meet). Human-rate compose vs echo.",
+    "expect": ["interested"]
+  },
+
+  {
+    "id": "PM-trap-tell-literal",
+    "category": "personal-message", "style": "casual", "lang": "English", "persona": "friends",
+    "input": "tell me honestly did you like the place or were you just being polite",
+    "note": "MISFIRE TRAP (should NOT compose): opens with the directive 'tell' but is a literal message spoken TO the recipient (2nd person 'me'/'you'). Must be cleaned as the message/question itself, NOT read as an instruction to compose. Human-rate: did it stay verbatim?",
+    "forbid": []
+  },
+  {
+    "id": "PM-trap-thirdperson-mention",
+    "category": "personal-message", "style": "casual", "lang": "English", "persona": "friends",
+    "input": "did you hear that sarah got the job we should totally celebrate with her this weekend",
+    "note": "MISFIRE TRAP (should NOT compose): mentions a third person ('sarah'/'her') but is a genuine message spoken to 'you'. A third-person mention alone must not trigger compose; clean it as the message. Human-rate: did it stay verbatim?",
+    "expect": ["Sarah"], "forbid": []
+  },
+  {
+    "id": "EM-trap-noverb-instruction",
+    "category": "email", "style": "formal", "lang": "English", "persona": "business",
+    "mode": "agent",
+    "input": "an email to the team letting them know the office will be closed friday for maintenance",
+    "note": "MISFIRE TRAP (should COMPOSE): no leading write/tell/reply verb, but 'an email to the team' + third-person 'them' = an instruction. Should compose the actual notice (office closed Friday for maintenance), not echo the instruction phrasing.",
+    "expect": ["Friday"], "forbid": ["an email to the team", "letting them know"]
+  },
+  {
+    "id": "EM-trap-2ndperson-instruction",
+    "category": "email", "style": "formal", "lang": "English", "persona": "business",
+    "mode": "agent",
+    "input": "reply that you are really happy with the offer but you need it in writing before signing",
+    "note": "MISFIRE TRAP (should COMPOSE + shift person): directive 'reply that' with the SPEAKER referred to as 'you'. Should compose from the speaker's view ('I'm really happy with the offer, but I'll need it in writing before signing'), NOT address the recipient as 'you are happy'. Human-rate the person handling.",
+    "expect": [], "forbid": ["reply that"]
+  }
+]
