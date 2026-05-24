@@ -425,5 +425,103 @@
     "input": "reply that you are really happy with the offer but you need it in writing before signing",
     "note": "MISFIRE TRAP (should COMPOSE + shift person): directive 'reply that' with the SPEAKER referred to as 'you'. Should compose from the speaker's view ('I'm really happy with the offer, but I'll need it in writing before signing'), NOT address the recipient as 'you are happy'. Human-rate the person handling.",
     "expect": [], "forbid": ["reply that"]
+  },
+  {
+    "id": "NO-buy-list-plain-en",
+    "category": "notes", "style": "smart", "lang": "English", "persona": "personal", "target": "plain",
+    "input": "okay so for the camping trip this weekend I need to grab a tent some sleeping bags a cooler and bug spray",
+    "note": "clear topic -> short title; each named item on its own '- ' line; PLAIN text, no Markdown ('#', '*', '[')",
+    "expect": ["- "], "forbid": ["#", "*", "["]
+  },
+  {
+    "id": "NO-buy-list-notion-en",
+    "category": "notes", "style": "smart", "lang": "English", "persona": "personal", "target": "notion",
+    "input": "for the camping trip I need to pick up a tent sleeping bags a cooler and bug spray",
+    "note": "Notion target -> '# Title' + '[] ' to-do checkboxes for things to buy (NOT '- '); real Markdown blocks",
+    "expect": ["#", "[]"], "forbid": []
+  },
+  {
+    "id": "NO-prose-en",
+    "category": "notes", "style": "smart", "lang": "English", "persona": "personal", "target": "plain",
+    "input": "I've been thinking about the apartment search and honestly I think we should focus on the east side it's closer to work and the rent seems more reasonable plus there are more cafes around",
+    "note": "connected reasoning, NOT a list -> clean prose in short paragraphs, no bullet points; plain text",
+    "expect": [], "forbid": ["#", "*", "["]
+  },
+  {
+    "id": "NO-multigroup-en",
+    "category": "notes", "style": "smart", "lang": "English", "persona": "personal", "target": "plain",
+    "input": "so planning the office move there's the IT stuff we need to set up the new routers and move the servers then for the furniture we need desks chairs and a couple of meeting tables and don't forget facilities we have to sort out parking passes and the cleaning contract",
+    "note": "three distinct groups (IT, furniture, facilities) -> short sub-headings with grouped '- ' items; plain text, no Markdown",
+    "expect": ["- "], "forbid": ["#", "*", "["]
+  },
+  {
+    "id": "NO-request-margarita-en",
+    "category": "notes", "style": "smart", "lang": "English", "persona": "personal", "target": "plain",
+    "input": "make me a note with the ingredients for a spicy margarita",
+    "note": "REQUEST RULE: explicitly asks to GENERATE known content -> output the actual ingredient list (tequila, lime, agave, jalapeno...), do NOT echo the instruction. Judge: are real ingredients present?",
+    "expect": [], "forbid": ["make me a note", "#", "*", "["]
+  },
+  {
+    "id": "NO-antiinvention-party-en",
+    "category": "notes", "style": "smart", "lang": "English", "persona": "personal", "target": "plain",
+    "input": "I still need to buy a few things for the party this weekend",
+    "note": "ANTI-INVENTION TRAP: announces intent but names NO concrete items -> keep only the sentence (a title is ok), invent NO list items. Any bullet '- ' = invented items = fail.",
+    "expect": [], "forbid": ["- "]
+  },
+  {
+    "id": "NO-antiinvention-recipe-en",
+    "category": "notes", "style": "smart", "lang": "English", "persona": "personal", "target": "plain",
+    "input": "I want to write down the recipe I made for dinner tonight",
+    "note": "ANTI-INVENTION TRAP: states intent to record a recipe but gives NO ingredients or steps -> must NOT invent a recipe; keep only what was said.",
+    "expect": [], "forbid": ["- "]
+  },
+  {
+    "id": "NO-barelist-notitle-en",
+    "category": "notes", "style": "smart", "lang": "English", "persona": "personal", "target": "plain",
+    "input": "eggs milk bread coffee bananas",
+    "note": "bare list with NO stated context -> start directly with the '- ' list, NO invented heading/title; plain text. Judge: confirm no fabricated title line.",
+    "expect": ["- "], "forbid": ["#", "*", "["]
+  },
+  {
+    "id": "NO-title-clear-en",
+    "category": "notes", "style": "smart", "lang": "English", "persona": "personal", "target": "plain",
+    "input": "spicy margarita recipe two ounces tequila one ounce lime juice half ounce agave and a few slices of jalapeno",
+    "note": "clear topic + content the SPEAKER provided (not invented) -> short title then the items; plain text. Judge: confirm a fitting title appears (e.g. 'Spicy Margarita').",
+    "expect": ["- "], "forbid": ["#", "*", "["]
+  },
+  {
+    "id": "NO-buy-list-plain-de",
+    "category": "notes", "style": "smart", "lang": "German", "persona": "personal", "target": "plain",
+    "input": "also für das Wochenende muss ich noch einkaufen Tomaten Eier Milch und Brot",
+    "note": "klarer Kontext -> kurzer Titel; jedes Element auf eigener '- ' Zeile; reiner Text, kein Markdown",
+    "expect": ["- "], "forbid": ["#", "*", "["]
+  },
+  {
+    "id": "NO-buy-list-notion-de",
+    "category": "notes", "style": "smart", "lang": "German", "persona": "personal", "target": "notion",
+    "input": "Notiz für den Wocheneinkauf ich brauche Tomaten Eier Milch und Brot",
+    "note": "Notion -> '# Titel' + '[] ' Checkboxen für Einkaufsartikel; Markdown-Blöcke",
+    "expect": ["#", "[]"], "forbid": []
+  },
+  {
+    "id": "NO-prose-de",
+    "category": "notes", "style": "smart", "lang": "German", "persona": "personal", "target": "plain",
+    "input": "ich überlege gerade wegen dem Umzug ich glaube wir sollten uns auf die Innenstadt konzentrieren das ist näher an der Arbeit und die Mieten wirken vernünftiger",
+    "note": "zusammenhängende Überlegung, keine Liste -> sauberer Fließtext, keine Aufzählung; reiner Text",
+    "expect": [], "forbid": ["#", "*", "["]
+  },
+  {
+    "id": "NO-request-packliste-de",
+    "category": "notes", "style": "smart", "lang": "German", "persona": "personal", "target": "plain",
+    "input": "schreib mir eine Packliste für ein Ski-Wochenende",
+    "note": "REQUEST RULE: bittet explizit um bekannte Inhalte -> echte Packliste generieren (Skier, Handschuhe, Skihose...), Anweisung nicht wiederholen. Judge: sind echte Packlisten-Elemente da?",
+    "expect": [], "forbid": ["schreib mir", "#", "*", "["]
+  },
+  {
+    "id": "NO-antiinvention-de",
+    "category": "notes", "style": "smart", "lang": "German", "persona": "personal", "target": "plain",
+    "input": "ich muss noch ein paar Sachen für die Reise besorgen",
+    "note": "ANTI-INVENTION TRAP: kündigt Absicht an, nennt aber KEINE konkreten Dinge -> nur den Satz behalten, KEINE Liste erfinden. Jede Aufzählung '- ' = erfunden = fail.",
+    "expect": [], "forbid": ["- "]
   }
 ]

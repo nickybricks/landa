@@ -35,7 +35,7 @@ slightly prim German-excited register; compose path adds mild courtesy filler �
 future tightening pass, not required now.
 
 ### Then, pick the next focus
-1. **Finish the profile roadmap item** — what's still open after this session's Email+PM polish: the **Notes** prompt, the **per-profile UI card examples** (`modes.preview.*`), and **slice 2** (Slack-vs-WhatsApp split). Reuses the new `evals/run_profile_samples.py` sampler.
+1. **Finish the profile roadmap item** — ✅ **Notes eval'd 14/14 clean (no changes)** and ✅ **preview cards polished** (session 3g). **Only slice 2 remains** (Slack/Discord vs WhatsApp/Signal tone/format split) — its own session: needs a product decision on the actual delta + a regression-eval budget (rides the most-tuned PM prompt).
 2. **Make transcription feel faster** — kill the local double-pass language detect (one pass). Solo-verifiable, low risk, felt by everyone (esp. Windows/slow machines).
 3. **Robustness & security** — top review items: config write-race, crash-restart loop, localhost backend lock/auth (the last pairs with payments).
 4. **Smarter offline transcription** — the deterministic local vocab fix ([tasks/local-vocab-correction.md](tasks/local-vocab-correction.md)) for the free/local path.
@@ -67,12 +67,20 @@ future tightening pass, not required now.
 - **Resolved 2026-05-24:** the unexplained `main.js` pill-positioning change was reviewed and committed (`a997538`); strategy/workflow docs committed (`0f0f79b`).
 - **Slice 1 COMMITTED (`10a81a9`, 2026-05-24):** feature code shipped to `main` (backend prompt+defaults+migration+routing, settings tile, banner filter). Not released yet — gates pending (see "Up next"). main.js unchanged (tray lists only PM+Email — consistent).
 - **Everyday-profile polish + AGENT MODE — COMMITTED (`102ab94`, 2026-05-24, session 3f).** `backend/landa_core.py` (PM style prompts, `_EMAIL_GUARDRAILS`, emoji branch, `_EMAIL_AGENT`/`_PM_AGENT` blocks in `get_mode_prompt`) + `evals/run_profile_samples.py` + `evals/everyday_profiles.json` (now **59 cases**, incl. 4 adversarial traps) + `tasks/profile-polish-email-pm.md` + `tasks/profile-eval-2026-05-24.md` + `tasks/profile-eval-results-2026-05-24.md`. Reviewed (LLM-as-judge 53/55) + adversarial probe 4/4. **⚠️ Still owed:** agent mode is unreleased/unannounced — onboarding/landing/changelog before the release that ships it.
+- **Notes eval + preview-card polish — UNCOMMITTED (session 3g, 2026-05-24).** Diagnostic + copy only, no behavior change. Files: `evals/everyday_profiles.json` (+14 Notes cases, now 73), `evals/run_profile_samples.py` (target field + category filter), `renderer/settings.js` (email + notes preview strings, EN+DE), `tasks/notes-eval-2026-05-24.md` + `tasks/profile-notes-and-previews.md` (new), STRATEGY.md + NEXT_SESSION.md. **Notes prompt itself UNCHANGED** (eval'd clean). Visual card render not yet eyeballed (a stale Landa instance held the single-instance lock; restart to see new copy). Awaiting Nick's go to commit.
 - **Still uncommitted (clarify when relevant, not urgent):** `tasks/todo.md` (EU-migration WIP notes), and untracked `LANDING.md` + `archive/` — unknown provenance, left untouched until Nick confirms what they are.
 - _(add new in-flight items here as they happen)_
 
 ---
 
 ## Session log (most recent first)
+
+### 2026-05-24 (session 3g — finish profile roadmap: Notes eval + preview cards)
+- Alignment ritual clean: only the known `tasks/todo.md` (EU WIP) + untracked `LANDING.md`/`archive/` uncommitted; reconciled against the in-flight log.
+- Nick chose "finish the profile roadmap," **safe-two-first** sequencing (Notes + preview cards now; **slice 2 deferred** to its own session — needs a product decision + regression budget).
+- **Part A — Notes:** corpus had 0 Notes cases. Built **14** (corpus 59→73), extended the sampler (plain-vs-Notion `target` field + a category filter arg). Live run: **14/14 clean, 0 guardrail failures**. LLM-as-judged each: anti-invention traps all held (announced-but-unnamed → invented nothing), title rule correct both ways, plain/Notion branch + request rule work EN+DE. Verdict = same as Email/PM: already good → **no prompt changes** (don't fix what isn't broken). Snapshot: [tasks/notes-eval-2026-05-24.md](tasks/notes-eval-2026-05-24.md).
+- **Part B — preview cards:** elevated `modes.preview.*` for **email** (unified all 3 styles on one scenario; **removed the invented boilerplate** the old formal preview still showed — it contradicted our own `_EMAIL_GUARDRAILS`) and **notes** (grocery list → professional project note), EN+DE. **PM + code left unchanged** (already at the bar). `node --check`/JSON/py_compile pass; app launches, backend healthy.
+- **Not committed** — awaiting Nick's go. Logged to STRATEGY Decision Log + Product status.
 
 ### 2026-05-24 (session 3f — judge the profile polish + agent mode, then commit)
 - Alignment ritual: every uncommitted change reconciled against the in-flight log — clean. (Mid-session, STRATEGY.md gained brand/naming decision rows from a **parallel edit** — surfaced, kept out of this commit; left in the working tree for Nick.)
