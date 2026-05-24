@@ -6,9 +6,9 @@ This document defines the core design principles and token values for Landa. All
 
 - **Brand intent**: Mature, serious, trustworthy — never playful or childish. Trust is the wedge; the design has to earn it.
 - **Color Mode**: Light (dark mode is a supported override, not the default)
-- **Roundedness**: Subtle (2px–4px) — tight corners read precise and serious
+- **Roundedness**: Varied per element type — cards/panels are notably rounded, controls moderate, with smaller radii for compact/inline items. Different element types intentionally use different radii; do not flatten them to one value.
 - **Spacing**: Normal — balanced layout with adequate breathing room
-- **No liquid glass / heavy blur.** Surfaces are solid with restrained elevation (a soft shadow), not translucent glass. Blur effects read trendy and date quickly — they're off-brand for a mature product.
+- **No liquid glass / heavy blur.** Surfaces are solid with restrained elevation (a soft shadow), not translucent glass. Blur effects read trendy and date quickly — they're off-brand for a mature product. **One deliberate exception:** the recording window's resting pill (see Surface Colors) stays a soft translucent lozenge — it's an ambient always-on indicator that must read as "seen but not seen," not a surface.
 
 ## Typography
 
@@ -31,19 +31,19 @@ The brand is a **monochrome deep-red** system — premium, heritage, warm-trust,
 | `--tertiary`  | `#A32B2B` | Accent — badges, highlights, active/selected indicators, decorative emphasis (used sparingly) |
 | `--neutral`   | `#747067` | Non-chromatic UI elements (warm greige, not a cool grey)           |
 
-> Neutrals are intentionally **warm** (greige), not the cool blue-greys used previously — a warm brand on cool neutrals reads "off." Keep the whole system warm so it feels intentional.
+> The **chromatic** palette stays warm — the reds, the mauve `--secondary`, and the greige `--neutral` are deliberately warm so the brand reads intentional. The **surfaces**, however, are light, near-white neutral greys (`--bg #f5f5f6` / cards `#ffffff`), lightened from the earlier warm Cloud Dancer beige for a cleaner, brighter, more product-like canvas.
 
 ### Surface Colors (Light)
 
 | Token              | Value                 |                                                              |
 |--------------------|-----------------------|--------------------------------------------------------------|
-| `--bg`             | `#f0eee9`             | Cloud Dancer (PANTONE 11-4201) — warm off-white app background |
-| `--bg-card`        | `#fbfaf7`             | Warm white card/panel surface                                |
-| `--bg-sidebar`     | `#eae7e0`             | Slightly deeper warm surface                                 |
-| `--border`         | `rgba(42,36,34,0.10)` | Warm-tinted hairline                                         |
-| `--text`           | `#2a2422`             | Warm near-black                                              |
-| `--text-secondary` | `#6e6a66`             | Warm greige                                                 |
-| `--pill-rest-bg`   | `#262321`             | Recording-window resting pill — **solid** warm-dark lozenge (no translucency/blur); scheme-independent |
+| `--bg`             | `#f5f5f6`             | Light neutral grey — app background (lightened from the earlier warm Cloud Dancer beige) |
+| `--bg-card`        | `#ffffff`             | White card/panel surface                                     |
+| `--bg-sidebar`     | `#ededee`             | Slightly deeper light grey surface                           |
+| `--border`         | `rgba(20,20,22,0.10)` | Neutral hairline                                            |
+| `--text`           | `#20201f`             | Near-black                                                  |
+| `--text-secondary` | `#6c6a68`             | Mid grey                                                    |
+| `--pill-rest-bg`   | `rgba(38,35,33,0.55)` | Recording-window resting pill — a calm **translucent** warm-dark glass lozenge. This is the one intentional blur we keep (`backdrop-filter`), because the ambient always-on pill should read as "seen but not seen"; scheme-independent |
 
 ### Surface Colors (Dark override)
 
@@ -57,15 +57,25 @@ The brand is a **monochrome deep-red** system — premium, heritage, warm-trust,
 | `--text`           | `#f0eee9`               | Cloud Dancer as text on dark               |
 | `--text-secondary` | `#a39e99`               |                                            |
 
+### Semantic / Status Colors
+
+Status colors are **deliberately kept off the brand reds** — with a deep-red brand, a red "error" would otherwise read as "brand," so danger gets a distinct orange-red. Use these only for their meaning, never as decoration.
+
+| Token        | Light     | Dark      | Usage                                                        |
+|--------------|-----------|-----------|--------------------------------------------------------------|
+| `--error`    | `#e5533d` | `#f26b54` | Errors, destructive/delete actions — distinct from the brand reds |
+| `--success`  | `#2f9e44` | `#51cf66` | Confirmations, ready/installed states                        |
+| `--warning`  | `#e8920c` | `#ffc247` | Paused / attention states                                    |
+
 ## Border Radius
 
 | Token              | Value   | Usage                              |
 |--------------------|---------|------------------------------------|
-| `--radius-pill`    | `4px`   | Buttons, badges, interactive controls (token name is legacy — no longer a pill) |
-| `--radius-card`    | `4px`   | Cards, panels, settings sections   |
-| `--radius-sidebar` | `4px`   | Sidebar icon containers            |
+| `--radius-pill`    | `8px`   | Buttons, badges, interactive controls   |
+| `--radius-card`    | `16px`  | Cards, panels, settings sections        |
+| `--radius-sidebar` | `12px`  | Sidebar icon containers                 |
 
-> Subtle radii (2px–4px). Use `2px` for very small inline elements if needed; everything else is `4px`.
+> These are the base tokens. Individual components legitimately set their own radius — e.g. small chips/keys (`4–6px`), inline bars/indicators (`2–3px`), pills & toggles (full-round), app-icon images (`9–18px`), the always-on recording lozenge (`100px`). **Different roundings per element are intentional**, not drift — match the element's existing radius rather than forcing one global value.
 
 ## Iconography
 

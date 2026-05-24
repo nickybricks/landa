@@ -3,17 +3,21 @@
    --------------------------------------------------------------------------- */
 
 :root {
-  --primary: #0088ff;
-  --secondary: #5978aa;
-  --tertiary: #df6402;
-  --neutral: #747780;
+  --primary: #4a0404;
+  --secondary: #8c6b6e;
+  --tertiary: #a32b2b;
+  --neutral: #747067;
 
-  --bg: #f5f5f7;
+  --bg: #f5f5f6;
   --bg-card: #ffffff;
-  --bg-sidebar: #f0f0f2;
-  --border: rgba(0, 0, 0, 0.08);
-  --text: #1d1d1f;
-  --text-secondary: #86868b;
+  --bg-sidebar: #ededee;
+  --border: rgba(20, 20, 22, 0.10);
+  --text: #20201f;
+  --text-secondary: #6c6a68;
+
+  --error: #e5533d;
+  --success: #2f9e44;
+  --warning: #e8920c;
 
   --radius-pill: 100px;
   --radius-card: 16px;
@@ -24,12 +28,16 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1e1e1e;
-    --bg-card: #2d2d2d;
-    --bg-sidebar: #252525;
-    --border: rgba(255, 255, 255, 0.1);
-    --text: #f5f5f7;
-    --text-secondary: #98989d;
+    --primary: #c0453f;
+    --bg: #1c1a19;
+    --bg-card: #262321;
+    --bg-sidebar: #211f1e;
+    --border: rgba(255, 250, 245, 0.10);
+    --text: #f0eee9;
+    --text-secondary: #a39e99;
+    --error: #f26b54;
+    --success: #51cf66;
+    --warning: #ffc247;
   }
 }
 
@@ -224,7 +232,7 @@ html, body {
 /* Notes window — training step */
 .ob-notes-window {
   width: 100%;
-  background: #fdfdf6;
+  background: var(--bg-card);
   border-radius: 12px;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.7) inset,
@@ -242,7 +250,7 @@ html, body {
   align-items: center;
   height: 38px;
   padding: 0 12px;
-  background: linear-gradient(to bottom, #f3f1ec, #ebe9e3);
+  background: linear-gradient(to bottom, var(--bg-card), var(--bg-sidebar));
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   position: relative;
 }
@@ -250,7 +258,7 @@ html, body {
 
 .ob-notes-tab {
   font-size: 0.78rem;
-  color: #1d1d1f;
+  color: var(--text);
   font-weight: 500;
   position: absolute;
   left: 50%;
@@ -261,15 +269,15 @@ html, body {
   text-align: center;
   padding: 8px 0 2px;
   font-size: 0.75rem;
-  color: #8a8a8e;
-  background: #fdfdf6;
+  color: var(--text-secondary);
+  background: var(--bg-card);
 }
 
 .ob-notes-body {
   padding: 14px 22px 20px;
   display: flex;
   flex-direction: column;
-  background: #fdfdf6;
+  background: var(--bg-card);
   min-height: 140px;
 }
 
@@ -277,7 +285,7 @@ html, body {
   min-height: 48px;
   font-size: 1rem;
   line-height: 1.55;
-  color: #1d1d1f;
+  color: var(--text);
   outline: none;
   white-space: pre-wrap;
   word-break: break-word;
@@ -297,16 +305,16 @@ html, body {
 .ob-notes-prompt {
   font-size: 0.9rem;
   font-weight: 600;
-  color: #1d1d1f;
+  color: var(--text);
   text-align: center;
   margin: 0;
 }
 
 /* Big kbd inside notes window gets dark keys to sit on the light background */
 .ob-notes-window .ob-key {
-  background: #e8e6e0;
+  background: var(--bg-sidebar);
   border-color: rgba(0, 0, 0, 0.18);
-  color: #1d1d1f;
+  color: var(--text);
 }
 
 /* Done step — small follow-up notes under the lead body */
@@ -331,7 +339,7 @@ html, body {
   width: 88px;
   height: 88px;
   border-radius: 50%;
-  background: rgba(0, 136, 255, 0.12);
+  background: rgba(163, 43, 43, 0.12);
   color: var(--primary);
   display: flex;
   align-items: center;
@@ -349,7 +357,7 @@ html, body {
   gap: 8px;
   padding: 8px 16px;
   border-radius: var(--radius-pill);
-  background: rgba(0, 136, 255, 0.12);
+  background: rgba(163, 43, 43, 0.12);
   color: var(--primary);
   font-weight: 500;
   font-size: 13px;
@@ -393,7 +401,7 @@ html, body {
 }
 
 .ob-btn-primary:hover:not(:disabled) {
-  background: #0077e0;
+  background: var(--primary);
 }
 
 .ob-btn-primary:active:not(:disabled) {
@@ -465,7 +473,7 @@ html, body {
   justify-content: center;
   gap: 8px;
   margin-top: 14px;
-  color: #1f9d55;
+  color: var(--success);
   font-size: 0.9rem;
   font-weight: 600;
   animation: ob-success-pop 0.45s ease-out;
@@ -478,7 +486,7 @@ html, body {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: #1f9d55;
+  background: var(--success);
   color: #fff;
   font-size: 14px;
   font-weight: 800;
@@ -497,8 +505,8 @@ html, body {
 }
 
 @keyframes ob-btn-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 136, 255, 0.5); }
-  50%      { box-shadow: 0 0 0 10px rgba(0, 136, 255, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(163, 43, 43, 0.5); }
+  50%      { box-shadow: 0 0 0 10px rgba(163, 43, 43, 0); }
 }
 
 .ob-btn-primary.ob-btn-pulse:not(:disabled) {

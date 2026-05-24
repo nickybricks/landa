@@ -1,24 +1,32 @@
 /* ---------------------------------------------------------------------------
-   Design System — mirrors the Swift DS enum
-   Primary: #0088FF  Secondary: #5978AA  Tertiary: #DF6402  Neutral: #747780
+   Design System — see DESIGN.md (single source of truth)
+   Monochrome deep-red brand on light, near-white neutral surfaces. Mature, not playful.
    --------------------------------------------------------------------------- */
 
 :root {
-  --primary: #0088ff;
-  --secondary: #5978aa;
-  --tertiary: #df6402;
-  --neutral: #747780;
+  --primary: #4a0404;     /* near-black oxblood — CTAs, interactive, key branding */
+  --secondary: #8c6b6e;   /* muted mauve — chips, secondary actions */
+  --tertiary: #a32b2b;    /* brighter red accent — badges, active/selected (sparingly) */
+  --neutral: #747067;     /* warm greige — non-chromatic UI */
 
-  --bg: #f5f5f7;
-  --bg-card: #ffffff;
-  --bg-sidebar: #f0f0f2;
-  --border: rgba(0, 0, 0, 0.08);
-  --text: #1d1d1f;
-  --text-secondary: #86868b;
+  --bg: #f5f5f6;          /* light neutral grey — app background */
+  --bg-card: #ffffff;     /* white card/panel surface */
+  --bg-sidebar: #ededee;  /* slightly deeper light grey surface */
+  --border: rgba(20, 20, 22, 0.10);  /* neutral hairline */
+  --text: #20201f;        /* near-black */
+  --text-secondary: #6c6a68;          /* mid grey */
 
-  --radius-pill: 8px;
-  --radius-card: 16px;
-  --radius-sidebar: 12px;
+  /* Semantic / status colors — kept distinct from the brand reds so
+     "danger/delete" never reads as "brand" (see DESIGN.md). */
+  --error: #e5533d;       /* orange-red alarm — errors, destructive actions */
+  --success: #2f9e44;     /* confirmations, ready states */
+  --warning: #e8920c;     /* amber — paused/attention states */
+
+  --radius-pill: 8px;     /* buttons, badges, interactive controls */
+  --radius-card: 16px;    /* cards, panels, settings sections */
+  --radius-sidebar: 12px; /* sidebar icon containers */
+
+  --content-top: 50px;    /* gap before the first title/item in each tab (one knob) */
 
   --font-headline: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -26,12 +34,17 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1e1e1e;
-    --bg-card: #2d2d2d;
-    --bg-sidebar: #252525;
-    --border: rgba(255, 255, 255, 0.1);
-    --text: #f5f5f7;
-    --text-secondary: #98989d;
+    --primary: #c0453f;   /* lifted red so CTAs stay visible on dark */
+    --bg: #1c1a19;        /* warm near-black */
+    --bg-card: #262321;
+    --bg-sidebar: #211f1e;
+    --border: rgba(255, 250, 245, 0.10);
+    --text: #f0eee9;      /* Cloud Dancer as text on dark */
+    --text-secondary: #a39e99;
+
+    --error: #f26b54;
+    --success: #51cf66;
+    --warning: #ffc247;
   }
 }
 
@@ -89,6 +102,30 @@ body {
 .titlebar-trail {
   flex: 1;
 }
+
+/* "Landa" wordmark. Windows shows it in the titlebar (top-left, no traffic lights);
+   macOS shows it in the sidebar instead (below the traffic lights). */
+.titlebar-brand {
+  font-family: var(--font-headline);
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  color: var(--primary);
+  padding-left: 6px;
+}
+
+.sidebar-brand {
+  display: none;
+  font-family: var(--font-headline);
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  color: var(--primary);
+  padding: 2px 14px 12px;
+  -webkit-app-region: drag;
+}
+body.platform-darwin .sidebar-brand { display: block; }
+.sidebar.collapsed .sidebar-brand { display: none; }
 
 /* Invisible resize hit-target on the right edge of the sidebar (Mac only).
    Must be no-drag so mouse events reach JS despite the sidebar's drag region. */
@@ -165,11 +202,11 @@ body.platform-darwin #sidebar-resize-handle {
   font-size: 15px;
   font-weight: 500;
   white-space: nowrap;
-  color: #747780;
+  color: var(--text-secondary);
 }
 
 .sidebar-item > span:not(.sidebar-icon) {
-  color: #747780;
+  color: var(--text-secondary);
 }
 
 /* Collapsed sidebar — center icons, hide labels */
@@ -215,7 +252,7 @@ body.platform-darwin #sidebar-resize-handle {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-  color: #747780;
+  color: var(--text-secondary);
 }
 
 .sidebar-item.active .sidebar-icon {
@@ -233,7 +270,7 @@ body.platform-darwin #sidebar-resize-handle {
   border-top: 1px solid var(--border);
   border-left: 1px solid var(--border);
   border-radius: 10px 0 0 0;
-  background: #f5f5f5;
+  background: var(--bg);
 }
 
 .tab-panel {
@@ -248,10 +285,21 @@ body.platform-darwin #sidebar-resize-handle {
 
 .tab-scroll {
   overflow-y: auto;
-  padding: 24px;
+  padding: 8px 24px 24px;
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+/* Settings page title — mirrors .history-header / .vocab-header */
+.settings-header {
+  padding: var(--content-top) 20px 8px;
+  -webkit-app-region: no-drag;
+}
+.settings-header h2 {
+  font-family: var(--font-headline);
+  font-size: 20px;
+  font-weight: 700;
 }
 
 /* ---------------------------------------------------------------------------
@@ -264,7 +312,7 @@ body.platform-darwin #sidebar-resize-handle {
 
 .home-bg {
   flex: 1;
-  background-color: #0a0a0a;
+  background-color: var(--bg);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -275,32 +323,6 @@ body.platform-darwin #sidebar-resize-handle {
   position: relative;
 }
 
-.home-bg-image {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  z-index: 0;
-  pointer-events: none;
-}
-
-/* Glowing glass line — top edge (header / home separation) */
-.home-bg::before {
-  content: '';
-  position: absolute;
-  top: -1px;
-  left: -1px;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg,
-    rgba(255,255,255,0.9) 0%,
-    rgba(255,255,255,0.6) 40%,
-    rgba(255,255,255,0.25) 100%);
-  box-shadow: 0 0 10px rgba(255,255,255,0.4), 0 0 3px rgba(255,255,255,0.6);
-  z-index: 2;
-  pointer-events: none;
-}
 
 /* Glowing glass line — left edge (sidebar / home separation) */
 .home-bg::after {
@@ -326,11 +348,9 @@ body.platform-darwin #sidebar-resize-handle {
   gap: 8px;
   padding: 36px 44px;
   border-radius: var(--radius-card);
-  background: rgba(255, 255, 255, 0.48);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.1), 0 1px 0 rgba(255,255,255,0.8) inset;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(42, 36, 34, 0.06), 0 8px 24px rgba(42, 36, 34, 0.08);
   text-align: center;
 }
 
@@ -346,18 +366,18 @@ body.platform-darwin #sidebar-resize-handle {
   font-family: var(--font-headline);
   font-size: 24px;
   font-weight: 700;
-  color: #1d1d1f;
+  color: var(--text);
   letter-spacing: -0.3px;
 }
 
 .home-version {
   font-size: 12px;
-  color: rgba(29, 29, 31, 0.5);
+  color: rgba(42, 36, 34, 0.5);
 }
 
 .home-desc {
   font-size: 13px;
-  color: rgba(29, 29, 31, 0.55);
+  color: rgba(42, 36, 34, 0.55);
   line-height: 1.6;
   max-width: 260px;
   margin-top: 4px;
@@ -372,11 +392,9 @@ body.platform-darwin #sidebar-resize-handle {
   flex-direction: column;
   padding: 20px 24px;
   border-radius: var(--radius-card);
-  background: rgba(255, 255, 255, 0.48);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.1), 0 1px 0 rgba(255,255,255,0.8) inset;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(42, 36, 34, 0.06), 0 8px 24px rgba(42, 36, 34, 0.08);
   width: 360px;
   z-index: 1;
 }
@@ -399,7 +417,7 @@ body.platform-darwin #sidebar-resize-handle {
   font-family: var(--font-headline);
   font-size: 20px;
   font-weight: 700;
-  color: #1d1d1f;
+  color: var(--text);
   letter-spacing: -0.5px;
   line-height: 1;
 }
@@ -407,7 +425,7 @@ body.platform-darwin #sidebar-resize-handle {
 .stat-label {
   font-size: 10px;
   font-weight: 500;
-  color: rgba(29, 29, 31, 0.5);
+  color: rgba(42, 36, 34, 0.5);
   text-transform: uppercase;
   letter-spacing: 0.4px;
   text-align: center;
@@ -416,16 +434,14 @@ body.platform-darwin #sidebar-resize-handle {
 .home-stats-empty {
   padding: 14px 20px;
   border-radius: var(--radius-card);
-  background: rgba(255, 255, 255, 0.48);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.1), 0 1px 0 rgba(255,255,255,0.8) inset;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(42, 36, 34, 0.06), 0 8px 24px rgba(42, 36, 34, 0.08);
   width: 360px;
   z-index: 1;
   text-align: center;
   font-size: 12px;
-  color: rgba(29, 29, 31, 0.5);
+  color: rgba(42, 36, 34, 0.5);
 }
 
 /* ---------------------------------------------------------------------------
@@ -442,8 +458,9 @@ body.platform-darwin #sidebar-resize-handle {
 }
 
 .placeholder-icon {
-  font-size: 48px;
-  margin-bottom: 8px;
+  color: var(--text-secondary);
+  opacity: 0.55;
+  margin-bottom: 12px;
 }
 
 .placeholder-view h2 {
@@ -466,7 +483,7 @@ body.platform-darwin #sidebar-resize-handle {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px 8px;
+  padding: var(--content-top) 20px 8px;
   -webkit-app-region: no-drag;
 }
 
@@ -488,8 +505,8 @@ body.platform-darwin #sidebar-resize-handle {
 }
 
 .btn-clear-history:hover {
-  color: #e74c3c;
-  border-color: #e74c3c;
+  color: var(--error);
+  border-color: var(--error);
 }
 
 .history-list {
@@ -609,11 +626,11 @@ body.platform-darwin #sidebar-resize-handle {
 
 .history-action-btn:hover {
   color: var(--primary);
-  background: rgba(0, 136, 255, 0.1);
+  background: rgba(163, 43, 43, 0.1);
 }
 
 .history-action-btn.delete:hover {
-  color: #e74c3c;
+  color: var(--error);
   background: rgba(231, 76, 60, 0.1);
 }
 
@@ -741,7 +758,7 @@ body.platform-darwin #sidebar-resize-handle {
   position: absolute;
   cursor: pointer;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: #ccc;
+  background: rgba(116, 112, 103, 0.30);
   border-radius: 22px;
   transition: 0.2s;
 }
@@ -828,7 +845,7 @@ select {
 .text-input:focus, select:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(0, 136, 255, 0.2);
+  box-shadow: 0 0 0 2px rgba(163, 43, 43, 0.2);
 }
 
 .api-key-masked {
@@ -918,9 +935,9 @@ select {
   font-size: 12px;
   color: var(--tertiary);
   padding: 5px 10px;
-  border: 1px solid rgba(223, 100, 2, 0.4);
+  border: 1px solid rgba(163, 43, 43, 0.4);
   border-radius: var(--radius-pill);
-  background: rgba(223, 100, 2, 0.1);
+  background: rgba(163, 43, 43, 0.1);
 }
 
 .shortcut-badges .record-label {
@@ -991,11 +1008,10 @@ select {
 
 /* Column 2: Category sidebar */
 .modes-sidebar {
-  width: 200px;
-  min-width: 200px;
-  background: #f5f5f5;
-  border-right: 1px solid var(--border);
-  padding: 12px 8px;
+  width: 240px;
+  min-width: 240px;
+  background: var(--bg-sidebar);
+  padding: var(--content-top) 8px 12px;
   overflow-y: auto;
 }
 
@@ -1041,8 +1057,8 @@ select {
   border-radius: var(--radius-sidebar);
   font-size: 14px;
   flex-shrink: 0;
-  background: rgba(89, 120, 170, 0.15);
-  color: #5978aa;
+  background: rgba(140, 107, 110, 0.15);
+  color: var(--primary);
 }
 
 .modes-llm-label {
@@ -1090,15 +1106,15 @@ select {
   display: flex;
   align-items: center;
   gap: 14px;
-  background: rgba(89, 120, 170, 0.08);
-  border: 1px solid rgba(89, 120, 170, 0.2);
+  background: rgba(140, 107, 110, 0.08);
+  border: 1px solid rgba(140, 107, 110, 0.2);
   border-radius: var(--radius-card);
   padding: 16px 20px;
 }
 
 @media (prefers-color-scheme: dark) {
   .modes-no-llm-notice {
-    background: rgba(89, 120, 170, 0.12);
+    background: rgba(140, 107, 110, 0.12);
   }
 }
 
@@ -1177,19 +1193,31 @@ select {
 }
 
 .modes-category-icon {
-  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
   flex-shrink: 0;
+}
+
+.modes-category.active .modes-category-icon {
+  color: var(--primary);
 }
 
 .modes-category-text {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  flex: 1;
+  min-width: 0;
 }
 
 .modes-category-name {
   font-size: 13px;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .modes-category-style {
@@ -1219,7 +1247,7 @@ select {
   position: absolute;
   cursor: pointer;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: #ccc;
+  background: rgba(116, 112, 103, 0.30);
   border-radius: 16px;
   transition: 0.2s;
 }
@@ -1281,8 +1309,8 @@ select {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  background: rgba(0, 136, 255, 0.07);
-  border: 1px solid rgba(0, 136, 255, 0.18);
+  background: rgba(163, 43, 43, 0.07);
+  border: 1px solid rgba(163, 43, 43, 0.18);
   border-left: 3px solid var(--primary);
   border-radius: 10px;
   padding: 12px 16px;
@@ -1300,8 +1328,8 @@ select {
 
 @media (prefers-color-scheme: dark) {
   .modes-disabled-notice {
-    background: rgba(0, 136, 255, 0.12);
-    border-color: rgba(0, 136, 255, 0.28);
+    background: rgba(163, 43, 43, 0.12);
+    border-color: rgba(163, 43, 43, 0.28);
     border-left-color: var(--primary);
   }
 }
@@ -1314,7 +1342,7 @@ select {
 
 .modes-scroll {
   overflow-y: auto;
-  padding: 24px;
+  padding: var(--content-top) 24px 24px;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -1671,7 +1699,7 @@ body:not(.dev-mode) .dev-only {
 }
 
 .popup-item-remove:hover {
-  color: #ff3b30;
+  color: var(--error);
 }
 
 .popup-empty {
@@ -1699,7 +1727,7 @@ body:not(.dev-mode) .dev-only {
 
 .popup-input:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(0, 136, 255, 0.15);
+  box-shadow: 0 0 0 2px rgba(163, 43, 43, 0.15);
 }
 
 .popup-add-btn {
@@ -1814,7 +1842,7 @@ body:not(.dev-mode) .dev-only {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #ff3b30;
+  background: var(--error);
   color: white;
   font-size: 10px;
   font-weight: 700;
@@ -1851,7 +1879,7 @@ body:not(.dev-mode) .dev-only {
 
 .popup-search-input:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(0, 136, 255, 0.15);
+  box-shadow: 0 0 0 2px rgba(163, 43, 43, 0.15);
 }
 
 /* ---------------------------------------------------------------------------
@@ -1895,12 +1923,12 @@ body:not(.dev-mode) .dev-only {
 }
 
 .app-grid-item.linked {
-  background: rgba(0, 136, 255, 0.08);
+  background: rgba(163, 43, 43, 0.08);
 }
 
 @media (prefers-color-scheme: dark) {
   .app-grid-item.linked {
-    background: rgba(0, 136, 255, 0.15);
+    background: rgba(163, 43, 43, 0.15);
   }
 }
 
@@ -1921,7 +1949,7 @@ body:not(.dev-mode) .dev-only {
   width: 52px;
   height: 52px;
   border-radius: 12px;
-  background: #6B7280;
+  background: var(--neutral);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2073,7 +2101,7 @@ body:not(.dev-mode) .dev-only {
 }
 
 .url-tag-remove:hover {
-  color: #ff3b30;
+  color: var(--error);
 }
 
 /* ---------------------------------------------------------------------------
@@ -2095,7 +2123,7 @@ body:not(.dev-mode) .dev-only {
 }
 
 .local-model-note.error {
-  color: #ff3b30;
+  color: var(--error);
 }
 
 .local-model-badge {
@@ -2108,12 +2136,12 @@ body:not(.dev-mode) .dev-only {
 
 .local-model-badge.ready {
   background: rgba(52, 199, 89, 0.15);
-  color: #34c759;
+  color: var(--success);
 }
 
 .local-model-badge.downloading {
   background: rgba(255, 159, 10, 0.15);
-  color: #ff9f0a;
+  color: var(--warning);
 }
 
 .btn-local-model {
@@ -2151,7 +2179,7 @@ body:not(.dev-mode) .dev-only {
 }
 
 .llm-install-log.error {
-  color: #ff3b30;
+  color: var(--error);
   background: rgba(255, 59, 48, 0.05);
   border-color: rgba(255, 59, 48, 0.2);
 }
@@ -2220,7 +2248,7 @@ body:not(.dev-mode) .dev-only {
 
 .logo-select.open .logo-select-trigger {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(0, 136, 255, 0.2);
+  box-shadow: 0 0 0 2px rgba(163, 43, 43, 0.2);
 }
 
 .logo-select-icon[src=""] {
@@ -2252,7 +2280,7 @@ body:not(.dev-mode) .dev-only {
 
 .logo-select-menu {
   position: fixed;
-  background: #ffffff;
+  background: var(--bg-card);
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.13), 0 1px 4px rgba(0, 0, 0, 0.07);
@@ -2271,17 +2299,17 @@ body:not(.dev-mode) .dev-only {
   cursor: pointer;
   font-family: var(--font-body);
   font-size: 13px;
-  color: #1a1a1a;
+  color: var(--text);
   user-select: none;
   transition: background 0.1s;
 }
 
 .logo-select-option:hover {
-  background: #f5f5f5;
+  background: var(--bg-sidebar);
 }
 
 .logo-select-option.selected {
-  background: #f0f6ff;
+  background: rgba(163, 43, 43, 0.10);
 }
 
 .logo-select-option img {
@@ -2314,7 +2342,7 @@ body:not(.dev-mode) .dev-only {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 16px 20px 8px;
+  padding: var(--content-top) 20px 8px;
   -webkit-app-region: no-drag;
   gap: 12px;
 }
@@ -2385,7 +2413,7 @@ body:not(.dev-mode) .dev-only {
 }
 
 .btn-delete-vocab:hover {
-  color: #e53e3e;
+  color: var(--error);
 }
 
 .btn-pill-primary {
@@ -2439,7 +2467,7 @@ body:not(.dev-mode) .dev-only {
 .rec-style-option[aria-checked="true"] {
   border-color: var(--primary);
   color: var(--text);
-  box-shadow: 0 0 0 2px rgba(0, 136, 255, 0.18);
+  box-shadow: 0 0 0 2px rgba(163, 43, 43, 0.18);
 }
 
 .rec-style-preview {
@@ -2537,32 +2565,34 @@ body.platform-darwin .titlebar {
 }
 
 body.platform-darwin .layout-body {
-  background: #ebebed;
+  background: var(--bg);
   padding: 8px;
   gap: 8px;
 }
 
 @media (prefers-color-scheme: dark) {
   body.platform-darwin .layout-body {
-    background: #141414;
+    background: var(--bg);
   }
 }
 
 body.platform-darwin .sidebar {
   position: relative;
+  z-index: 2;                /* sits on top so the Profiles drawer tucks behind it */
   background: var(--bg-sidebar);
+  border: 1px solid var(--border);
   border-radius: var(--radius-card);
   padding-top: 52px;
   box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.06),
-    0 6px 20px rgba(0, 0, 0, 0.12);
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    -2px 4px 14px rgba(0, 0, 0, 0.06);
 }
 
 @media (prefers-color-scheme: dark) {
   body.platform-darwin .sidebar {
     box-shadow:
-      0 1px 2px rgba(0, 0, 0, 0.4),
-      0 8px 24px rgba(0, 0, 0, 0.5);
+      0 1px 2px rgba(0, 0, 0, 0.3),
+      -2px 4px 16px rgba(0, 0, 0, 0.35);
   }
 }
 
@@ -2570,6 +2600,23 @@ body.platform-darwin .content {
   background: var(--bg);
   border: none;
   border-radius: var(--radius-card);
+}
+
+/* Profiles categories column — a "drawer" that slides out from behind the sidebar
+   island: its left edge tucks under the island (hidden, square), and only its
+   exposed right corners are rounded. Same material (--bg-sidebar) as the island. */
+body.platform-darwin .content:has(#tab-modes.active) {
+  overflow: visible;           /* let the drawer extend left, under the island */
+}
+body.platform-darwin #tab-modes .modes-sidebar {
+  position: relative;
+  z-index: 1;                  /* above the content panel, below the island (z-index 2) */
+  width: 264px;
+  min-width: 264px;
+  margin-left: -24px;          /* tuck ~16px under the island (past its 16px corner radius) */
+  padding-left: 28px;          /* push categories clear to the right of the island */
+  border-radius: 0 var(--radius-card) var(--radius-card) 0;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);  /* lighter right-edge shadow */
 }
 
 /* Account section (auth + entitlement) */

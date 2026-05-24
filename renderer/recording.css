@@ -1,19 +1,24 @@
 /* Design tokens — kept in sync with renderer/settings.css :root */
 :root {
-  --primary: #0088ff;
+  --primary: #4a0404;      /* deep-red brand — see DESIGN.md / settings.css :root */
+  --tertiary: #a32b2b;     /* accent red — recording-active indicator */
+  --warning: #e8920c;      /* amber — paused indicator */
   --bg-card: #ffffff;
-  --text: #1d1d1f;
-  --text-secondary: #86868b;
+  --text: #20201f;
+  --text-secondary: #6c6a68;
+  /* The floating recording indicator is an intentional capsule/lozenge, not a
+     settings control — it keeps a full pill radius (DESIGN.md's 4px is for buttons). */
   --radius-pill: 100px;
-  /* Resting pill: a calm translucent "glass" lozenge in both color schemes. */
-  --pill-rest-bg: rgba(30, 30, 32, 0.52);
+  /* Resting pill stays a calm translucent "glass" lozenge in both schemes. */
+  --pill-rest-bg: rgba(38, 35, 33, 0.55);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg-card: #2d2d2d;
-    --text: #f5f5f7;
-    --text-secondary: #98989d;
+    --primary: #c0453f;
+    --bg-card: #262321;
+    --text: #f0eee9;
+    --text-secondary: #a39e99;
   }
 }
 
@@ -78,7 +83,7 @@ body {
   padding: 1.5px;                /* ring thickness = pill border width */
   background: conic-gradient(
     from var(--halo-a),
-    #a855f7, #3b82f6, #06b6d4, #ec4899, #a855f7
+    #4a0404, #a32b2b, #8c6b6e, #a32b2b, #4a0404
   );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -106,8 +111,8 @@ body.is-recording .pill::before {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #ff453a;
-  box-shadow: 0 0 8px rgba(255, 69, 58, 0.6);
+  background: var(--tertiary);
+  box-shadow: 0 0 8px rgba(163, 43, 43, 0.6);
   flex-shrink: 0;
   animation: pulse 1.4s ease-in-out infinite;
 }
@@ -180,7 +185,7 @@ body.style-classic .bars span {
   display: none;
   width: 13px;
   height: 13px;
-  border: 2px solid rgba(0, 136, 255, 0.2);
+  border: 2px solid rgba(74, 4, 4, 0.15);
   border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
@@ -204,8 +209,8 @@ body.is-processing .pill {
 body.is-paused .bars { display: none; }
 body.is-paused .paused-icon { display: flex; }
 body.is-paused .dot {
-  background: #ffd60a;
-  box-shadow: 0 0 8px rgba(255, 214, 10, 0.55);
+  background: var(--warning);
+  box-shadow: 0 0 8px rgba(232, 146, 12, 0.55);
   animation: none;
   opacity: 0.95;
 }

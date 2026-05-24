@@ -1,0 +1,100 @@
+{
+  "fill" : {
+    "solid" : "display-p3:0.26392,0.04950,0.04163,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+        {
+          "fill" : "none",
+          "glass" : true,
+          "hidden" : true,
+          "image-name" : "Landa Logo.png",
+          "name" : "Landa Logo",
+          "position" : {
+            "scale" : 0.6,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "hidden" : true,
+          "image-name" : "Landa Logo (6).png",
+          "name" : "Landa Logo (6)",
+          "position" : {
+            "scale" : 0.23999999999999996,
+            "translation-in-points" : [
+              -7,
+              0
+            ]
+          }
+        },
+        {
+          "hidden" : false,
+          "image-name" : "Landa Logo (6) 2.png",
+          "name" : "Landa Logo (6) 2",
+          "position" : {
+            "scale" : 0.24,
+            "translation-in-points" : [
+              -7,
+              0
+            ]
+          }
+        },
+        {
+          "image-name" : "Landa Logo (2).png",
+          "name" : "Landa Logo (2)",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

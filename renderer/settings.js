@@ -159,7 +159,7 @@ const TRANSLATIONS = {
     'local.install': 'Install',
     'local.installing': 'Installing…',
     'local.downloading.note': 'Downloading model…',
-    'local.downloading.badge': '⏳ Downloading',
+    'local.downloading.badge': 'Downloading',
     'local.download': 'Download',
     'local.retry': 'Retry',
     'local.ready': '✓ Ready',
@@ -174,6 +174,7 @@ const TRANSLATIONS = {
     'local.llm.engine_error': 'Engine installed but failed to load. See error below.',
     'local.llm.install_failed': 'Install failed — see error below.',
     // History tab
+    'settings.title': 'Settings',
     'history.title': 'History',
     'history.clear': 'Clear All',
     'history.empty.title': 'No transcriptions yet',
@@ -325,7 +326,7 @@ const TRANSLATIONS = {
     'local.install': 'Installieren',
     'local.installing': 'Installiert…',
     'local.downloading.note': 'Modell wird heruntergeladen…',
-    'local.downloading.badge': '⏳ Wird geladen',
+    'local.downloading.badge': 'Wird geladen',
     'local.download': 'Herunterladen',
     'local.retry': 'Erneut versuchen',
     'local.ready': '✓ Bereit',
@@ -340,6 +341,7 @@ const TRANSLATIONS = {
     'local.llm.engine_error': 'Engine installiert, aber Laden fehlgeschlagen. Fehler unten ansehen.',
     'local.llm.install_failed': 'Installation fehlgeschlagen — Fehler unten ansehen.',
     // History tab
+    'settings.title': 'Einstellungen',
     'history.title': 'Verlauf',
     'history.clear': 'Alles löschen',
     'history.empty.title': 'Noch keine Transkriptionen',
@@ -1390,7 +1392,7 @@ function renderLocalModelStatus(status, modelName) {
         <span class="local-model-note">${t('local.whisper.tagline')}</span>
         <button class="btn-local-model" id="btn-install-whisper-deps">${t('local.install')}</button>
       </div>
-      ${_whisperDepsInstalling ? `<div class="local-model-installing"><span>⏳ ${t('local.installing')}</span><div class="status-line" id="whisper-deps-status-line"></div></div>` : ''}
+      ${_whisperDepsInstalling ? `<div class="local-model-installing"><span>${t('local.installing')}</span><div class="status-line" id="whisper-deps-status-line"></div></div>` : ''}
     `;
     const btn = document.getElementById('btn-install-whisper-deps');
     if (btn) btn.addEventListener('click', installWhisperDeps);
@@ -1996,29 +1998,21 @@ function closeLlmPanel() {
 // ---------------------------------------------------------------------------
 
 const MODES_CATEGORIES = {
-  'personal-message': {
-    name: 'Personal Message',
-    icon: '💬',
-  },
-  'email': {
-    name: 'Email',
-    icon: '📧',
-  },
-  'notes': {
-    name: 'Notes',
-    icon: '📝',
-  },
-  'code': {
-    name: 'Code',
-    icon: '💻',
-  },
+  'personal-message': { name: 'Personal Message' },
+  'email': { name: 'Email' },
+  'notes': { name: 'Notes' },
+  'code': { name: 'Code' },
 };
 
-// Known app icons — label + background color for recognizable apps
+// White monochrome line icons for app-chip fallbacks (render on a colored chip).
+const APP_ICON_MAIL = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>';
+const APP_ICON_MESSAGE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>';
+
+// Known app icons — label (or svg) + background color for recognizable apps
 const KNOWN_APP_ICONS = {
   'gmail': { label: 'G', bg: '#EA4335' },
-  'mail': { label: '✉', bg: '#007AFF' },
-  'apple mail': { label: '✉', bg: '#007AFF' },
+  'mail': { svg: APP_ICON_MAIL, bg: '#007AFF' },
+  'apple mail': { svg: APP_ICON_MAIL, bg: '#007AFF' },
   'outlook': { label: 'O', bg: '#0078D4' },
   'superhuman': { label: 'S', bg: '#5C35E0' },
   'spark': { label: 'S', bg: '#4F46E5' },
@@ -2030,8 +2024,8 @@ const KNOWN_APP_ICONS = {
   'whatsapp': { label: 'W', bg: '#25D366' },
   'telegram': { label: 'T', bg: '#0088cc' },
   'signal': { label: 'S', bg: '#3A76F0' },
-  'imessage': { label: '💬', bg: '#34C759' },
-  'messages': { label: '💬', bg: '#34C759' },
+  'imessage': { svg: APP_ICON_MESSAGE, bg: '#34C759' },
+  'messages': { svg: APP_ICON_MESSAGE, bg: '#34C759' },
 };
 
 // Default linked apps/URLs per category (used if config has none yet)
@@ -2237,7 +2231,7 @@ function getBannerIconHtml(name) {
     }
   }
   const icon = getAppIcon(name);
-  return `<div class="modes-banner-icon" style="background: ${icon.bg};">${escapeHtml(icon.label)}</div>`;
+  return `<div class="modes-banner-icon" style="background: ${icon.bg};">${icon.svg || escapeHtml(icon.label)}</div>`;
 }
 
 function renderBanner(categoryId) {
@@ -2387,7 +2381,7 @@ function openLinkedAppsPopup(categoryId) {
       }
     }
     const ic = getAppIcon(name);
-    return `<div class="linked-app-icon-letter" style="background:${ic.bg};">${escapeHtml(ic.label)}</div>`;
+    return `<div class="linked-app-icon-letter" style="background:${ic.bg};">${ic.svg || escapeHtml(ic.label)}</div>`;
   }
 
   function refreshLinkedAppsSection() {

@@ -16,7 +16,7 @@
     <!-- ── Full-width titlebar ───────────────────────────────────────────── -->
     <header class="titlebar">
       <!-- Left zone: drag region only (toggle moved into sidebar) -->
-      <div class="titlebar-lead"></div>
+      <div class="titlebar-lead"><span class="titlebar-brand">Landa</span></div>
       <!-- Right zone: content-area header (drag region, no controls yet) -->
       <div class="titlebar-trail"></div>
     </header>
@@ -26,6 +26,7 @@
 
       <!-- Sidebar -->
       <nav class="sidebar" id="sidebar">
+        <div class="sidebar-brand">Landa</div>
         <div class="sidebar-item active" data-tab="home">
           <span class="sidebar-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
@@ -93,7 +94,6 @@
         <!-- Home Tab -->
         <div class="tab-panel active" id="tab-home">
           <div class="home-bg">
-            <img class="home-bg-image" src="../assets/home-bg-sky.jpg" alt="">
             <!-- Stats Card -->
             <div class="home-stats-card hidden" id="home-stats-card">
               <div class="home-stats-grid" id="home-stats-grid"></div>
@@ -102,7 +102,7 @@
               <p data-i18n="home.stats.empty">Record your first transcription to see your stats here.</p>
             </div>
             <div class="home-glass-card">
-              <img src="../assets/icon.png" alt="Landa" class="home-app-icon">
+              <img src="../assets/Landa-Logo-2026-new-iOS-Default-1024x1024@1x.png" alt="Landa" class="home-app-icon">
               <h2 class="home-title">Landa</h2>
               <p class="home-version" id="app-version-label">Version …</p>
               <p class="home-desc" data-i18n-html="home.desc">Lightweight voice-to-text for macOS &amp; Windows.<br>Press your hotkey to record, press again to transcribe and paste.</p>
@@ -116,13 +116,13 @@
           <div class="modes-sidebar">
             <!-- LLM Settings header icon — dev-mode only -->
             <div class="modes-llm-btn dev-only" id="modes-llm-btn" title="LLM Settings">
-              <span class="modes-llm-icon">✦</span>
+              <span class="modes-llm-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"/></svg></span>
               <span class="modes-llm-label" data-i18n="modes.llm.btn">LLM Settings</span>
             </div>
             <div class="modes-sidebar-divider dev-only"></div>
             <div class="modes-category active" data-category="personal-message">
               <div class="modes-category-row">
-                <span class="modes-category-icon">💬</span>
+                <span class="modes-category-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></span>
                 <div class="modes-category-text">
                   <span class="modes-category-name" data-i18n="modes.category.personal">Personal Message</span>
                   <span class="modes-category-style" id="cat-style-personal-message">Formal</span>
@@ -135,7 +135,7 @@
             </div>
             <div class="modes-category" data-category="email">
               <div class="modes-category-row">
-                <span class="modes-category-icon">📧</span>
+                <span class="modes-category-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
                 <div class="modes-category-text">
                   <span class="modes-category-name" data-i18n="modes.category.email">Email</span>
                   <span class="modes-category-style" id="cat-style-email">Formal</span>
@@ -148,7 +148,7 @@
             </div>
             <div class="modes-category" data-category="notes">
               <div class="modes-category-row">
-                <span class="modes-category-icon">📝</span>
+                <span class="modes-category-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></span>
                 <div class="modes-category-text">
                   <span class="modes-category-name" data-i18n="modes.category.notes">Notes</span>
                   <span class="modes-category-style" id="cat-style-notes">Smart</span>
@@ -161,7 +161,7 @@
             </div>
             <div class="modes-category" data-category="code">
               <div class="modes-category-row">
-                <span class="modes-category-icon">💻</span>
+                <span class="modes-category-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></span>
                 <div class="modes-category-text">
                   <span class="modes-category-name" data-i18n="modes.category.code">Code</span>
                   <span class="modes-category-style" id="cat-style-code">Smart</span>
@@ -222,7 +222,7 @@
             <div class="modes-scroll" id="modes-category-panel">
               <!-- No LLM API key notice — dev-mode only -->
               <div class="modes-no-llm-notice dev-only" id="modes-no-llm-notice">
-                <div class="modes-no-llm-icon">✦</div>
+                <div class="modes-no-llm-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"/></svg></div>
                 <div class="modes-no-llm-text">
                   <strong data-i18n="modes.nollm.title">LLM not configured</strong>
                   <span data-i18n="modes.nollm.text">Set up an API key in LLM Settings to use modes.</span>
@@ -246,6 +246,9 @@
 
         <!-- Settings Tab -->
         <div class="tab-panel" id="tab-configuration">
+          <div class="settings-header">
+            <h2 data-i18n="settings.title">Settings</h2>
+          </div>
           <div class="tab-scroll">
 
             <!-- Account -->
@@ -474,7 +477,7 @@
           </div>
           <div class="history-list" id="history-list">
             <div class="placeholder-view" id="history-empty">
-              <div class="placeholder-icon">🕐</div>
+              <div class="placeholder-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
               <h2 data-i18n="history.empty.title">No transcriptions yet</h2>
               <p class="muted" data-i18n="history.empty.sub">Your transcription history will appear here.</p>
             </div>
@@ -492,7 +495,7 @@
           </div>
           <div class="vocab-list" id="vocab-list">
             <div class="placeholder-view" id="vocab-empty">
-              <div class="placeholder-icon">📖</div>
+              <div class="placeholder-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></div>
               <h2 data-i18n="vocabulary.empty.title">No replacements yet</h2>
               <p class="muted" data-i18n="vocabulary.empty.sub">Add words that Whisper consistently mishears.</p>
             </div>
