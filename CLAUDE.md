@@ -86,6 +86,21 @@ Project-specific verification:
 - Electron: confirm `npm start` launches without errors
 - Test the full flow: hotkey → record → transcribe → paste
 
+### 5. Keep Every Surface in Sync
+
+**A feature isn't done when the code works — it's done when every surface that describes or exposes it is updated.** Landa has the same feature reflected in many places; changing one without the others ships an inconsistent product.
+
+When you add or change any user-facing behavior, check and update (or explicitly confirm "no change needed") each surface it touches:
+- **Settings UI** (`renderer/settings.js` / `.html` / `.css`) — toggles, labels, new config.
+- **Onboarding** (`renderer/onboarding.*`) — does first-run still teach the feature set accurately?
+- **Landing page** (`website/`) — copy, feature lists, demos, pricing/tiers.
+- **README.md** — features, setup, tech stack (also a release-workflow step).
+- **DESIGN.md** — if anything visual/brand changed (update it *first*, per Design System).
+- **In-app changelog / release notes** — what the user sees on update.
+- **`STRATEGY.md` + `NEXT_SESSION.md`** — per the Strategy & Session Workflow.
+
+State the ripple explicitly before finishing: "this change also requires updating X, Y; Z needs no change." Don't silently leave a stale surface — a landing page that promises old behavior is a bug.
+
 ### Subagents
 - Use subagents to keep main context window clean when possible
 - Offload research, exploration, and parallel analysis to subagents
