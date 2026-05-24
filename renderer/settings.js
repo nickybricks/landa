@@ -2159,11 +2159,11 @@ function getBannerIconHtml(name) {
   if (installedAppsCache) {
     const cached = installedAppsCache.find((a) => a.name.toLowerCase() === name.toLowerCase());
     if (cached && cached.icon) {
-      return `<div class="modes-banner-icon modes-banner-icon-app"><img src="${cached.icon}" alt="${name}"></div>`;
+      return `<div class="modes-banner-icon modes-banner-icon-app"><img src="${cached.icon}" alt="${escapeHtml(name)}"></div>`;
     }
   }
   const icon = getAppIcon(name);
-  return `<div class="modes-banner-icon" style="background: ${icon.bg};">${icon.label}</div>`;
+  return `<div class="modes-banner-icon" style="background: ${icon.bg};">${escapeHtml(icon.label)}</div>`;
 }
 
 function renderBanner(categoryId) {
@@ -2291,7 +2291,7 @@ function openLinkedAppsPopup(categoryId) {
     const chips = apps.length === 0
       ? `<span class="linked-apps-empty">${t('popup.no_apps')}</span>`
       : apps.map((name, i) => `
-          <div class="linked-app-chip" data-index="${i}" title="${name}">
+          <div class="linked-app-chip" data-index="${i}" title="${escapeHtml(name)}">
             ${getLinkedAppIconHtml(name)}
             <button class="linked-app-chip-remove" data-index="${i}">&times;</button>
           </div>
@@ -2313,7 +2313,7 @@ function openLinkedAppsPopup(categoryId) {
       }
     }
     const ic = getAppIcon(name);
-    return `<div class="linked-app-icon-letter" style="background:${ic.bg};">${ic.label}</div>`;
+    return `<div class="linked-app-icon-letter" style="background:${ic.bg};">${escapeHtml(ic.label)}</div>`;
   }
 
   function refreshLinkedAppsSection() {
@@ -2348,7 +2348,7 @@ function openLinkedAppsPopup(categoryId) {
   function buildUrlSection() {
     const tags = urls.map((url, i) => `
       <div class="url-tag">
-        <span class="url-tag-text">${url}</span>
+        <span class="url-tag-text">${escapeHtml(url)}</span>
         <button class="url-tag-remove" data-index="${i}" title="Remove">&times;</button>
       </div>
     `).join('');
@@ -2400,7 +2400,7 @@ function openLinkedAppsPopup(categoryId) {
     if (!container) return;
     container.innerHTML = urls.map((url, i) => `
       <div class="url-tag">
-        <span class="url-tag-text">${url}</span>
+        <span class="url-tag-text">${escapeHtml(url)}</span>
         <button class="url-tag-remove" data-index="${i}" title="Remove">&times;</button>
       </div>
     `).join('');
@@ -2429,12 +2429,12 @@ function openLinkedAppsPopup(categoryId) {
       const linked = apps.some((a) => a.toLowerCase() === appItem.name.toLowerCase());
       const iconHtml = appItem.icon
         ? `<img class="app-grid-icon-img" src="${appItem.icon}" alt="">`
-        : `<div class="app-grid-icon-placeholder">${appItem.name.charAt(0).toUpperCase()}</div>`;
+        : `<div class="app-grid-icon-placeholder">${escapeHtml(appItem.name.charAt(0).toUpperCase())}</div>`;
       const checkHtml = linked ? '<div class="app-grid-check">✓</div>' : '';
       return `
-        <div class="app-grid-item${linked ? ' linked' : ''}" data-name="${appItem.name}">
+        <div class="app-grid-item${linked ? ' linked' : ''}" data-name="${escapeHtml(appItem.name)}">
           <div class="app-grid-icon">${iconHtml}${checkHtml}</div>
-          <div class="app-grid-name">${appItem.name}</div>
+          <div class="app-grid-name">${escapeHtml(appItem.name)}</div>
         </div>
       `;
     }).join('');
@@ -2938,9 +2938,13 @@ function buildTooltipContent(usage) {
 }
 
 function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+  if (text == null) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // ---------------------------------------------------------------------------
