@@ -23,18 +23,18 @@
 
 ## Up next
 
-### First thing next session: commit session 3h
-This session is **entirely uncommitted** (full file list in In flight). Auto-register + the two
-Profiles UI redesigns are independent of the slice-1/EU work — land them as their own commit(s)
-before starting anything new. (Run the alignment ritual first, as always.)
+### Start: alignment ritual, then pick the focus below
+Session 3h is **committed** — `b4da6b6` (auto-register feature) + `ec89261` (Profiles UI redesign),
+on `main`, **not pushed**. Tree is clean apart from the long-standing `tasks/todo.md` (EU WIP) +
+untracked `LANDING.md`/`archive/`. Run the alignment ritual, then go.
 
 ### Where things stand
 The **profile-depth roadmap item is done** (Email/PM polish + agent mode + Notes eval + auto-register).
 A lot is now **built but unreleased**, and it stacks:
 - **Slice 1** — code category (committed `10a81a9`)
 - **Agent mode** — Email + PM compose-from-instruction (committed `102ab94`)
-- **Auto-register** — the "Automatic" style (3h, **uncommitted**)
-- **Profiles UI redesign** — tone selector + apps banner (3h, **uncommitted**)
+- **Auto-register** — the "Automatic" style (3h, committed `b4da6b6`)
+- **Profiles UI redesign** — tone selector + apps banner (3h, committed `ec89261`)
 
 No release has shipped any of it yet.
 
@@ -77,8 +77,8 @@ No release has shipped any of it yet.
 - **Slice 1 COMMITTED (`10a81a9`, 2026-05-24):** feature code shipped to `main` (backend prompt+defaults+migration+routing, settings tile, banner filter). Not released yet — gates pending (see "Up next"). main.js unchanged (tray lists only PM+Email — consistent).
 - **Everyday-profile polish + AGENT MODE — COMMITTED (`102ab94`, 2026-05-24, session 3f).** `backend/landa_core.py` (PM style prompts, `_EMAIL_GUARDRAILS`, emoji branch, `_EMAIL_AGENT`/`_PM_AGENT` blocks in `get_mode_prompt`) + `evals/run_profile_samples.py` + `evals/everyday_profiles.json` (now **59 cases**, incl. 4 adversarial traps) + `tasks/profile-polish-email-pm.md` + `tasks/profile-eval-2026-05-24.md` + `tasks/profile-eval-results-2026-05-24.md`. Reviewed (LLM-as-judge 53/55) + adversarial probe 4/4. **⚠️ Still owed:** agent mode is unreleased/unannounced — onboarding/landing/changelog before the release that ships it.
 - **Notes eval + preview-card polish — COMMITTED (session 3g, 2026-05-24).** Three commits on `main`, **not pushed**: `1ce01b9` (Notes eval 14/14 + preview cards), `db6dcf5` (descope sync — auto-language double-pass → WON'T FIX, incl. Nick's `tasks/review-2026-05-24.md` edit), `f2967f1` (Nick's German `du` refinements to the email previews). **Notes prompt itself UNCHANGED** (eval'd clean; corpus now 73). ⚠️ **Still owed:** Nick to eyeball the preview cards in-app after a Landa restart (a stale instance held the single-instance lock at commit time — low risk, copy-only).
-- **Auto-register style (reshaped slice 2) — BUILT, UNCOMMITTED (session 3h, 2026-05-24).** Files: `backend/landa_core.py` (`auto` prompts for PM+email, `_pm_app_bucket()`, app nudge in `get_mode_prompt`, `auto` greeting/sign-off variants, fresh-install default `auto`, conservative migration, app-list alignment + Teams enrichment), `renderer/settings.js` ("Automatic" style + EN/DE labels/previews + Teams icon), `evals/run_profile_samples.py` (`_pm_app_bucket` stub) + `evals/everyday_profiles.json` (now **83 cases**, 10 auto), `tasks/auto-register-style.md` (plan + eval results). Live eval **10/10, 0 guardrail failures**; manual styles unchanged (no-regression proven). **⚠️ Still owed:** (1) Nick eyeballs the new "Automatic" card in-app after a Landa restart; (2) Nick's blind A/B on real dictations — **probe whether the work/personal app nudge is strong enough** (it's subtle: identical neutral input gave identical output across buckets); (3) agent mode + Automatic are unreleased → onboarding/landing/changelog before the release that ships them.
-- **Profiles tone UI redesign — BUILT, UNCOMMITTED (session 3h).** Adding the 4th tone card squeezed the layout + looked like Wispr. Replaced the card wall with a compact segmented tone selector + one full-width preview (`renderStyleCards`/`selectStyle` in `renderer/settings.js`; `.modes-tone*` in `renderer/settings.css`; `modes.tone.label` i18n EN/DE). Fixed an off-brand blue selection glow → brand red. Also refined the **apps banner** ("This profile applies to:" → **"Active in"**, app icons squared, card height reduced, blue hover → red). **⚠️ Owed:** Nick reloads the app and eyeballs the new Profiles layout (all four categories). First cut at the roadmap's "rethink Profiles UX"; the deeper mental-model rethink is still open.
+- **Auto-register style (reshaped slice 2) — BUILT + COMMITTED `b4da6b6` (session 3h, not pushed).** Files: `backend/landa_core.py` (`auto` prompts for PM+email, `_pm_app_bucket()`, app nudge in `get_mode_prompt`, `auto` greeting/sign-off variants, fresh-install default `auto`, conservative migration, app-list alignment + Teams enrichment), `renderer/settings.js` ("Automatic" style + EN/DE labels/previews + Teams icon), `evals/run_profile_samples.py` (`_pm_app_bucket` stub) + `evals/everyday_profiles.json` (now **83 cases**, 10 auto), `tasks/auto-register-style.md` (plan + eval results). Live eval **10/10, 0 guardrail failures**; manual styles unchanged (no-regression proven). **⚠️ Still owed:** (1) Nick eyeballs the new "Automatic" card in-app after a Landa restart; (2) Nick's blind A/B on real dictations — **probe whether the work/personal app nudge is strong enough** (it's subtle: identical neutral input gave identical output across buckets); (3) agent mode + Automatic are unreleased → onboarding/landing/changelog before the release that ships them.
+- **Profiles tone UI redesign — BUILT + COMMITTED `ec89261` (session 3h, not pushed).** Adding the 4th tone card squeezed the layout + looked like Wispr. Replaced the card wall with a compact segmented tone selector + one full-width preview (`renderStyleCards`/`selectStyle` in `renderer/settings.js`; `.modes-tone*` in `renderer/settings.css`; `modes.tone.label` i18n EN/DE). Fixed an off-brand blue selection glow → brand red. Also refined the **apps banner** ("This profile applies to:" → **"Active in"**, app icons squared, card height reduced, blue hover → red). **⚠️ Owed:** Nick reloads the app and eyeballs the new Profiles layout (all four categories). First cut at the roadmap's "rethink Profiles UX"; the deeper mental-model rethink is still open.
 - **Still uncommitted (clarify when relevant, not urgent):** `tasks/todo.md` (EU-migration WIP notes), and untracked `LANDING.md` + `archive/` — unknown provenance, left untouched until Nick confirms what they are.
 - _(add new in-flight items here as they happen)_
 
@@ -96,7 +96,7 @@ No release has shipped any of it yet.
   - **Profiles tone UI** — the 4th tone card ("Automatic") squeezed Email/PM into a horizontal scroll, and the card wall was the main "looks like Wispr" tell. Replaced it with a **compact segmented tone selector + one full-width preview** (toggles inside it); Notes/Code show just the preview. Reused the native Recording-Window segmented pattern. Rewrote `renderStyleCards`/`selectStyle` in `renderer/settings.js`; `.modes-tone*` in `renderer/settings.css`; `modes.tone.label` i18n EN/DE. Nick picked this from 3 mocked options.
   - **Apps banner** — relabeled "This profile applies to:" → **"Active in"** (EN) / "Aktiv in" (DE), **squared** the app icons (were round/social), removed the overlap, shrank the card height, bumped icons to 32px on Nick's note. (`.modes-banner*` in `renderer/settings.css` + banner i18n.)
   - Fixed an off-brand **blue** selection/hover glow → brand red in both redesigns (DESIGN.md). node --check clean.
-- Logged everything to STRATEGY Decision Log + Product status. **Nothing this session is committed** — see In flight for the full file list. **⚠️ Carry-forward:** agent mode + the Automatic style + the code category are all unreleased → onboarding/landing/changelog owed before the release that ships them.
+- Logged everything to STRATEGY Decision Log + Product status. **Committed** as `b4da6b6` (auto-register feature) + `ec89261` (Profiles UI redesign), on `main`, **not pushed**. **⚠️ Carry-forward:** agent mode + the Automatic style + the code category are all unreleased → onboarding/landing/changelog owed before the release that ships them.
 
 ### 2026-05-24 (session 3g — finish profile roadmap: Notes eval + preview cards)
 - Alignment ritual clean: only the known `tasks/todo.md` (EU WIP) + untracked `LANDING.md`/`archive/` uncommitted; reconciled against the in-flight log.
