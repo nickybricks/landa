@@ -23,16 +23,20 @@
 
 ## Up next
 
-**Goal (proposed — confirm at session start):** Start the **adaptive per-app writing style** feature (STRATEGY.md → top product priority) — each target app gets its own tone + formatting, building on the existing modes.
+**Goal:** **Plan** the **adaptive per-app writing style** feature (STRATEGY.md → top product priority). Nick's call (2026-05-24): **plan only this session — no code yet.** Produce a design doc + per-app style table at `tasks/adaptive-per-app-style.md` for review before any implementation.
 
-**Why this one:** it's the highest-leverage product bet and is *not* blocked by the legal entity or vendor quota, so it's the most valuable thing Claude can build right now while the entity/payments track proceeds in the real world.
+**Why this one:** highest-leverage product bet, and *not* blocked by the legal entity or vendor quota.
 
-**Tasks (to refine in plan mode):**
-- [ ] Map how modes/profiles currently resolve per app (Email / Personal Message / Notes) and where tone+formatting is decided.
-- [ ] Design how each app maps to a writing style (WhatsApp vs. Slack vs. Notion vs. Cursor vs. email).
-- [ ] Spec before coding; verify on both macOS and Windows.
+**Research already done (2026-05-24 — don't re-derive):**
+- The app **already routes per app**: backend detects frontmost app/URL and matches it to one of 3 buckets — Email / Personal Message / Notes — via `get_active_category()` ([landa_core.py:809](backend/landa_core.py#L809)), then applies a tuned prompt via `get_mode_prompt()` ([landa_core.py:849](backend/landa_core.py#L849)).
+- **Notion is the proven per-app override pattern:** `_is_notion_target()` swaps in a Notion-Markdown prompt instead of the generic Notes one ([landa_core.py:877-882](backend/landa_core.py#L877-L882)). Extend *this* mechanism rather than inventing a new one.
+- **The gap:** apps inside a bucket share one voice — Slack/WhatsApp/Discord/Telegram/Signal are all "personal-message" with the *identical* prompt. **Cursor / code editors aren't handled at all** (a genuinely new "code" purpose, not a tone tweak).
+- Config shape: `modes.categories[].linkedApps/linkedUrls`, `modes.selections` (style per category), `modes.toggles`; prompts in `MODE_SYSTEM_PROMPTS[category][style]` ([landa_core.py:507](backend/landa_core.py#L507)).
+- ⚠️ Prompts are **heavily tuned** (German address forms Sie/du, guardrails). Per-app variants are prompt-engineering that needs an **eval on real dictations** (STRATEGY.md: "polish quality needs an eval, not vibes"), and must work on **macOS + Windows**.
 
-**Done when:** dictating into two different apps produces two visibly app-appropriate outputs, verified live (hotkey → record → transcribe → polish → paste).
+**Open scoping decision for the planning doc** (Nick declined to pick a build-scope yet — the plan should lay out the options): (a) messaging tone split first [smallest], (b) + new Cursor/code-editor target, (c) full per-app matrix [multi-session]. Keep consistent with "built-in profiles, not user-defined" (STRATEGY.md).
+
+**Done when:** `tasks/adaptive-per-app-style.md` exists with the design + a per-app → style/format table + the recommended first slice, reviewed by Nick. No code until approved.
 
 **Parallel (Nick, real-world — not a Claude task):** form the legal entity; chase the Anthropic/Google EU quota. These unblock payments + the EU flip.
 
@@ -40,7 +44,8 @@
 
 ## ⚠️ In flight / don't forget (uncommitted or half-done)
 
-- **Uncommitted working-tree changes exist** (as of 2026-05-24): `main.js` modified, `tasks/recording-sounds.md` deleted, `tasks/todo.md` modified, plus new untracked landing/strategy assets. **Review with `git diff` before building anything** — confirm these are intended before they cause surprises.
+- **Resolved 2026-05-24:** the unexplained `main.js` pill-positioning change was reviewed and committed (`a997538`); strategy/workflow docs committed (`0f0f79b`).
+- **Still uncommitted (clarify when relevant, not urgent):** `tasks/todo.md` (EU-migration WIP notes), and untracked `LANDING.md` + `archive/` — unknown provenance, left untouched until Nick confirms what they are.
 - _(add new in-flight items here as they happen)_
 
 ---
@@ -51,7 +56,9 @@
 - Built `STRATEGY.md` (single source of truth) from memory + todo + the old Product Strategy doc.
 - Mirrored it read-only into Notion under the **Landa** page.
 - Set up this session-planning workflow + the alignment ritual in `CLAUDE.md`.
-- **Next:** confirm and start adaptive per-app writing style (see Up next).
+- Ran the alignment ritual: found + committed an unexplained `main.js` pill-positioning change (`a997538`); committed the strategy/workflow docs (`0f0f79b`).
+- Researched the adaptive-per-app-style feature (findings captured under "Up next"). Nick chose to **start a fresh session to plan it** rather than continue here.
+- **Next:** new session → write the `tasks/adaptive-per-app-style.md` design doc (plan only, no code).
 
 ---
 
