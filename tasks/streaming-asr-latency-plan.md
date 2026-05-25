@@ -1,13 +1,22 @@
 # Streaming transcription — how we match Wispr Flow / Willow Voice speed (plan)
 
-**Status:** PLAN ONLY (2026-05-25). Architecture decided in direction; execution gated on the
-EU entity + vendor track (same blockers as the polish flip). The *client-side* groundwork and the
-*offline path* are buildable now; the EU streaming backend is not.
+**Status:** PLAN (2026-05-25). **Sequencing DECIDED (Nick):** stand up streaming on whatever backend
+is fastest to ship — **interim non-EU is fine** — and get the better dictation working now; EU
+residency comes later. Execution is therefore **unblocked** (no longer waiting on the entity/vendor
+track for v1).
 
-**Decision that motivates this:** the wedge is **EU-hosted + zero-retention**, NOT on-device. So
-streaming audio to an EU endpoint is acceptable, and cloud streaming is now the **primary** path.
-Local transcription becomes the **offline fallback**, shown in the UI. (Reverses the 2026-05-23
-"streaming OUT" and 2026-05-24 "local-only" calls — see STRATEGY Decision Log 2026-05-25.)
+**Can we switch to EU later easily? YES — if we front it with our own gateway.** Architecture rule:
+the Electron client talks ONLY to **Landa's own thin streaming gateway** (WebSocket/gRPC); the gateway
+calls whatever ASR+format provider we choose. Region + vendor are then **config**, so the EU flip is an
+endpoint/provider swap with **no client change and no app update** — the same abstraction the polish
+proxy already uses (STRATEGY calls the OpenAI-US→Vertex-EU switch "one deploy"). ❌ Do NOT wire the
+client directly to a vendor SDK — that is the one thing that makes the EU swap hard.
+
+**Decision that motivates this:** speed+quality parity with Wispr/Willow is the **#1, existential**
+priority (Nick: "if our app is not on the same level as the others, it doesn't make sense to do it at
+all"). The wedge is **EU-hosted + zero-retention**, not on-device — so streaming audio is acceptable;
+EU residency is a later swap, not a v1 blocker. Local transcription becomes the **offline fallback**,
+shown in the UI.
 
 ---
 
@@ -114,9 +123,10 @@ The five levers, mapped to what we already have:
 - Offline: bounded by local CPU (~1× realtime today) — acceptable as the fallback, and improvable later by overlapping local transcription with recording.
 
 ## 6. Dependencies / blockers
-- **EU streaming-ASR + format backend** is the critical new piece and is **gated on the legal entity + EU vendor approvals** (Anthropic quota denied; OpenAI-EU sales-gated). Until then there is no EU streaming endpoint to point at.
-- Persistent-connection infra (a real service, not Vercel) must be stood up EU-side, zero-retention (no audio at rest).
+- **Streaming gateway + ASR/format provider** is the critical new piece. For **v1 it can be a non-EU provider** (decided 2026-05-25) → **not blocked** on the entity/vendor track. EU residency is a later endpoint/provider swap behind our gateway (see status note up top).
+- **Persistent-connection infra** (a real always-on service, NOT Vercel serverless) must be stood up to hold the streaming audio connection. Region-agnostic for v1; EU + zero-retention when we flip.
 - Windows stop→paste path needs parity (today it has the 30s cliff / silent-loss issue — see `tasks/windows-transcription-speed-plan.md`); streaming changes the stop path, fix together.
+- When we DO flip to EU: the chosen ASR + format providers must be EU-resident + zero-retention (same gated track as the polish flip — Anthropic quota denied, OpenAI-EU sales-gated). Until the flip, keep EU marketing off and don't onboard EU customers (audio is transiently on a non-EU host — same claim-discipline already in STRATEGY §2).
 
 ## 7. Open questions
 1. Transport: **WebSocket vs gRPC-web** in Electron (lean WebSocket for simplicity unless gRPC buys us something).
@@ -125,7 +135,7 @@ The five levers, mapped to what we already have:
 4. End-to-end **zero-retention** guarantee (no audio/text written to disk server-side) — required to keep the wedge honest before marketing "EU-hosted."
 5. How much **context** to send (app type only, vs focused-field text vs proper-noun biasing) — start with app type (we already have it), add the rest if accuracy needs it.
 
-## 8. Phasing
-- **Phase 0 (now, unblocked):** offline-path quality (deterministic vocab correction) + offline UI badge; client plumbing groundwork (OPUS encode, persistent-connection + warm-at-hotkey scaffolding) behind a flag.
-- **Phase 1 (gated on entity/vendor):** stand up the EU streaming ASR+format service; flip the primary path to streaming; context prefetch over the stream.
+## 8. Phasing (sequencing decided 2026-05-25 — ship parity now, EU later)
+- **Phase 1 (NOW — the #1 priority):** stand up Landa's streaming gateway + a (non-EU is fine) streaming ASR+format provider; flip the primary path to streaming; warm-at-hotkey; context prefetch over the stream. Goal = Wispr/Willow-grade stop→paste feel. Build the offline fallback (bundled `landa-base` + deterministic vocab correction) + offline UI badge alongside.
 - **Phase 2:** tune the latency budget, proper-noun biasing, richer per-app context; Windows stop-path parity.
+- **Phase 3 (EU flip — later, gated on entity/vendor):** repoint the gateway's upstream + region to EU-resident, zero-retention providers. No client change (that's the whole point of the gateway abstraction). Then the egress proof + "EU-hosted" marketing.
