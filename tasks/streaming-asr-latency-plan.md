@@ -5,6 +5,11 @@ is fastest to ship — **interim non-EU is fine** — and get the better dictati
 residency comes later. Execution is therefore **unblocked** (no longer waiting on the entity/vendor
 track for v1).
 
+**⚠️ FIRST STEP IS A SPIKE, NOT THE REAL BUILD — see §8 Phase 0.** This plan is inferred from a single
+Wispr log; the latency numbers in §1 are *theirs*, not ours. Prove the architecture with a throwaway
+client→gateway→ASR spike and measure real stop→paste on macOS **and** Windows before committing to the
+full build. Go/no-go gate: ~0.5–1.0s stop→paste for both short and long clips.
+
 **Can we switch to EU later easily? YES — if we front it with our own gateway.** Architecture rule:
 the Electron client talks ONLY to **Landa's own thin streaming gateway** (WebSocket/gRPC); the gateway
 calls whatever ASR+format provider we choose. Region + vendor are then **config**, so the EU flip is an
@@ -136,6 +141,13 @@ The five levers, mapped to what we already have:
 5. How much **context** to send (app type only, vs focused-field text vs proper-noun biasing) — start with app type (we already have it), add the rest if accuracy needs it.
 
 ## 8. Phasing (sequencing decided 2026-05-25 — ship parity now, EU later)
-- **Phase 1 (NOW — the #1 priority):** stand up Landa's streaming gateway + a (non-EU is fine) streaming ASR+format provider; flip the primary path to streaming; warm-at-hotkey; context prefetch over the stream. Goal = Wispr/Willow-grade stop→paste feel. Build the offline fallback (bundled `landa-base` + deterministic vocab correction) + offline UI badge alongside.
+
+- **Phase 0 — DE-RISK SPIKE (DO THIS FIRST, ~half a day, throwaway).** This whole plan is *inferred from one Wispr log*, not yet proven on our own infra — the latency numbers in §1 are theirs, not ours. Before building anything real, prove the architecture hits the budget:
+  - Stand up the thinnest possible path: Electron client → minimal Landa gateway (WebSocket) → **one** streaming ASR provider → return text. Hardcode everything; no auth, no offline path, no UI polish. Throwaway code.
+  - Stream 16 kHz mono audio **during** recording (not after stop) so we actually test the "transcribe while talking" win.
+  - **Measure real stop→paste on BOTH macOS and Windows** (Windows already has the 30s cliff / silent-loss issue — see `tasks/windows-transcription-speed-plan.md`).
+  - **Go / no-go gate:** stop→paste lands near **~0.5–1.0s** for both a short (~2s) and a long (~45s) clip → architecture validated, proceed to Phase 1. If it's materially worse, STOP and re-plan (provider choice, transport, or the whole streaming bet) before sinking weeks in.
+  - Also confirm the chosen provider exposes a streaming API we can later point at an **EU-resident** equivalent (keeps the "EU = config swap" promise honest).
+- **Phase 1 (the #1 priority, only after Phase 0 passes):** build it properly — Landa's streaming gateway + a (non-EU is fine) streaming ASR+format provider; flip the primary path to streaming; warm-at-hotkey; context prefetch over the stream. Goal = Wispr/Willow-grade stop→paste feel. Build the offline fallback (bundled `landa-base` + deterministic vocab correction) + offline UI badge alongside.
 - **Phase 2:** tune the latency budget, proper-noun biasing, richer per-app context; Windows stop-path parity.
 - **Phase 3 (EU flip — later, gated on entity/vendor):** repoint the gateway's upstream + region to EU-resident, zero-retention providers. No client change (that's the whole point of the gateway abstraction). Then the egress proof + "EU-hosted" marketing.
